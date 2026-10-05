@@ -1,6 +1,6 @@
 //! Every pair of 8-bit values, signed and unsigned, through every operation and every rounding
 //! mode, against an exact reference: integer arithmetic in an `i128`, and each mode by its
-//! definition rather than its table; and random pairs at 32 and 64 steps, where an `i128` is still
+//! definition rather than its table; and random pairs at 32 and 64 bits, where an `i128` is still
 //! exact.
 
 #[cfg(test)]
@@ -314,7 +314,8 @@ mod tests {
         (0_u8..=6, 0_u8..=6, 0_u8..=6, select(MODES.to_vec()))
     }
 
-    /// One pair of values through every operation with one mode, as [`check_pairs`] does for all.
+    /// One pair of values with one mode, as [`check_pairs`] checks every pair: the sum, the
+    /// difference and the order, the product and the quotient at `to`, and a count's parts.
     fn check_one<I>(x: I, y: I, a: u8, b: u8, to: u8, mode: Rounding) -> Result<(), TestCaseError>
     where
         I: Int + Into<i128> + TryFrom<i128>,

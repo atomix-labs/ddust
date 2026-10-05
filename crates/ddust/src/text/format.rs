@@ -307,7 +307,7 @@ fn pad_number(
     (0..after).try_for_each(|_| f.write_char(character))
 }
 
-/// Puts the eight bytes of `word` at `at` in `out`; `None` when they do not fit.
+/// Puts the eight bytes of `word` at `position` in `out`; `None` when they do not fit.
 #[inline]
 fn put(out: &mut [u8], position: usize, word: u64) -> Option<()> {
     out.get_mut(position..position.checked_add(8)?)?.copy_from_slice(&word.to_le_bytes());

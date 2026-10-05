@@ -80,7 +80,7 @@ fuzz_target!(|input: Input| {
     let sum = &x * pow10(finer - a) + &y * pow10(finer - b);
     assert_eq!(left.checked_add(right).map(Decimal::steps), fits(sum), "{input:?}");
 
-    // The same at 64 steps, from the low halves.
+    // The same at 64 bits, from the low halves.
     let (a64, b64) = (input.a as i64, input.b as i64);
     let (x, y) = (BigInt::from(a64), BigInt::from(b64));
     let (left, right) = (Decimal::from_steps(a64, scale(a)), Decimal::from_steps(b64, scale(b)));

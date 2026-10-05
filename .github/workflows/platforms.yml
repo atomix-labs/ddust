@@ -1,7 +1,7 @@
 # What `check.yml`, on x86_64 Linux, cannot show: the tests on arm64 Linux and on macOS, on Apple
 # silicon and on Intel, where 128-bit and 256-bit arithmetic compile to other instructions; the
-# crate built for bare metal, where `std` cannot sneak in, and checked for 32-bit Linux; and every
-# fuzz target run from the corpus committed under `crates/ddust/fuzz/`.
+# crate built for bare metal, where a use of `std` fails the build, and checked for 32-bit Linux;
+# and every fuzz target run from the corpus committed under `crates/ddust/fuzz/`.
 name: platforms
 
 on:

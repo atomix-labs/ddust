@@ -110,7 +110,7 @@ const impl<I: [const] Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal
     }
 }
 
-/// A product's scale as the `Fixed` of its decimals, with no instruction; a `Fixed` of other
+/// A product's scale as the `Fixed` of its decimals, its steps unchanged; a `Fixed` of other
 /// decimals fails the build.
 ///
 /// # Examples

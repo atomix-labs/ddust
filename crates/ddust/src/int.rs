@@ -372,7 +372,7 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
 }
 
 /// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when its
-/// result outgrows that. `None` only when it outgrows even the U256.
+/// result outgrows that. `None` only when it outgrows even a `U256`.
 macro_rules! exact {
     ($i:ty, $kernel:ident($($argument:expr),* $(,)?)) => {
         match kernel::$kernel::<<$i as Magnitude>::Unsigned, <$i as Magnitude>::Double>($($argument),*) {
@@ -809,7 +809,7 @@ mod tests {
         #[test]
         fn a_wrapped_result_keeps_the_low_bits(a: i32, b: i32, k in 0_u8..12) {
             let (a128, b128, power) = (i128::from(a), i128::from(b), 10_i128.pow(u32::from(k)));
-            #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "the low steps, as wrapping keeps")]
+            #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "the low bits, as wrapping keeps")]
             let low = |x: i128| x as i32;
             prop_assert_eq!(a.scale_up(k).wrapping(), low(a128 * power));
             prop_assert_eq!(a.lined_up_add(false, k, b, false).wrapping(), low(a128 * power + b128));

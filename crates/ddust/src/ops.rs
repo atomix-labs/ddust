@@ -727,7 +727,7 @@ const fn remainder_by_zero() -> ! {
 
 /// The exact product of two decimals: the steps multiplied as the integer's `*` does, the scales
 /// summed. A product at the sum of two static scales is a [`Sum`](crate::scale::Sum) scale, which
-/// converts into the `Fixed` of those decimals for free.
+/// converts into the `Fixed` of those decimals, its steps unchanged.
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// The exact product, or `None` past the range or for a run-time product past 38 decimals.
     ///

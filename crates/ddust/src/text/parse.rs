@@ -225,7 +225,7 @@ const fn eight_digits(word: u64) -> u64 {
     (word & 0x0000_FFFF_0000_FFFF).wrapping_mul(42_949_672_960_001).wrapping_shr(32)
 }
 
-/// The eight bytes of `window` from `at`, little-endian.
+/// The eight bytes of `window` from `position`, little-endian.
 #[inline]
 fn word(window: &[u8; 32], position: usize) -> Option<u64> {
     let bytes: [u8; 8] = window.get(position..position.checked_add(8)?)?.try_into().ok()?;
@@ -519,7 +519,7 @@ impl<I: Int> FromStr for Decimal<I, Dynamic> {
     }
 }
 
-/// Reading with a mode, for the tests: the table's form of [`read_or_round`].
+/// Reads `text` at `decimals`, rounded by `mode`, for the tests: [`read_or_round`] given a mode.
 #[cfg(test)]
 fn read_rounded<R: RoundingMode>(
     text: &[u8], decimals: u8, mode: R,

@@ -157,7 +157,7 @@ const impl<S: StaticScale> From<S> for Dynamic {
 /// The scale of a product of two values of static scales: `A`'s decimals and `B`'s, summed.
 ///
 /// Stable Rust cannot write `Fixed<{A + B}>`, so a product's scale is this type, and converts into
-/// the `Fixed` of the same decimals for free; a `Fixed` of other decimals fails the build.
+/// the `Fixed` of its decimals, its steps unchanged; a `Fixed` of other decimals fails the build.
 ///
 /// # Examples
 /// ```

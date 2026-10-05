@@ -76,7 +76,7 @@ What a change here keeps, beyond what the checks hold it to.
   as a `const fn` whose bounds are `[const]` per method: a crate that enables
   const traits computes with it in a constant, and every crate will once they
   are stable. `dec!`'s constructor and the constants take always-const bounds
-  instead, so every crate has them in a constant now.
+  instead: a crate that enables no nightly feature has them in a constant too.
 - Arithmetic that can outgrow its integer is a kernel in `kernel.rs`: on
   magnitudes, exact in a word wide enough for the result (the integer's double,
   or a `U256`), and rounded once, by the mode's table. The integer's four
