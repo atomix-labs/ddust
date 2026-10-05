@@ -2,12 +2,12 @@
 //! enough for its result, and rounded once by a mode's table.
 //!
 //! A kernel returns `None` when its result outgrows the word it was given; the caller then runs it
-//! again in a [`U256`](crate::word::U256), the widest word, where no kernel but [`mul_up`]
+//! again in a [`U256`], the widest word, where no kernel but [`mul_up`]
 //! outgrows it.
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, Word};
+use crate::word::{Double, Narrow, U256, Word};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it.
 #[derive(Clone, Copy, Debug)]
@@ -164,6 +164,52 @@ pub(crate) const fn mul_div<U: [const] Narrow, D: [const] Double<U>>(
 ) -> Exact<D> {
     let (q, class) = quotient(D::widening_mul(a, b), D::from_narrow(c));
     Exact { negative, magnitude: settle(q, class, negative, table) }
+}
+
+/// The multiple of `step` that `a / step`, rounded by `table`, comes to, for a `step` that is not
+/// zero: never past the word, since it is at most `a + step`.
+#[inline]
+pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
+    negative: bool, a: U, step: U, table: u16,
+) -> Exact<D> {
+    let step = D::from_narrow(step);
+    let (q, class) = quotient(D::from_narrow(a), step);
+    let count = settle(q, class, negative, table);
+    // count × step ≤ a + step < 2 × 2^bits(U), which the double word holds.
+    let magnitude = match count.checked_mul(step) {
+        Some(magnitude) => magnitude,
+        None => D::ZERO,
+    };
+    Exact { negative: negative && magnitude != D::ZERO, magnitude }
+}
+
+/// `5^k` for `k` in `0..=38`: with a power of two, every power of ten a scale needs.
+#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
+const POW5: [u128; 39] = {
+    let mut table = [1_u128; 39];
+    let mut k = 1;
+    while k < table.len() {
+        table[k] = table[k.wrapping_sub(1)].wrapping_mul(5);
+        k = k.wrapping_add(1);
+    }
+    table
+};
+
+/// The magnitude of `mantissa × 2^exponent × 10^decimals`, rounded by `table` for a value of sign
+/// `negative`: a double's exact value at a scale, rounded once. `None` past 256 bits, which no
+/// integer holds.
+#[expect(clippy::indexing_slicing, reason = "decimals are at most 38, the table's last index")]
+pub(crate) const fn binary_at_scale(
+    negative: bool, mantissa: u64, exponent: i32, decimals: u8, table: u16,
+) -> Option<U256> {
+    // mantissa · 2^e · 10^d is mantissa · 5^d · 2^(e + d): one product, then one shift.
+    let product = U256::widening(u128::from(mantissa), POW5[usize::from(decimals)]);
+    let shift = exponent.wrapping_add(i32::from(decimals));
+    if shift >= 0 {
+        return product.checked_shl(shift.cast_unsigned());
+    }
+    let (quotient, class) = product.shr_classed(shift.unsigned_abs());
+    Some(settle(quotient, class, negative, table))
 }
 
 /// The exact sum of two results.

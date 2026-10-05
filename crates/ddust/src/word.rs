@@ -229,6 +229,88 @@ impl U256 {
         (quotient, remainder)
     }
 
+    /// The product of two `u128`s.
+    #[inline]
+    pub(crate) const fn widening(a: u128, b: u128) -> Self {
+        let (low, high) = a.carrying_mul(b, 0);
+        Self { high, low }
+    }
+
+    /// The value as a `u128`, or `None` past one.
+    #[inline]
+    pub(crate) const fn to_u128(self) -> Option<u128> {
+        if self.high == 0 { Some(self.low) } else { None }
+    }
+
+    /// How many leading bits are zero.
+    #[inline]
+    const fn leading_zeros(self) -> u32 {
+        if self.high == 0 {
+            128_u32.wrapping_add(self.low.leading_zeros())
+        } else {
+            self.high.leading_zeros()
+        }
+    }
+
+    /// The value shifted `shift` bits left, or `None` when a set bit would leave the word.
+    pub(crate) const fn checked_shl(self, shift: u32) -> Option<Self> {
+        if self.high == 0 && self.low == 0 {
+            return Some(self);
+        }
+        if shift >= self.leading_zeros().wrapping_add(1) {
+            return None;
+        }
+        Some(if shift >= 128 {
+            Self { high: self.low << shift.wrapping_sub(128), low: 0 }
+        } else if shift == 0 {
+            self
+        } else {
+            Self {
+                high: (self.high << shift) | (self.low >> 128_u32.wrapping_sub(shift)),
+                low: self.low << shift,
+            }
+        })
+    }
+
+    /// The value shifted `shift` bits right, and how the bits shifted out compare with half of
+    /// `2^shift`: 0 when they are zero, 1 below half, 2 at half, 3 above.
+    pub(crate) const fn shr_classed(self, shift: u32) -> (Self, u32) {
+        if shift == 0 {
+            return (self, 0);
+        }
+        if shift > 256 {
+            // 2^(shift - 1) is past every value: all of it shifts out, below half.
+            return (Self::ZERO, u32::from(self.high != 0 || self.low != 0));
+        }
+        let half = Self::ONE.checked_shl(shift.wrapping_sub(1));
+        let (quotient, rest) = if shift >= 256 {
+            (Self::ZERO, self)
+        } else if shift >= 128 {
+            let low_bits = shift.wrapping_sub(128);
+            let mask = if low_bits == 0 { 0 } else { u128::MAX >> 128_u32.wrapping_sub(low_bits) };
+            (
+                Self { high: 0, low: self.high >> low_bits },
+                Self { high: self.high & mask, low: self.low },
+            )
+        } else {
+            let mask = u128::MAX >> 128_u32.wrapping_sub(shift);
+            (
+                Self {
+                    high: self.high >> shift,
+                    low: (self.low >> shift) | (self.high << 128_u32.wrapping_sub(shift)),
+                },
+                Self { high: 0, low: self.low & mask },
+            )
+        };
+        let class = match half {
+            Some(half) => u32::from(rest != Self::ZERO)
+                .wrapping_add(u32::from(rest >= half))
+                .wrapping_add(u32::from(rest > half)),
+            None => u32::from(rest != Self::ZERO),
+        };
+        (quotient, class)
+    }
+
     /// The value shifted one bit left, and the bit shifted out.
     #[inline]
     const fn shifted_left(self) -> (Self, bool) {

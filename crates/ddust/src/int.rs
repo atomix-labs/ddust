@@ -35,6 +35,13 @@ impl<I: Int> Outcome<I> {
         Self { wrapped: value, past: false, negative: false }
     }
 
+    /// The result of the integer's own operator: its wrapped value, whether it overflowed, and
+    /// the sign of the exact result.
+    #[inline]
+    pub(crate) const fn from_parts(wrapped: I, past: bool, negative: bool) -> Self {
+        Self { wrapped, past, negative }
+    }
+
     /// The result, or `None` past the range.
     #[inline]
     #[must_use]
@@ -63,6 +70,17 @@ impl<I: Int> Outcome<I> {
         self.past
     }
 
+    /// The result as an operator gives it: past the range, a panic with overflow checks on, and
+    /// the wrapped value otherwise, as the integer's own operator does.
+    #[inline]
+    #[track_caller]
+    pub(crate) const fn operator(self, operation: Operation) -> I {
+        if cfg!(overflow_checks) && self.past {
+            overflowed(operation);
+        }
+        self.wrapped
+    }
+
     /// The result, held at the end of the range it is past.
     #[inline]
     #[must_use]
@@ -75,6 +93,33 @@ impl<I: Int> Outcome<I> {
             (true, true) => I::MIN,
             (true, false) => I::MAX,
         }
+    }
+}
+
+/// An operation whose overflow panics with the integer's own message.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Operation {
+    /// `+`.
+    Add,
+    /// `-`.
+    Subtract,
+    /// `*`.
+    Multiply,
+    /// `/`.
+    Divide,
+}
+
+/// Panics as the integer's operator does past its range.
+#[cold]
+#[inline(never)]
+#[track_caller]
+#[expect(clippy::panic, reason = "the integer's own overflow, with its own message")]
+const fn overflowed(operation: Operation) -> ! {
+    match operation {
+        Operation::Add => panic!("attempt to add with overflow"),
+        Operation::Subtract => panic!("attempt to subtract with overflow"),
+        Operation::Multiply => panic!("attempt to multiply with overflow"),
+        Operation::Divide => panic!("attempt to divide with overflow"),
     }
 }
 
@@ -108,6 +153,8 @@ pub const trait Int:
 {
     /// Zero.
     const ZERO: Self;
+    /// One.
+    const ONE: Self;
     /// The smallest value.
     const MIN: Self;
     /// The largest value.
@@ -223,9 +270,14 @@ pub const trait Int:
     /// `self × b / c`, rounded by `table`, for a `c` that is not zero.
     #[doc(hidden)]
     fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self>;
-    /// `self × 10^k + rhs`, exactly: two values lined up at `rhs`'s scale, and added.
+    /// The multiple of `step` that `self` rounds to by `table`, `step`'s sign ignored, for a
+    /// `step` that is not zero.
     #[doc(hidden)]
-    fn lined_up_add(self, k: u8, rhs: Self) -> Outcome<Self>;
+    fn multiple(self, step: Self, table: u16) -> Outcome<Self>;
+    /// `±self × 10^k ± rhs`, each negated when its flag says so, exactly: two values lined up at
+    /// `rhs`'s scale, and added or subtracted.
+    #[doc(hidden)]
+    fn lined_up_add(self, negate: bool, k: u8, rhs: Self, negate_rhs: bool) -> Outcome<Self>;
     /// The order of `self × 10^k` and `rhs`.
     #[doc(hidden)]
     #[must_use]
@@ -374,6 +426,13 @@ const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: 
     settled(exact!(I, mul_down(negative, a, b, k, table)), negative)
 }
 
+/// The multiple of `step` that `a` rounds to, for any integer and a `step` that is not zero.
+#[inline]
+const fn multiple<I: [const] Magnitude>(a: I, step: I, table: u16) -> Outcome<I> {
+    let ((negative, a), (_, step)) = (a.split(), step.split());
+    outcome::<I, I::Double>(kernel::multiple::<I::Unsigned, I::Double>(negative, a, step, table))
+}
+
 /// `a × b × 10^k`, exactly, for any integer: past even a [`U256`], its low bits by wrapping
 /// arithmetic, which keeps them exactly.
 #[inline]
@@ -439,10 +498,13 @@ const fn lined_up_sum<U: [const] Narrow, D: [const] Double<U>>(
     }
 }
 
-/// `a × 10^k + b`, exactly, for any integer.
+/// `±a × 10^k ± b`, exactly, for any integer.
 #[inline]
-const fn lined_up_add<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I) -> Outcome<I> {
+const fn lined_up_add<I: [const] Magnitude + [const] Int>(
+    a: I, negate: bool, k: u8, b: I, negate_b: bool,
+) -> Outcome<I> {
     let ((na, a), (nb, b)) = (a.split(), b.split());
+    let (na, nb) = (na != negate, nb != negate_b);
     let sum = match lined_up_sum::<I::Unsigned, I::Double>(na, a, k, nb, b) {
         Some(exact) => Some(outcome::<I, I::Double>(exact)),
         None => match lined_up_sum::<I::Unsigned, U256>(na, a, k, nb, b) {
@@ -491,6 +553,7 @@ macro_rules! int {
 
         const impl Int for $t {
             const ZERO: Self = 0;
+            const ONE: Self = 1;
             const MIN: Self = <$t>::MIN;
             const MAX: Self = <$t>::MAX;
             const DIGITS: u8 = $digits;
@@ -573,7 +636,11 @@ macro_rules! int {
             #[inline]
             fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self> { mul_div(self, b, c, table) }
             #[inline]
-            fn lined_up_add(self, k: u8, rhs: Self) -> Outcome<Self> { lined_up_add(self, k, rhs) }
+            fn multiple(self, step: Self, table: u16) -> Outcome<Self> { multiple(self, step, table) }
+            #[inline]
+            fn lined_up_add(self, negate: bool, k: u8, rhs: Self, negate_rhs: bool) -> Outcome<Self> {
+                lined_up_add(self, negate, k, rhs, negate_rhs)
+            }
             #[inline]
             fn lined_up_cmp(self, k: u8, rhs: Self) -> Ordering { lined_up_cmp(self, k, rhs) }
             #[inline]
@@ -733,7 +800,9 @@ mod tests {
             if c != 0 {
                 prop_assert_eq!(a.mul_div(b, c, TRUNC).checked(), narrow(a128 * b128 / c128));
             }
-            prop_assert_eq!(a.lined_up_add(k, b).checked(), narrow(a128 * power + b128));
+            prop_assert_eq!(a.lined_up_add(false, k, b, false).checked(), narrow(a128 * power + b128));
+            prop_assert_eq!(a.lined_up_add(true, k, b, false).checked(), narrow(-a128 * power + b128));
+            prop_assert_eq!(a.lined_up_add(false, k, b, true).checked(), narrow(a128 * power - b128));
             prop_assert_eq!(a.lined_up_cmp(k, b), (a128 * power).cmp(&b128));
         }
 
@@ -743,7 +812,7 @@ mod tests {
             #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "the low bits, as wrapping keeps")]
             let low = |x: i128| x as i32;
             prop_assert_eq!(a.scale_up(k).wrapping(), low(a128 * power));
-            prop_assert_eq!(a.lined_up_add(k, b).wrapping(), low(a128 * power + b128));
+            prop_assert_eq!(a.lined_up_add(false, k, b, false).wrapping(), low(a128 * power + b128));
             prop_assert_eq!(a.mul_up(b, k).wrapping(), low(a128 * b128 * power));
         }
 
@@ -790,9 +859,23 @@ mod tests {
 
     #[test]
     fn a_saturated_result_holds_at_the_end_it_passes() {
-        assert_eq!(i8::MAX.lined_up_add(1, 0).saturating(), i8::MAX, "1270 holds at 127");
-        assert_eq!(i8::MIN.lined_up_add(1, 0).saturating(), i8::MIN, "-1280 holds at -128");
-        assert_eq!(0_u8.lined_up_add(0, 0).checked(), Some(0), "zero fits");
-        assert_eq!(i8::MIN.lined_up_add(0, 0).checked(), Some(i8::MIN), "the minimum fits");
+        assert_eq!(
+            i8::MAX.lined_up_add(false, 1, 0, false).saturating(),
+            i8::MAX,
+            "1270 holds at 127"
+        );
+        assert_eq!(
+            i8::MIN.lined_up_add(false, 1, 0, false).saturating(),
+            i8::MIN,
+            "-1280 holds at -128"
+        );
+        assert_eq!(0_u8.lined_up_add(false, 0, 0, false).checked(), Some(0), "zero fits");
+        assert_eq!(
+            i8::MIN.lined_up_add(false, 0, 0, false).checked(),
+            Some(i8::MIN),
+            "the minimum fits"
+        );
+        assert_eq!(1_u8.lined_up_add(true, 1, 3, false).checked(), None, "3 - 10 is below a u8");
+        assert_eq!(1_u8.lined_up_add(true, 1, 3, false).saturating(), 0, "and holds at zero");
     }
 }
