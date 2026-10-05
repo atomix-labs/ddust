@@ -28,8 +28,8 @@ enum Meet<S> {
     /// At two scales that line up: the coarser value lifted by `k` decimals to `scale`, the
     /// finer one's.
     Lined {
-        /// Whether the left value is the coarser.
-        left: bool,
+        /// Which value is the coarser.
+        coarser: Side,
         /// How many decimals the coarser is lifted.
         k: u8,
         /// The finer scale, where they meet.
@@ -37,6 +37,24 @@ enum Meet<S> {
     },
     /// At two scales that never mix.
     Unmixed,
+}
+
+/// One of the two values an operation takes.
+#[derive(Clone, Copy)]
+enum Side {
+    /// The value the method is called on.
+    Left,
+    /// `rhs`.
+    Right,
+}
+
+/// The sign `rhs` is summed with: `+` adds it, `-` subtracts it.
+#[derive(Clone, Copy)]
+enum Sign {
+    /// `self + rhs`.
+    Plus,
+    /// `self - rhs`.
+    Minus,
 }
 
 impl<I: Int, S: Scale> Decimal<I, S> {
@@ -55,34 +73,35 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         }
         let (a, b) = (left.decimals(), right.decimals());
         if a < b {
-            Meet::Lined { left: true, k: b.wrapping_sub(a), scale: right }
+            Meet::Lined { coarser: Side::Left, k: b.wrapping_sub(a), scale: right }
         } else {
-            Meet::Lined { left: false, k: a.wrapping_sub(b), scale: left }
+            Meet::Lined { coarser: Side::Right, k: a.wrapping_sub(b), scale: left }
         }
     }
 
-    /// The exact sum, or difference when `subtract`, of two values lined up at the finer scale.
+    /// The exact sum, by `sign`, of two values lined up at the finer scale.
     #[inline(never)]
-    const fn lined_sum(self, rhs: Self, left: bool, k: u8, subtract: bool) -> Outcome<I>
+    const fn lined_sum(self, rhs: Self, coarser: Side, k: u8, sign: Sign) -> Outcome<I>
     where
         I: [const] Int,
     {
         let (a, b) = (self.steps(), rhs.steps());
-        if left {
-            a.lined_up_add(false, k, b, subtract)
-        } else {
-            b.lined_up_add(subtract, k, a, false)
+        let subtract = matches!(sign, Sign::Minus);
+        match coarser {
+            Side::Left => a.lined_up_add(false, k, b, subtract),
+            Side::Right => b.lined_up_add(subtract, k, a, false),
         }
     }
 
-    /// The sum, or difference when `subtract`, as an outcome at the scale both meet at; `None`
-    /// for two scales that never mix.
+    /// The sum, by `sign`, as an outcome at the scale both meet at; `None` for two scales that
+    /// never mix.
     #[inline]
-    const fn sum_outcome(self, rhs: Self, subtract: bool) -> Option<(Outcome<I>, S)>
+    const fn sum_outcome(self, rhs: Self, sign: Sign) -> Option<(Outcome<I>, S)>
     where
         I: [const] Int,
         S: [const] Scale,
     {
+        let subtract = matches!(sign, Sign::Minus);
         match self.meet(rhs) {
             Meet::Shared => {
                 let (a, b) = (self.steps(), rhs.steps());
@@ -91,7 +110,9 @@ impl<I: Int, S: Scale> Decimal<I, S> {
                 let negative = if subtract { a < b } else { a.is_negative() };
                 Some((Outcome::from_parts(steps, past, negative), self.scale()))
             },
-            Meet::Lined { left, k, scale } => Some((self.lined_sum(rhs, left, k, subtract), scale)),
+            Meet::Lined { coarser, k, scale } => {
+                Some((self.lined_sum(rhs, coarser, k, sign), scale))
+            },
             Meet::Unmixed => None,
         }
     }
@@ -113,7 +134,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, false) {
+        match self.sum_outcome(rhs, Sign::Plus) {
             Some((outcome, scale)) => match outcome.checked() {
                 Some(steps) => Some(Self::from_steps(steps, scale)),
                 None => None,
@@ -139,7 +160,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, true) {
+        match self.sum_outcome(rhs, Sign::Minus) {
             Some((outcome, scale)) => match outcome.checked() {
                 Some(steps) => Some(Self::from_steps(steps, scale)),
                 None => None,
@@ -168,7 +189,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, false) {
+        match self.sum_outcome(rhs, Sign::Plus) {
             Some((outcome, scale)) => Self::from_steps(outcome.saturating(), scale),
             None => unmixed(),
         }
@@ -194,7 +215,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, true) {
+        match self.sum_outcome(rhs, Sign::Minus) {
             Some((outcome, scale)) => Self::from_steps(outcome.saturating(), scale),
             None => unmixed(),
         }
@@ -220,7 +241,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, false) {
+        match self.sum_outcome(rhs, Sign::Plus) {
             Some((outcome, scale)) => Self::from_steps(outcome.wrapping(), scale),
             None => unmixed(),
         }
@@ -246,7 +267,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, true) {
+        match self.sum_outcome(rhs, Sign::Minus) {
             Some((outcome, scale)) => Self::from_steps(outcome.wrapping(), scale),
             None => unmixed(),
         }
@@ -272,7 +293,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, false) {
+        match self.sum_outcome(rhs, Sign::Plus) {
             Some((outcome, scale)) => {
                 let (steps, wrapped) = outcome.overflowing();
                 (Self::from_steps(steps, scale), wrapped)
@@ -301,7 +322,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, true) {
+        match self.sum_outcome(rhs, Sign::Minus) {
             Some((outcome, scale)) => {
                 let (steps, wrapped) = outcome.overflowing();
                 (Self::from_steps(steps, scale), wrapped)
@@ -627,11 +648,11 @@ impl<I: Int, S: Scale> Decimal<I, S> {
                 Some(steps) => Some(Self::from_steps(steps, self.scale())),
                 None => None,
             },
-            Meet::Lined { left, k, scale } => {
+            Meet::Lined { coarser, k, scale } => {
                 if rhs.steps() == I::ZERO {
                     return None;
                 }
-                Some(Self::from_steps(self.lined_rem(rhs, left, k), scale))
+                Some(Self::from_steps(self.lined_rem(rhs, coarser, k), scale))
             },
             Meet::Unmixed => None,
         }
@@ -686,11 +707,11 @@ impl<I: Int, S: Scale> Decimal<I, S> {
                 let (steps, wrapped) = self.steps().overflowing_rem(rhs.steps());
                 (Self::from_steps(steps, self.scale()), wrapped)
             },
-            Meet::Lined { left, k, scale } => {
+            Meet::Lined { coarser, k, scale } => {
                 if rhs.steps() == I::ZERO {
                     remainder_by_zero();
                 }
-                (Self::from_steps(self.lined_rem(rhs, left, k), scale), false)
+                (Self::from_steps(self.lined_rem(rhs, coarser, k), scale), false)
             },
             Meet::Unmixed => unmixed(),
         }
@@ -698,12 +719,15 @@ impl<I: Int, S: Scale> Decimal<I, S> {
 
     /// The remainder of two values lined up at the finer scale, by an `rhs` that is not zero.
     #[inline(never)]
-    const fn lined_rem(self, rhs: Self, left: bool, k: u8) -> I
+    const fn lined_rem(self, rhs: Self, coarser: Side, k: u8) -> I
     where
         I: [const] Int,
     {
         let (a, b) = (self.steps(), rhs.steps());
-        if left { a.lined_up_rem(k, b, 0) } else { a.lined_up_rem(0, b, k) }
+        match coarser {
+            Side::Left => a.lined_up_rem(k, b, 0),
+            Side::Right => a.lined_up_rem(0, b, k),
+        }
     }
 }
 
@@ -1068,8 +1092,8 @@ const impl<I: [const] Int, S: [const] Scale> Add for Decimal<I, S> {
     fn add(self, rhs: Self) -> Self {
         match self.meet(rhs) {
             Meet::Shared => Self::from_steps(self.steps() + rhs.steps(), self.scale()),
-            Meet::Lined { left, k, scale } => Self::from_steps(
-                self.lined_sum(rhs, left, k, false).operator(Operation::Add),
+            Meet::Lined { coarser, k, scale } => Self::from_steps(
+                self.lined_sum(rhs, coarser, k, Sign::Plus).operator(Operation::Add),
                 scale,
             ),
             Meet::Unmixed => unmixed(),
@@ -1088,8 +1112,8 @@ const impl<I: [const] Int, S: [const] Scale> Sub for Decimal<I, S> {
     fn sub(self, rhs: Self) -> Self {
         match self.meet(rhs) {
             Meet::Shared => Self::from_steps(self.steps() - rhs.steps(), self.scale()),
-            Meet::Lined { left, k, scale } => Self::from_steps(
-                self.lined_sum(rhs, left, k, true).operator(Operation::Subtract),
+            Meet::Lined { coarser, k, scale } => Self::from_steps(
+                self.lined_sum(rhs, coarser, k, Sign::Minus).operator(Operation::Subtract),
                 scale,
             ),
             Meet::Unmixed => unmixed(),
@@ -1175,11 +1199,11 @@ const impl<I: [const] Int, S: [const] Scale> Rem for Decimal<I, S> {
     fn rem(self, rhs: Self) -> Self {
         match self.meet(rhs) {
             Meet::Shared => Self::from_steps(self.steps() % rhs.steps(), self.scale()),
-            Meet::Lined { left, k, scale } => {
+            Meet::Lined { coarser, k, scale } => {
                 if rhs.steps() == I::ZERO {
                     remainder_by_zero();
                 }
-                Self::from_steps(self.lined_rem(rhs, left, k), scale)
+                Self::from_steps(self.lined_rem(rhs, coarser, k), scale)
             },
             Meet::Unmixed => unmixed(),
         }

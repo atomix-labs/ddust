@@ -62,9 +62,7 @@ What a change here keeps, beyond what the checks hold it to.
   `$crate::` and `::core::`.
 - Every name is whole words, never a fragment such as `at`, `by` or `held`.
 - The crate is `#![no_std]` and allocates nothing outside its tests.
-- No `unsafe`, but in the SIMD modules: each `unsafe` block holds one operation
-  and a `// SAFETY:` comment, and its kernel has a SWAR twin that the tests and
-  the fuzz targets hold it to, byte for byte.
+- No `unsafe`, which the workspace's lints deny.
 - The crate builds on the nightly `rust-toolchain.toml` pins, and only there.
   `lib.rs` lists each `#![feature]` with what it is for; adding one is a change
   of its own. `rust-version` is the pinned nightly's version, raised by hand

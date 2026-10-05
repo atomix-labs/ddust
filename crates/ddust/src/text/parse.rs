@@ -604,8 +604,8 @@ mod tests {
         assert_eq!(above.kind(), ParseErrorKind::PosOverflow, "above");
         let below = "-922337203686".parse::<Price>().expect_err("below");
         assert_eq!(below.kind(), ParseErrorKind::NegOverflow, "below");
-        let short = "-0.5".parse::<UD64<11>>().expect_err("a negative");
-        assert_eq!(short.kind(), ParseErrorKind::NegOverflow, "unsigned refuses a negative");
+        let negative = "-0.5".parse::<UD64<11>>().expect_err("a negative");
+        assert_eq!(negative.kind(), ParseErrorKind::NegOverflow, "unsigned refuses a negative");
         let rounded = Price::from_ascii_round(b"60000.123456789", Fixed, Rounding::HalfEven);
         assert_eq!(rounded.map(Price::steps), Ok(600_001_234_568), "rounded");
     }

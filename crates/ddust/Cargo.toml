@@ -9,7 +9,7 @@ authors.workspace      = true
 repository.workspace   = true
 homepage.workspace     = true
 readme                 = "../../README.md"
-keywords               = ["decimal", "fixed-point", "rounding", "no-std", "simd"]
+keywords               = ["decimal", "fixed-point", "rounding", "no-std", "financial"]
 categories             = ["mathematics", "finance", "no-std", "no-std::no-alloc"]
 
 [package.metadata.docs.rs]

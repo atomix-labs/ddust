@@ -17,15 +17,15 @@ pub(crate) struct Exact<D> {
     pub(crate) negative: bool,
     /// Its magnitude, modulo the word.
     pub(crate) magnitude: D,
-    /// Whether the magnitude is past the word, and so its low bits alone.
-    pub(crate) beyond: bool,
+    /// Whether the magnitude overflowed the word, and so is its low bits alone.
+    pub(crate) overflowed: bool,
 }
 
 impl<D> Exact<D> {
     /// A result the word holds.
     #[inline]
     pub(crate) const fn new(negative: bool, magnitude: D) -> Self {
-        Self { negative, magnitude, beyond: false }
+        Self { negative, magnitude, overflowed: false }
     }
 }
 
@@ -138,7 +138,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     };
     let Some(numerator) = numerator else { return None };
     let (mut q, mut remainder) = numerator.div_rem(divisor);
-    let mut beyond = false;
+    let mut overflowed = false;
     if rest > 0 {
         // q · 10^rest + (remainder · 10^rest) / b: the remainder is below b, so its product fits
         // the widest word; q's may not, and then only its low bits are kept.
@@ -148,7 +148,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
         let lifted = match q.checked_mul(power) {
             Some(lifted) => lifted,
             None if D::WIDEST => {
-                beyond = true;
+                overflowed = true;
                 q.wrapping_mul(power)
             },
             None => return None,
@@ -156,7 +156,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
         q = match lifted.checked_add(low) {
             Some(sum) => sum,
             None if D::WIDEST => {
-                beyond = true;
+                overflowed = true;
                 lifted.wrapping_add(low)
             },
             None => return None,
@@ -164,7 +164,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
         remainder = last;
     }
     let magnitude = settle(q, class(remainder, divisor), negative, table);
-    Some(Exact { negative, magnitude, beyond })
+    Some(Exact { negative, magnitude, overflowed })
 }
 
 /// `a / (b × 10^k)`, rounded by `table`, for a `b` that is not zero. In the widest word a divisor
@@ -204,10 +204,7 @@ pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
     let (q, class) = quotient(D::from_narrow(a), step);
     let count = settle(q, class, negative, table);
     // count × step ≤ a + step < 2 × 2^bits(U), which the double word holds.
-    let magnitude = match count.checked_mul(step) {
-        Some(magnitude) => magnitude,
-        None => D::ZERO,
-    };
+    let magnitude = count.wrapping_mul(step);
     Exact::new(negative && magnitude != D::ZERO, magnitude)
 }
 

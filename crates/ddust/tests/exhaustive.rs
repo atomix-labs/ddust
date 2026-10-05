@@ -106,11 +106,11 @@ mod tests {
             (xl + yl, left.saturating_add(right), left.overflowing_add(right)),
             (xl - yl, left.saturating_sub(right), left.overflowing_sub(right)),
         ] {
-            let held = if exact < 0 { I::MIN } else { I::MAX };
+            let nearest_end = if exact < 0 { I::MIN } else { I::MAX };
             assert_eq!(
                 saturated.steps(),
-                fit::<I>(exact).unwrap_or(held),
-                "{xi}@{a}, {yi}@{b}: held"
+                fit::<I>(exact).unwrap_or(nearest_end),
+                "{xi}@{a}, {yi}@{b}: saturated"
             );
             assert_eq!(flagged, fit::<I>(exact).is_none(), "{xi}@{a}, {yi}@{b}: flagged");
             let modulus = 1_i128 << (8 * size_of::<I>());

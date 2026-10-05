@@ -12,8 +12,8 @@ mod sealed {
 ///
 /// Each mode is a table of sixteen bits, one for each way a division can end: the sign of the
 /// result, whether its quotient is odd, and whether the remainder is zero, below half the
-/// divisor, at half or above it. Rounding is then one shift and one mask, with no branch, and the
-/// same instructions whether the mode is a type, a constant or a value read at run time.
+/// divisor, at half or above it. Rounding reads the one bit for how the division ended, so a mode
+/// is data, whether it is a type, a constant or a value read at run time.
 ///
 /// # Examples
 /// ```
@@ -118,7 +118,7 @@ mod tests {
     use super::{Rounding, RoundingMode};
 
     /// Whether `mode` moves a quotient away from zero, by its definition rather than its table.
-    fn defined(mode: Rounding, negative: bool, odd: bool, class: u32) -> bool {
+    fn moves_away(mode: Rounding, negative: bool, odd: bool, class: u32) -> bool {
         let (exact, half) = (class == 0, class.cmp(&2));
         match mode {
             Rounding::Floor => negative && !exact,
@@ -151,7 +151,7 @@ mod tests {
         for index in 0..16_u32 {
             let (negative, odd, class) = (index & 8 != 0, index & 4 != 0, index & 3);
             let bit = (mode.table() >> index) & 1 == 1;
-            assert_eq!(bit, defined(mode, negative, odd, class), "{mode:?}, case {index}");
+            assert_eq!(bit, moves_away(mode, negative, odd, class), "{mode:?}, case {index}");
         }
     }
 }

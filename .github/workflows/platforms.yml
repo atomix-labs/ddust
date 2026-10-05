@@ -33,8 +33,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # With every feature, and with none, so the code each feature gates builds and passes either
-      # way; and in release, where overflow wraps rather than panics.
+      # With every feature, and with none; and in release, where overflow wraps rather than panics.
       - run: cargo test --workspace --all-features --locked
       - run: cargo test --workspace --locked
       - run: cargo test --workspace --locked --release

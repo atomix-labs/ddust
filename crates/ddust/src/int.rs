@@ -14,16 +14,16 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// What an operation came to, before overflow is settled: its result, wrapped when it is past
-/// the integer's range, whether it is, and its sign. Each of the integer's families reads it its
+/// What an operation came to, before overflow is settled: its result, wrapped when it overflowed
+/// the integer's range, whether it did, and its sign. Each of the integer's families reads it its
 /// own way.
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 pub struct Outcome<I> {
     /// The result, modulo the integer's range.
     wrapped: I,
-    /// Whether the result is past the range.
-    past: bool,
+    /// Whether the result overflowed the range.
+    overflowed: bool,
     /// Whether the result is below zero.
     negative: bool,
 }
@@ -32,21 +32,21 @@ impl<I: Int> Outcome<I> {
     /// A result within the range.
     #[inline]
     const fn in_range(value: I) -> Self {
-        Self { wrapped: value, past: false, negative: false }
+        Self { wrapped: value, overflowed: false, negative: false }
     }
 
     /// The result of the integer's own operator: its wrapped value, whether it overflowed, and
     /// the sign of the exact result.
     #[inline]
-    pub(crate) const fn from_parts(wrapped: I, past: bool, negative: bool) -> Self {
-        Self { wrapped, past, negative }
+    pub(crate) const fn from_parts(wrapped: I, overflowed: bool, negative: bool) -> Self {
+        Self { wrapped, overflowed, negative }
     }
 
     /// The result, or `None` past the range.
     #[inline]
     #[must_use]
     pub const fn checked(self) -> Option<I> {
-        if self.past { None } else { Some(self.wrapped) }
+        if self.overflowed { None } else { Some(self.wrapped) }
     }
 
     /// The result, wrapped around the range.
@@ -60,14 +60,7 @@ impl<I: Int> Outcome<I> {
     #[inline]
     #[must_use]
     pub const fn overflowing(self) -> (I, bool) {
-        (self.wrapped, self.past)
-    }
-
-    /// Whether the result is past the range.
-    #[inline]
-    #[must_use]
-    pub const fn is_past(self) -> bool {
-        self.past
+        (self.wrapped, self.overflowed)
     }
 
     /// The result as an operator gives it: past the range, a panic with overflow checks on, and
@@ -75,7 +68,7 @@ impl<I: Int> Outcome<I> {
     #[inline]
     #[track_caller]
     pub(crate) const fn operator(self, operation: Operation) -> I {
-        if cfg!(overflow_checks) && self.past {
+        if cfg!(overflow_checks) && self.overflowed {
             overflowed(operation);
         }
         self.wrapped
@@ -88,7 +81,7 @@ impl<I: Int> Outcome<I> {
     where
         I: [const] Int,
     {
-        match (self.past, self.negative) {
+        match (self.overflowed, self.negative) {
             (false, _) => self.wrapped,
             (true, true) => I::MIN,
             (true, false) => I::MAX,
@@ -361,13 +354,13 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
     exact: Exact<D>,
 ) -> Outcome<I> {
     let negative = exact.negative;
-    let (magnitude, beyond) = match exact.magnitude.narrow() {
-        Some(magnitude) => (magnitude, exact.beyond),
+    let (magnitude, overflowed) = match exact.magnitude.narrow() {
+        Some(magnitude) => (magnitude, exact.overflowed),
         None => (exact.magnitude.wrapping_narrow(), true),
     };
-    match (beyond, I::join(negative, magnitude)) {
-        (false, Some(value)) => Outcome { wrapped: value, past: false, negative },
-        _ => Outcome { wrapped: I::wrapping_join(negative, magnitude), past: true, negative },
+    match (overflowed, I::join(negative, magnitude)) {
+        (false, Some(value)) => Outcome { wrapped: value, overflowed: false, negative },
+        _ => Outcome { wrapped: I::wrapping_join(negative, magnitude), overflowed: true, negative },
     }
 }
 
@@ -393,7 +386,7 @@ const fn settled<I: [const] Magnitude + [const] Int>(
 ) -> Outcome<I> {
     match outcome {
         Some(outcome) => outcome,
-        None => Outcome { wrapped: I::ZERO, past: true, negative },
+        None => Outcome { wrapped: I::ZERO, overflowed: true, negative },
     }
 }
 
@@ -449,7 +442,7 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
         left = left.wrapping_sub(1);
     }
     let low = I::Unsigned::truncate(a.to_u128().wrapping_mul(b.to_u128()).wrapping_mul(power));
-    Outcome { wrapped: I::wrapping_join(negative, low), past: true, negative }
+    Outcome { wrapped: I::wrapping_join(negative, low), overflowed: true, negative }
 }
 
 /// `a × 10^k / b`, rounded, for any integer and a `b` that is not zero.
@@ -548,7 +541,7 @@ const fn lined_up_rem<I: [const] Magnitude>(a: I, ka: u8, b: I, kb: u8) -> I {
 
 /// The methods every integer shares, forwarded to its own, and its kernels.
 macro_rules! int {
-    ($($t:ty => $unsigned:ty, $double:ty, $digits:literal;)*) => {$(
+    ($($t:ty => $unsigned:ty, $digits:literal;)*) => {$(
         impl sealed::Sealed for $t {}
 
         const impl Int for $t {
@@ -739,16 +732,16 @@ macro_rules! unsigned {
 }
 
 int! {
-    i8 => u8, u16, 2;
-    i16 => u16, u32, 4;
-    i32 => u32, u64, 9;
-    i64 => u64, u128, 18;
-    i128 => u128, U256, 38;
-    u8 => u8, u16, 2;
-    u16 => u16, u32, 4;
-    u32 => u32, u64, 9;
-    u64 => u64, u128, 19;
-    u128 => u128, U256, 38;
+    i8 => u8, 2;
+    i16 => u16, 4;
+    i32 => u32, 9;
+    i64 => u64, 18;
+    i128 => u128, 38;
+    u8 => u8, 2;
+    u16 => u16, 4;
+    u32 => u32, 9;
+    u64 => u64, 19;
+    u128 => u128, 38;
 }
 
 signed! {

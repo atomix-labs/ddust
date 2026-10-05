@@ -353,6 +353,6 @@ mod tests {
     #[should_panic(expected = "a product's decimals are past 38")]
     fn a_run_time_product_past_38_decimals_panics() {
         let fine = Dynamic::new(20).expect("at most 38");
-        let _past = fine.times(fine);
+        let _product_scale = fine.times(fine);
     }
 }
