@@ -1389,10 +1389,23 @@ mod tests {
     }
 
     #[test]
+    #[cfg(overflow_checks)]
     #[should_panic(expected = "attempt to add with overflow")]
     fn a_lined_up_sum_past_the_range_panics_with_overflow_checks() {
         let big = Decimal::<i8, Dynamic>::from_bits(100, Dynamic::new(0).expect("at most 38"));
         let _sum = big + Decimal::from_bits(1, Dynamic::new(1).expect("at most 38"));
+    }
+
+    #[test]
+    #[cfg(not(overflow_checks))]
+    fn a_lined_up_sum_past_the_range_wraps_without_overflow_checks() {
+        let big = Decimal::<i8, Dynamic>::from_bits(100, Dynamic::new(0).expect("at most 38"));
+        let sum = big + Decimal::from_bits(1, Dynamic::new(1).expect("at most 38"));
+        assert_eq!(
+            sum.to_bits(),
+            1_001_i16.to_le_bytes()[0].cast_signed(),
+            "1001's low byte, as i8 wraps"
+        );
     }
 
     #[test]
