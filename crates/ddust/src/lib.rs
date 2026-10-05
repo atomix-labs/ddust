@@ -8,11 +8,16 @@
 #![feature(const_unsigned_bigint_helpers)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(test)]
+extern crate alloc;
+
 mod int;
 mod kernel;
 pub mod round;
+pub mod scale;
 mod word;
 
 #[doc(hidden)]
 pub use crate::int::Outcome;
 pub use crate::int::{Int, Signed};
+pub use crate::scale::{Dynamic, Fixed, Scale, StaticScale};
