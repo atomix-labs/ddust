@@ -1,7 +1,8 @@
 //! What every parser target checks of one decimal type over any bytes.
 
 /// Checks one type over `$data`: `from_ascii` against `FromStr`, a read in place, a read at the
-/// front and the rounding reads; and `write_ascii` and `Display` against each other and read back.
+/// front and the rounding reads; `write_ascii` and `Display` against each other and read back; and
+/// the scale a run-time decimal reads from its spelling.
 #[macro_export]
 macro_rules! check {
     ($data:expr, $ty:ty) => {{
@@ -12,10 +13,20 @@ macro_rules! check {
         if let Ok(text) = core::str::from_utf8(data) {
             assert_eq!(text.parse::<$ty>(), value, "a &str reads as its bytes: {text:?}");
         }
-        let mut buffer = b"9.9".to_vec();
+        // Eight bytes before the number and twenty-four after, so a short one is read by the
+        // window, and digits, points and signs around it, which the window must leave out.
+        let (before, after): (&[u8], &[u8]) = (b"99999.9-", b"9.99999999999999999-9.99");
+        let mut buffer = before.to_vec();
         buffer.extend_from_slice(data);
-        buffer.extend_from_slice(b"99");
-        assert_eq!(<$ty>::from_ascii_at(&buffer, 3..3 + data.len(), Fixed), value, "a range reads as the bytes alone");
+        buffer.extend_from_slice(after);
+        let range = before.len()..before.len() + data.len();
+        assert_eq!(<$ty>::from_ascii_at(&buffer, range, Fixed), value, "a range reads as the bytes alone");
+        if let Ok(text) = core::str::from_utf8(data)
+            && let Ok(spelled) = text.parse::<ddust::Decimal<i128, ddust::Dynamic>>()
+        {
+            let back: ddust::Decimal<i128, ddust::Dynamic> = format!("{spelled:#}").parse().expect("its own spelling");
+            assert_eq!((back.steps(), back.decimals()), (spelled.steps(), spelled.decimals()), "{text:?} keeps its scale");
+        }
         if let Ok(value) = value {
             assert_eq!(<$ty>::from_ascii_prefix(data, Fixed), Ok((value, data.len())), "a whole number reads at the front");
         }

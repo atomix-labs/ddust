@@ -103,18 +103,14 @@ fn read_general(
         }
         place = place.saturating_sub(1);
     }
-    // The digits ran out above one step: the places left are zeros.
-    if place >= 0 {
+    // The digits ran out above one step: the places left are zeros, which zero keeps at any place.
+    if place >= 0 && value != 0 {
         let power = u32::try_from(place.saturating_add(1))
             .map_err(|_too_far| ParseErrorKind::PosOverflow)?;
-        value = if value == 0 {
-            0
-        } else {
-            10_u128
-                .checked_pow(power)
-                .and_then(|power| value.checked_mul(power))
-                .ok_or(ParseErrorKind::PosOverflow)?
-        };
+        value = 10_u128
+            .checked_pow(power)
+            .and_then(|power| value.checked_mul(power))
+            .ok_or(ParseErrorKind::PosOverflow)?;
     }
     if below == 0 && !sticky {
         return Ok(value);
@@ -577,6 +573,7 @@ mod tests {
         Err(ParseErrorKind::TooManyDecimals)
     )]
     #[case::a_digit_far_below_a_step(concat!("1.", "0000000000000000000000000000000000000000", "1"), 7, Err(ParseErrorKind::TooManyDecimals))]
+    #[case::zero_at_any_place("0e5000000000", 7, Ok((false, 0)))]
     #[case::past_u128("1e40", 7, Err(ParseErrorKind::PosOverflow))]
     #[case::past_u128_negative("-1e40", 7, Err(ParseErrorKind::NegOverflow))]
     fn a_number_reads_exactly_or_says_why_not(

@@ -489,8 +489,8 @@ fn exponent_digits(exponent: i32) -> Exponent {
 
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// Writes the value's shortest exact decimal into `out`, as `Display` does, with no formatter:
-    /// the length written, or `None` when the text does not fit. [`MAX_ASCII_LEN`] bytes hold every
-    /// value's.
+    /// the length written, or `None` when the text does not fit; no byte past the text is touched.
+    /// [`MAX_ASCII_LEN`] bytes hold every value's.
     ///
     /// # Examples
     /// ```
@@ -506,11 +506,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         let (negative, magnitude) = self.steps().sign_and_magnitude();
         let decimals = self.decimals();
         match u64::try_from(magnitude) {
-            // Stored eight bytes at a time, past the text: straight into `out` when it has the
-            // room, and through the stack otherwise, then the text alone copied.
-            Ok(narrow) if decimals <= 19 && out.len() >= EIGHT_BYTE_ROOM => {
-                write_ascii_narrow(negative, narrow, decimals, out)
-            },
+            // Stored eight bytes at a time, past the text, so through the stack: `out` is written
+            // with the text alone, and nothing past it.
             Ok(narrow) if decimals <= 19 => {
                 let mut room = [0; EIGHT_BYTE_ROOM];
                 let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
@@ -618,6 +615,18 @@ mod tests {
     #[case::smallest_negative(i64::MIN, "-922337203685.4775808")]
     fn a_value_writes_its_shortest_exact_decimal(#[case] steps: i64, #[case] text: &str) {
         assert_eq!(format!("{}", Price::from_steps(steps, Fixed)), text, "{steps}");
+    }
+
+    #[test]
+    fn nothing_past_the_text_is_written() {
+        let mut frame = [b'#'; 64];
+        let len =
+            Price::from_steps(15_000_000, Fixed).write_ascii(&mut frame).expect("room enough");
+        assert_eq!(
+            (&frame[..len], frame[len]),
+            (&b"1.5"[..], b'#'),
+            "the byte after the text, kept"
+        );
     }
 
     #[test]
