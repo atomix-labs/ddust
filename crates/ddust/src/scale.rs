@@ -55,6 +55,14 @@ pub trait StaticScale: Scale {
 /// assert_eq!(Fixed::<4>.decimals(), 4, "four decimals");
 /// assert_eq!(size_of::<Fixed<4>>(), 0, "known at compile time, so it takes no room");
 /// ```
+///
+/// More than 38 decimals fails the build:
+///
+/// ```compile_fail,E0080
+/// use ddust::{Fixed, Scale};
+///
+/// let _decimals = Fixed::<39>.decimals();
+/// ```
 #[derive(Clone, Copy, Default, Hash)]
 #[derive_const(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed<const D: u8>;

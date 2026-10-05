@@ -1,0 +1,5 @@
+error[E0600]: cannot apply unary operator `-` to type `Decimal<u64, Fixed<2>>`
+ --> tests/compile_fail/an_unsigned_decimal_never_negates.rs:7:20
+  |
+7 |     let _negated = -size;
+  |                    ^^^^^ cannot apply unary operator `-`

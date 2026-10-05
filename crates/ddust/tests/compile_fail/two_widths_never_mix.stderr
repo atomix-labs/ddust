@@ -1,0 +1,12 @@
+error[E0308]: mismatched types
+ --> tests/compile_fail/two_widths_never_mix.rs:7:23
+  |
+7 |     let _sum = wide + narrow;
+  |                       ^^^^^^ expected `Decimal<i64, Fixed<2>>`, found `Decimal<i32, Fixed<2>>`
+  |
+  = note: expected struct `Decimal<i64, Fixed<2>>`
+             found struct `Decimal<i32, Fixed<2>>`
+help: call `Into::into` on this expression to convert `Decimal<i32, Fixed<2>>` into `Decimal<i64, Fixed<2>>`
+  |
+7 |     let _sum = wide + narrow.into();
+  |                             +++++++

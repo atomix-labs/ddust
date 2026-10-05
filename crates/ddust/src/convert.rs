@@ -111,6 +111,24 @@ impl<I: Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal<I, Fixed<D>> 
 
 /// A product's scale as the `Fixed` of its decimals, with no instruction; a `Fixed` of other
 /// decimals fails the build.
+///
+/// # Examples
+/// ```
+/// use ddust::{D64, dec};
+///
+/// let (price, size): (D64<2>, D64<4>) = (dec!(60000.37), dec!(0.0125));
+/// let notional: D64<6> = (price * size).into();
+/// assert_eq!(notional, dec!(750.004625), "two decimals and four: six");
+/// ```
+///
+/// Any other scale fails the build:
+///
+/// ```compile_fail,E0080
+/// use ddust::{D64, dec};
+///
+/// let (price, size): (D64<2>, D64<4>) = (dec!(60000.37), dec!(0.0125));
+/// let notional: D64<5> = (price * size).into();
+/// ```
 impl<I: Int, A: StaticScale, B: StaticScale, const C: u8> From<Decimal<I, Sum<A, B>>>
     for Decimal<I, Fixed<C>>
 {

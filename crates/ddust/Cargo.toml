@@ -30,3 +30,4 @@ bench = false
 # external
 proptest = { workspace = true }
 rstest   = { workspace = true }
+trybuild = { workspace = true }

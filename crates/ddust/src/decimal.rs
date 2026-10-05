@@ -316,7 +316,20 @@ impl<I: Int, S: StaticScale> Decimal<I, S> {
 }
 
 impl<I: const Int, S: StaticScale + const Scale> Decimal<I, S> {
-    /// One: `10^decimals` steps. Naming it where one does not fit, `D8<3>::ONE`, fails the build.
+    /// One: `10^decimals` steps.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D64;
+    ///
+    /// assert_eq!(D64::<2>::ONE.to_bits(), 100, "a hundred hundredths");
+    /// ```
+    ///
+    /// Naming it where one does not fit fails the build:
+    ///
+    /// ```compile_fail,E0080
+    /// let _one = ddust::D8::<3>::ONE;
+    /// ```
     pub const ONE: Self = {
         let one = Self::new(I::ONE, 0, S::INSTANCE);
         assert!(one.is_ok(), "one is past the decimal's range");
