@@ -67,7 +67,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        let (a, b) = (self.to_bits(), rhs.to_bits());
+        let (a, b) = (self.steps(), rhs.steps());
         if left {
             a.lined_up_add(false, k, b, subtract)
         } else {
@@ -85,7 +85,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     {
         match self.meet(rhs) {
             Meet::Shared => {
-                let (a, b) = (self.to_bits(), rhs.to_bits());
+                let (a, b) = (self.steps(), rhs.steps());
                 let (steps, past) =
                     if subtract { a.overflowing_sub(b) } else { a.overflowing_add(b) };
                 let negative = if subtract { a < b } else { a.is_negative() };
@@ -115,7 +115,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     {
         match self.sum_outcome(rhs, false) {
             Some((outcome, scale)) => match outcome.checked() {
-                Some(steps) => Some(Self::from_bits(steps, scale)),
+                Some(steps) => Some(Self::from_steps(steps, scale)),
                 None => None,
             },
             None => None,
@@ -141,7 +141,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     {
         match self.sum_outcome(rhs, true) {
             Some((outcome, scale)) => match outcome.checked() {
-                Some(steps) => Some(Self::from_bits(steps, scale)),
+                Some(steps) => Some(Self::from_steps(steps, scale)),
                 None => None,
             },
             None => None,
@@ -169,7 +169,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         match self.sum_outcome(rhs, false) {
-            Some((outcome, scale)) => Self::from_bits(outcome.saturating(), scale),
+            Some((outcome, scale)) => Self::from_steps(outcome.saturating(), scale),
             None => unmixed(),
         }
     }
@@ -195,7 +195,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         match self.sum_outcome(rhs, true) {
-            Some((outcome, scale)) => Self::from_bits(outcome.saturating(), scale),
+            Some((outcome, scale)) => Self::from_steps(outcome.saturating(), scale),
             None => unmixed(),
         }
     }
@@ -221,7 +221,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         match self.sum_outcome(rhs, false) {
-            Some((outcome, scale)) => Self::from_bits(outcome.wrapping(), scale),
+            Some((outcome, scale)) => Self::from_steps(outcome.wrapping(), scale),
             None => unmixed(),
         }
     }
@@ -247,7 +247,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         match self.sum_outcome(rhs, true) {
-            Some((outcome, scale)) => Self::from_bits(outcome.wrapping(), scale),
+            Some((outcome, scale)) => Self::from_steps(outcome.wrapping(), scale),
             None => unmixed(),
         }
     }
@@ -275,7 +275,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         match self.sum_outcome(rhs, false) {
             Some((outcome, scale)) => {
                 let (steps, wrapped) = outcome.overflowing();
-                (Self::from_bits(steps, scale), wrapped)
+                (Self::from_steps(steps, scale), wrapped)
             },
             None => unmixed(),
         }
@@ -304,7 +304,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         match self.sum_outcome(rhs, true) {
             Some((outcome, scale)) => {
                 let (steps, wrapped) = outcome.overflowing();
-                (Self::from_bits(steps, scale), wrapped)
+                (Self::from_steps(steps, scale), wrapped)
             },
             None => unmixed(),
         }
@@ -326,8 +326,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        match self.to_bits().checked_mul(n) {
-            Some(steps) => Some(Self::from_bits(steps, self.scale())),
+        match self.steps().checked_mul(n) {
+            Some(steps) => Some(Self::from_steps(steps, self.scale())),
             None => None,
         }
     }
@@ -347,7 +347,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        Self::from_bits(self.to_bits().saturating_mul(n), self.scale())
+        Self::from_steps(self.steps().saturating_mul(n), self.scale())
     }
 
     /// The value `n` times over, wrapped around the range.
@@ -365,7 +365,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        Self::from_bits(self.to_bits().wrapping_mul(n), self.scale())
+        Self::from_steps(self.steps().wrapping_mul(n), self.scale())
     }
 
     /// The value `n` times over, wrapped around the range, and whether it wrapped.
@@ -383,8 +383,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        let (steps, wrapped) = self.to_bits().overflowing_mul(n);
-        (Self::from_bits(steps, self.scale()), wrapped)
+        let (steps, wrapped) = self.steps().overflowing_mul(n);
+        (Self::from_steps(steps, self.scale()), wrapped)
     }
 
     /// One of `n` equal parts, truncated toward zero, or `None` for zero parts and for the
@@ -404,8 +404,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        match self.to_bits().checked_div(n) {
-            Some(steps) => Some(Self::from_bits(steps, self.scale())),
+        match self.steps().checked_div(n) {
+            Some(steps) => Some(Self::from_steps(steps, self.scale())),
             None => None,
         }
     }
@@ -429,7 +429,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        Self::from_bits(self.to_bits().saturating_div(n), self.scale())
+        Self::from_steps(self.steps().saturating_div(n), self.scale())
     }
 
     /// One of `n` equal parts, truncated toward zero; the minimum in -1 parts wraps to itself.
@@ -450,7 +450,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        Self::from_bits(self.to_bits().wrapping_div(n), self.scale())
+        Self::from_steps(self.steps().wrapping_div(n), self.scale())
     }
 
     /// One of `n` equal parts, truncated toward zero, and whether it wrapped.
@@ -471,8 +471,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        let (steps, wrapped) = self.to_bits().overflowing_div(n);
-        (Self::from_bits(steps, self.scale()), wrapped)
+        let (steps, wrapped) = self.steps().overflowing_div(n);
+        (Self::from_steps(steps, self.scale()), wrapped)
     }
 
     /// The quotient by `rhs` at this value's scale, truncated toward zero as `/` is, or `None` for
@@ -482,9 +482,9 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::{D64, dec};
     ///
-    /// let (budget, price): (D64<2>, D64<4>) = (dec!(100), dec!(3.0001));
-    /// assert_eq!(budget.checked_div(price), Some(dec!(33.33)), "truncated, at two decimals");
-    /// assert_eq!(budget.checked_div(D64::<4>::ZERO), None, "never by zero");
+    /// let (total, quantity): (D64<2>, D64<4>) = (dec!(100), dec!(3.0001));
+    /// assert_eq!(total.checked_div(quantity), Some(dec!(33.33)), "truncated, at two decimals");
+    /// assert_eq!(total.checked_div(D64::<4>::ZERO), None, "never by zero");
     /// ```
     #[inline]
     #[must_use]
@@ -495,7 +495,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     {
         match self.quotient(rhs) {
             Some(outcome) => match outcome.checked() {
-                Some(steps) => Some(Self::from_bits(steps, self.scale())),
+                Some(steps) => Some(Self::from_steps(steps, self.scale())),
                 None => None,
             },
             None => None,
@@ -523,7 +523,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         T: [const] Scale,
     {
-        Self::from_bits(self.nonzero_quotient(rhs).saturating(), self.scale())
+        Self::from_steps(self.nonzero_quotient(rhs).saturating(), self.scale())
     }
 
     /// The quotient by `rhs` at this value's scale, truncated toward zero, wrapped around the
@@ -547,7 +547,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         T: [const] Scale,
     {
-        Self::from_bits(self.nonzero_quotient(rhs).wrapping(), self.scale())
+        Self::from_steps(self.nonzero_quotient(rhs).wrapping(), self.scale())
     }
 
     /// The quotient by `rhs` at this value's scale, truncated toward zero, wrapped around the
@@ -572,7 +572,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         T: [const] Scale,
     {
         let (steps, wrapped) = self.nonzero_quotient(rhs).overflowing();
-        (Self::from_bits(steps, self.scale()), wrapped)
+        (Self::from_steps(steps, self.scale()), wrapped)
     }
 
     /// The truncated quotient by `rhs` at this value's scale, or `None` for a zero divisor:
@@ -583,11 +583,11 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         T: [const] Scale,
     {
-        let divisor = rhs.to_bits();
+        let divisor = rhs.steps();
         if divisor == I::ZERO {
             return None;
         }
-        Some(self.to_bits().div_up(rhs.decimals(), divisor, Trunc.table()))
+        Some(self.steps().div_up(rhs.decimals(), divisor, Trunc.table()))
     }
 
     /// The truncated quotient by `rhs` at this value's scale; panics for a zero divisor.
@@ -623,15 +623,15 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         match self.meet(rhs) {
-            Meet::Shared => match self.to_bits().checked_rem(rhs.to_bits()) {
-                Some(steps) => Some(Self::from_bits(steps, self.scale())),
+            Meet::Shared => match self.steps().checked_rem(rhs.steps()) {
+                Some(steps) => Some(Self::from_steps(steps, self.scale())),
                 None => None,
             },
             Meet::Lined { left, k, scale } => {
-                if rhs.to_bits() == I::ZERO {
+                if rhs.steps() == I::ZERO {
                     return None;
                 }
-                Some(Self::from_bits(self.lined_rem(rhs, left, k), scale))
+                Some(Self::from_steps(self.lined_rem(rhs, left, k), scale))
             },
             Meet::Unmixed => None,
         }
@@ -646,7 +646,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::D8;
     ///
-    /// let minus_one = D8::<0>::from_bits(-1, ddust::Fixed);
+    /// let minus_one = D8::<0>::from_steps(-1, ddust::Fixed);
     /// assert_eq!(D8::<0>::MIN.wrapping_rem(minus_one), D8::<0>::ZERO, "no remainder");
     /// ```
     #[inline]
@@ -670,7 +670,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::D8;
     ///
-    /// let minus_one = D8::<0>::from_bits(-1, ddust::Fixed);
+    /// let minus_one = D8::<0>::from_steps(-1, ddust::Fixed);
     /// assert_eq!(D8::<0>::MIN.overflowing_rem(minus_one), (D8::<0>::ZERO, true), "flagged");
     /// ```
     #[inline]
@@ -683,14 +683,14 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     {
         match self.meet(rhs) {
             Meet::Shared => {
-                let (steps, wrapped) = self.to_bits().overflowing_rem(rhs.to_bits());
-                (Self::from_bits(steps, self.scale()), wrapped)
+                let (steps, wrapped) = self.steps().overflowing_rem(rhs.steps());
+                (Self::from_steps(steps, self.scale()), wrapped)
             },
             Meet::Lined { left, k, scale } => {
-                if rhs.to_bits() == I::ZERO {
+                if rhs.steps() == I::ZERO {
                     remainder_by_zero();
                 }
-                (Self::from_bits(self.lined_rem(rhs, left, k), scale), false)
+                (Self::from_steps(self.lined_rem(rhs, left, k), scale), false)
             },
             Meet::Unmixed => unmixed(),
         }
@@ -702,7 +702,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
     {
-        let (a, b) = (self.to_bits(), rhs.to_bits());
+        let (a, b) = (self.steps(), rhs.steps());
         if left { a.lined_up_rem(k, b, 0) } else { a.lined_up_rem(0, b, k) }
     }
 }
@@ -729,15 +729,15 @@ const fn remainder_by_zero() -> ! {
 /// summed. A product at the sum of two static scales is a [`Sum`](crate::scale::Sum) scale, which
 /// converts into the `Fixed` of those decimals for free.
 impl<I: Int, S: Scale> Decimal<I, S> {
-    /// The exact product, or `None` past the range.
+    /// The exact product, or `None` past the range or for a run-time product past 38 decimals.
     ///
     /// # Examples
     /// ```
     /// use ddust::{D32, D64, dec};
     ///
-    /// let (price, size): (D64<2>, D64<4>) = (dec!(60000.37), dec!(0.0125));
-    /// let notional: Option<D64<6>> = price.checked_mul(size).map(Into::into);
-    /// assert_eq!(notional, Some(dec!(750.004625)), "exact, at six decimals");
+    /// let (unit_price, quantity): (D64<2>, D64<3>) = (dec!(19.99), dec!(2.375));
+    /// let total: Option<D64<5>> = unit_price.checked_mul(quantity).map(Into::into);
+    /// assert_eq!(total, Some(dec!(47.47625)), "exact, at five decimals");
     /// let (big, many): (D32<2>, D32<2>) = (dec!(1000), dec!(30000));
     /// assert_eq!(big.checked_mul(many), None, "3 · 10^11 steps are past an i32");
     /// ```
@@ -750,13 +750,16 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Times<T>,
     {
-        match self.to_bits().checked_mul(rhs.to_bits()) {
-            Some(steps) => Some(Decimal::from_bits(steps, self.scale().times(rhs.scale()))),
-            None => None,
+        match (self.steps().checked_mul(rhs.steps()), self.scale().checked_times(rhs.scale())) {
+            (Some(steps), Some(scale)) => Some(Decimal::from_steps(steps, scale)),
+            _ => None,
         }
     }
 
     /// The exact product, held at the end of the range it passes.
+    ///
+    /// # Panics
+    /// For a run-time product past 38 decimals, a scale no integer holds a step of.
     ///
     /// # Examples
     /// ```
@@ -775,13 +778,16 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Times<T>,
     {
-        Decimal::from_bits(
-            self.to_bits().saturating_mul(rhs.to_bits()),
+        Decimal::from_steps(
+            self.steps().saturating_mul(rhs.steps()),
             self.scale().times(rhs.scale()),
         )
     }
 
     /// The exact product, wrapped around the range.
+    ///
+    /// # Panics
+    /// For a run-time product past 38 decimals, a scale no integer holds a step of.
     ///
     /// # Examples
     /// ```
@@ -800,13 +806,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Times<T>,
     {
-        Decimal::from_bits(
-            self.to_bits().wrapping_mul(rhs.to_bits()),
-            self.scale().times(rhs.scale()),
-        )
+        Decimal::from_steps(self.steps().wrapping_mul(rhs.steps()), self.scale().times(rhs.scale()))
     }
 
     /// The exact product, wrapped around the range, and whether it wrapped.
+    ///
+    /// # Panics
+    /// For a run-time product past 38 decimals, a scale no integer holds a step of.
     ///
     /// # Examples
     /// ```
@@ -824,30 +830,46 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Times<T>,
     {
-        let (steps, wrapped) = self.to_bits().overflowing_mul(rhs.to_bits());
-        (Decimal::from_bits(steps, self.scale().times(rhs.scale())), wrapped)
+        let (steps, wrapped) = self.steps().overflowing_mul(rhs.steps());
+        (Decimal::from_steps(steps, self.scale().times(rhs.scale())), wrapped)
     }
 }
 
 impl<I: Signed, S: Scale> Decimal<I, S> {
     /// Whether the value is below zero.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, dec};
+    ///
+    /// let (loss, gain): (D64<2>, D64<2>) = (dec!(-12.5), dec!(12.5));
+    /// assert!(loss.is_negative() && !gain.is_negative());
+    /// ```
     #[inline]
     #[must_use]
     pub const fn is_negative(self) -> bool
     where
         I: [const] Signed,
     {
-        self.to_bits() < I::ZERO
+        self.steps() < I::ZERO
     }
 
     /// `-1`, `0` or `1`, as the value's sign.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, dec};
+    ///
+    /// let loss: D64<2> = dec!(-12.5);
+    /// assert_eq!((loss.signum(), D64::<2>::ZERO.signum()), (-1, 0));
+    /// ```
     #[inline]
     #[must_use]
     pub const fn signum(self) -> I
     where
         I: [const] Signed,
     {
-        self.to_bits().signum()
+        self.steps().signum()
     }
 
     /// The magnitude; for the minimum it panics with overflow checks on, and wraps otherwise.
@@ -866,7 +888,7 @@ impl<I: Signed, S: Scale> Decimal<I, S> {
     where
         I: [const] Signed,
     {
-        Self::from_bits(self.to_bits().abs(), self.scale())
+        Self::from_steps(self.steps().abs(), self.scale())
     }
 
     /// The magnitude as an unsigned decimal, exact for every value.
@@ -875,7 +897,7 @@ impl<I: Signed, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::D8;
     ///
-    /// assert_eq!(D8::<1>::MIN.unsigned_abs().to_bits(), 128, "-12.8's magnitude, in a u8");
+    /// assert_eq!(D8::<1>::MIN.unsigned_abs().steps(), 128, "-12.8's magnitude, in a u8");
     /// ```
     #[inline]
     #[must_use]
@@ -883,73 +905,119 @@ impl<I: Signed, S: Scale> Decimal<I, S> {
     where
         I: [const] Signed,
     {
-        Decimal::from_bits(self.to_bits().unsigned_abs(), self.scale())
+        Decimal::from_steps(self.steps().unsigned_abs(), self.scale())
     }
 
     /// The negation, or `None` for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D8, dec};
+    ///
+    /// let debt: D8<1> = dec!(-2.5);
+    /// assert_eq!(debt.checked_neg(), Some(dec!(2.5)), "repaid");
+    /// assert_eq!(D8::<1>::MIN.checked_neg(), None, "12.8 is past 12.7");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn checked_neg(self) -> Option<Self>
     where
         I: [const] Signed,
     {
-        match self.to_bits().checked_neg() {
-            Some(steps) => Some(Self::from_bits(steps, self.scale())),
+        match self.steps().checked_neg() {
+            Some(steps) => Some(Self::from_steps(steps, self.scale())),
             None => None,
         }
     }
 
     /// The magnitude, or `None` for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D8, dec};
+    ///
+    /// let debt: D8<1> = dec!(-2.5);
+    /// assert_eq!(debt.checked_abs(), Some(dec!(2.5)));
+    /// assert_eq!(D8::<1>::MIN.checked_abs(), None, "12.8 is past 12.7");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn checked_abs(self) -> Option<Self>
     where
         I: [const] Signed,
     {
-        match self.to_bits().checked_abs() {
-            Some(steps) => Some(Self::from_bits(steps, self.scale())),
+        match self.steps().checked_abs() {
+            Some(steps) => Some(Self::from_steps(steps, self.scale())),
             None => None,
         }
     }
 
     /// The negation, the maximum for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D8;
+    ///
+    /// assert_eq!(D8::<1>::MIN.saturating_neg(), D8::<1>::MAX, "held at 12.7");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn saturating_neg(self) -> Self
     where
         I: [const] Signed,
     {
-        Self::from_bits(self.to_bits().saturating_neg(), self.scale())
+        Self::from_steps(self.steps().saturating_neg(), self.scale())
     }
 
     /// The magnitude, the maximum for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D8;
+    ///
+    /// assert_eq!(D8::<1>::MIN.saturating_abs(), D8::<1>::MAX, "held at 12.7");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn saturating_abs(self) -> Self
     where
         I: [const] Signed,
     {
-        Self::from_bits(self.to_bits().saturating_abs(), self.scale())
+        Self::from_steps(self.steps().saturating_abs(), self.scale())
     }
 
     /// The negation, the minimum for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D8;
+    ///
+    /// assert_eq!(D8::<1>::MIN.wrapping_neg(), D8::<1>::MIN, "wrapped to itself");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn wrapping_neg(self) -> Self
     where
         I: [const] Signed,
     {
-        Self::from_bits(self.to_bits().wrapping_neg(), self.scale())
+        Self::from_steps(self.steps().wrapping_neg(), self.scale())
     }
 
     /// The magnitude, the minimum for the minimum.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D8;
+    ///
+    /// assert_eq!(D8::<1>::MIN.wrapping_abs(), D8::<1>::MIN, "wrapped to itself");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn wrapping_abs(self) -> Self
     where
         I: [const] Signed,
     {
-        Self::from_bits(self.to_bits().wrapping_abs(), self.scale())
+        Self::from_steps(self.steps().wrapping_abs(), self.scale())
     }
 
     /// The negation, and whether it wrapped.
@@ -966,19 +1034,26 @@ impl<I: Signed, S: Scale> Decimal<I, S> {
     where
         I: [const] Signed,
     {
-        let (steps, wrapped) = self.to_bits().overflowing_neg();
-        (Self::from_bits(steps, self.scale()), wrapped)
+        let (steps, wrapped) = self.steps().overflowing_neg();
+        (Self::from_steps(steps, self.scale()), wrapped)
     }
 
     /// The magnitude, and whether it wrapped.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D8;
+    ///
+    /// assert_eq!(D8::<1>::MIN.overflowing_abs(), (D8::<1>::MIN, true), "12.8 is past 12.7");
+    /// ```
     #[inline]
     #[must_use]
     pub const fn overflowing_abs(self) -> (Self, bool)
     where
         I: [const] Signed,
     {
-        let (steps, wrapped) = self.to_bits().overflowing_abs();
-        (Self::from_bits(steps, self.scale()), wrapped)
+        let (steps, wrapped) = self.steps().overflowing_abs();
+        (Self::from_steps(steps, self.scale()), wrapped)
     }
 }
 
@@ -992,10 +1067,11 @@ const impl<I: [const] Int, S: [const] Scale> Add for Decimal<I, S> {
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: overflow checks decide")]
     fn add(self, rhs: Self) -> Self {
         match self.meet(rhs) {
-            Meet::Shared => Self::from_bits(self.to_bits() + rhs.to_bits(), self.scale()),
-            Meet::Lined { left, k, scale } => {
-                Self::from_bits(self.lined_sum(rhs, left, k, false).operator(Operation::Add), scale)
-            },
+            Meet::Shared => Self::from_steps(self.steps() + rhs.steps(), self.scale()),
+            Meet::Lined { left, k, scale } => Self::from_steps(
+                self.lined_sum(rhs, left, k, false).operator(Operation::Add),
+                scale,
+            ),
             Meet::Unmixed => unmixed(),
         }
     }
@@ -1011,8 +1087,8 @@ const impl<I: [const] Int, S: [const] Scale> Sub for Decimal<I, S> {
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: overflow checks decide")]
     fn sub(self, rhs: Self) -> Self {
         match self.meet(rhs) {
-            Meet::Shared => Self::from_bits(self.to_bits() - rhs.to_bits(), self.scale()),
-            Meet::Lined { left, k, scale } => Self::from_bits(
+            Meet::Shared => Self::from_steps(self.steps() - rhs.steps(), self.scale()),
+            Meet::Lined { left, k, scale } => Self::from_steps(
                 self.lined_sum(rhs, left, k, true).operator(Operation::Subtract),
                 scale,
             ),
@@ -1029,7 +1105,7 @@ const impl<I: [const] Signed, S: [const] Scale> Neg for Decimal<I, S> {
     #[track_caller]
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: overflow checks decide")]
     fn neg(self) -> Self {
-        Self::from_bits(-self.to_bits(), self.scale())
+        Self::from_steps(-self.steps(), self.scale())
     }
 }
 
@@ -1041,7 +1117,7 @@ const impl<I: [const] Int, S: [const] Scale> Mul<I> for Decimal<I, S> {
     #[track_caller]
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: overflow checks decide")]
     fn mul(self, n: I) -> Self {
-        Self::from_bits(self.to_bits() * n, self.scale())
+        Self::from_steps(self.steps() * n, self.scale())
     }
 }
 
@@ -1054,12 +1130,13 @@ const impl<I: [const] Int, S: [const] Scale> Div<I> for Decimal<I, S> {
     #[track_caller]
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: zero panics")]
     fn div(self, n: I) -> Self {
-        Self::from_bits(self.to_bits() / n, self.scale())
+        Self::from_steps(self.steps() / n, self.scale())
     }
 }
 
 /// The exact product: the steps multiplied as the integer's `*` does, the scales summed; overflow
-/// panics with overflow checks on, and wraps otherwise.
+/// panics with overflow checks on, and wraps otherwise. A run-time product past 38 decimals panics,
+/// a scale no integer holds a step of.
 const impl<I: [const] Int, S: [const] Times<T>, T: [const] Scale> Mul<Decimal<I, T>>
     for Decimal<I, S>
 {
@@ -1069,7 +1146,7 @@ const impl<I: [const] Int, S: [const] Times<T>, T: [const] Scale> Mul<Decimal<I,
     #[track_caller]
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: overflow checks decide")]
     fn mul(self, rhs: Decimal<I, T>) -> Self::Output {
-        Decimal::from_bits(self.to_bits() * rhs.to_bits(), self.scale().times(rhs.scale()))
+        Decimal::from_steps(self.steps() * rhs.steps(), self.scale().times(rhs.scale()))
     }
 }
 
@@ -1083,7 +1160,7 @@ const impl<I: [const] Int, S: [const] Scale, T: [const] Scale> Div<Decimal<I, T>
     #[inline]
     #[track_caller]
     fn div(self, rhs: Decimal<I, T>) -> Self {
-        Self::from_bits(self.nonzero_quotient(rhs).operator(Operation::Divide), self.scale())
+        Self::from_steps(self.nonzero_quotient(rhs).operator(Operation::Divide), self.scale())
     }
 }
 
@@ -1097,12 +1174,12 @@ const impl<I: [const] Int, S: [const] Scale> Rem for Decimal<I, S> {
     #[expect(clippy::arithmetic_side_effects, reason = "the integer's own: zero panics")]
     fn rem(self, rhs: Self) -> Self {
         match self.meet(rhs) {
-            Meet::Shared => Self::from_bits(self.to_bits() % rhs.to_bits(), self.scale()),
+            Meet::Shared => Self::from_steps(self.steps() % rhs.steps(), self.scale()),
             Meet::Lined { left, k, scale } => {
-                if rhs.to_bits() == I::ZERO {
+                if rhs.steps() == I::ZERO {
                     remainder_by_zero();
                 }
-                Self::from_bits(self.lined_rem(rhs, left, k), scale)
+                Self::from_steps(self.lined_rem(rhs, left, k), scale)
             },
             Meet::Unmixed => unmixed(),
         }
@@ -1261,60 +1338,60 @@ mod tests {
     /// Hundredths.
     type Cents = D64<2>;
 
-    /// `bits` hundredths.
-    const fn cents(bits: i64) -> Cents {
-        Cents::from_bits(bits, Fixed)
+    /// `steps` hundredths.
+    const fn cents(steps: i64) -> Cents {
+        Cents::from_steps(steps, Fixed)
     }
 
     /// A decimal at a run-time scale of `decimals`.
-    fn dynamic(bits: i64, decimals: u8) -> Decimal<i64, Dynamic> {
-        Decimal::from_bits(bits, Dynamic::new(decimals).expect("at most 38"))
+    fn dynamic(steps: i64, decimals: u8) -> Decimal<i64, Dynamic> {
+        Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"))
     }
 
     proptest! {
         #[test]
         fn every_binary_method_is_the_integers(a: i64, b: i64) {
             let (x, y) = (cents(a), cents(b));
-            prop_assert_eq!(x.checked_add(y).map(Cents::to_bits), a.checked_add(b));
-            prop_assert_eq!(x.checked_sub(y).map(Cents::to_bits), a.checked_sub(b));
-            prop_assert_eq!(x.checked_mul_int(b).map(Cents::to_bits), a.checked_mul(b));
-            prop_assert_eq!(x.checked_div_int(b).map(Cents::to_bits), a.checked_div(b));
-            prop_assert_eq!(x.checked_rem(y).map(Cents::to_bits), a.checked_rem(b));
-            prop_assert_eq!(x.saturating_add(y).to_bits(), a.saturating_add(b));
-            prop_assert_eq!(x.saturating_sub(y).to_bits(), a.saturating_sub(b));
-            prop_assert_eq!(x.saturating_mul_int(b).to_bits(), a.saturating_mul(b));
-            prop_assert_eq!(x.wrapping_add(y).to_bits(), a.wrapping_add(b));
-            prop_assert_eq!(x.wrapping_sub(y).to_bits(), a.wrapping_sub(b));
-            prop_assert_eq!(x.wrapping_mul_int(b).to_bits(), a.wrapping_mul(b));
+            prop_assert_eq!(x.checked_add(y).map(Cents::steps), a.checked_add(b));
+            prop_assert_eq!(x.checked_sub(y).map(Cents::steps), a.checked_sub(b));
+            prop_assert_eq!(x.checked_mul_int(b).map(Cents::steps), a.checked_mul(b));
+            prop_assert_eq!(x.checked_div_int(b).map(Cents::steps), a.checked_div(b));
+            prop_assert_eq!(x.checked_rem(y).map(Cents::steps), a.checked_rem(b));
+            prop_assert_eq!(x.saturating_add(y).steps(), a.saturating_add(b));
+            prop_assert_eq!(x.saturating_sub(y).steps(), a.saturating_sub(b));
+            prop_assert_eq!(x.saturating_mul_int(b).steps(), a.saturating_mul(b));
+            prop_assert_eq!(x.wrapping_add(y).steps(), a.wrapping_add(b));
+            prop_assert_eq!(x.wrapping_sub(y).steps(), a.wrapping_sub(b));
+            prop_assert_eq!(x.wrapping_mul_int(b).steps(), a.wrapping_mul(b));
             prop_assert_eq!(x.overflowing_add(y).1, a.overflowing_add(b).1);
             prop_assert_eq!(x.overflowing_sub(y).1, a.overflowing_sub(b).1);
-            prop_assert_eq!(x.checked_mul(y).map(Decimal::to_bits), a.checked_mul(b), "the exact product's steps");
+            prop_assert_eq!(x.checked_mul(y).map(Decimal::steps), a.checked_mul(b), "the exact product's steps");
             if b != 0 {
-                prop_assert_eq!(x.wrapping_rem(y).to_bits(), a.wrapping_rem(b));
-                prop_assert_eq!(x.wrapping_div_int(b).to_bits(), a.wrapping_div(b));
-                prop_assert_eq!(x.saturating_div_int(b).to_bits(), a.saturating_div(b));
+                prop_assert_eq!(x.wrapping_rem(y).steps(), a.wrapping_rem(b));
+                prop_assert_eq!(x.wrapping_div_int(b).steps(), a.wrapping_div(b));
+                prop_assert_eq!(x.saturating_div_int(b).steps(), a.saturating_div(b));
             }
         }
 
         #[test]
         fn every_unary_method_is_the_integers(a: i64) {
             let x = cents(a);
-            prop_assert_eq!(x.checked_neg().map(Cents::to_bits), a.checked_neg());
-            prop_assert_eq!(x.checked_abs().map(Cents::to_bits), a.checked_abs());
-            prop_assert_eq!(x.saturating_neg().to_bits(), a.saturating_neg());
-            prop_assert_eq!(x.saturating_abs().to_bits(), a.saturating_abs());
-            prop_assert_eq!(x.wrapping_neg().to_bits(), a.wrapping_neg());
-            prop_assert_eq!(x.wrapping_abs().to_bits(), a.wrapping_abs());
+            prop_assert_eq!(x.checked_neg().map(Cents::steps), a.checked_neg());
+            prop_assert_eq!(x.checked_abs().map(Cents::steps), a.checked_abs());
+            prop_assert_eq!(x.saturating_neg().steps(), a.saturating_neg());
+            prop_assert_eq!(x.saturating_abs().steps(), a.saturating_abs());
+            prop_assert_eq!(x.wrapping_neg().steps(), a.wrapping_neg());
+            prop_assert_eq!(x.wrapping_abs().steps(), a.wrapping_abs());
             prop_assert_eq!(x.overflowing_neg().1, a.overflowing_neg().1);
             prop_assert_eq!(x.overflowing_abs().1, a.overflowing_abs().1);
-            prop_assert_eq!(x.unsigned_abs().to_bits(), a.unsigned_abs());
+            prop_assert_eq!(x.unsigned_abs().steps(), a.unsigned_abs());
             prop_assert_eq!((x.signum(), x.is_negative(), x.is_positive(), x.is_zero()), (a.signum(), a < 0, a > 0, a == 0));
         }
 
         #[test]
         fn a_quotient_is_the_truncated_exact_one(a in -(1_i64 << 40)..(1_i64 << 40), b in 1_i64..1_000_000) {
             // a / b at two decimals: a · 10^2 / b steps, as an i128 truncates it.
-            let quotient = cents(a).checked_div(cents(b)).map(Cents::to_bits);
+            let quotient = cents(a).checked_div(cents(b)).map(Cents::steps);
             prop_assert_eq!(quotient.map(i128::from), Some(i128::from(a) * 100 / i128::from(b)));
         }
 
@@ -1322,9 +1399,9 @@ mod tests {
         fn two_run_time_scales_add_as_their_lined_up_steps(a: i32, b: i32, k in 0_u8..9) {
             let (x, y) = (dynamic(a.into(), 0), dynamic(b.into(), k));
             let lifted = i64::from(a) * 10_i64.pow(u32::from(k));
-            prop_assert_eq!((x + y).to_bits(), lifted + i64::from(b), "the sum");
-            prop_assert_eq!((x - y).to_bits(), lifted - i64::from(b), "the difference");
-            prop_assert_eq!((y - x).to_bits(), i64::from(b) - lifted, "the other difference");
+            prop_assert_eq!((x + y).steps(), lifted + i64::from(b), "the sum");
+            prop_assert_eq!((x - y).steps(), lifted - i64::from(b), "the difference");
+            prop_assert_eq!((y - x).steps(), i64::from(b) - lifted, "the other difference");
             prop_assert_eq!((x + y).decimals(), k, "at the finer scale");
         }
     }
@@ -1349,37 +1426,37 @@ mod tests {
 
     #[test]
     fn a_product_is_exact_and_its_scale_the_sum() {
-        let (price, size) = (cents(6_000_037), D64::<4>::from_bits(125, Fixed));
-        let notional: Decimal<i64, Sum<Fixed<2>, Fixed<4>>> = price * size;
-        let notional: D64<6> = notional.into();
-        assert_eq!(notional.to_bits(), 750_004_625, "one multiply, exact");
-        let run_time = price * dynamic(125, 4);
-        assert_eq!((run_time.to_bits(), run_time.decimals()), (750_004_625, 6), "at run time too");
+        let (unit_price, quantity) = (cents(6_000_037), D64::<4>::from_steps(125, Fixed));
+        let total: Decimal<i64, Sum<Fixed<2>, Fixed<4>>> = unit_price * quantity;
+        let total: D64<6> = total.into();
+        assert_eq!(total.steps(), 750_004_625, "one multiply, exact");
+        let run_time = unit_price * dynamic(125, 4);
+        assert_eq!((run_time.steps(), run_time.decimals()), (750_004_625, 6), "at run time too");
     }
 
     #[test]
     fn a_run_time_product_takes_its_scale_in_place() {
         let mut x = dynamic(15, 1);
         x *= dynamic(25, 2);
-        assert_eq!((x.to_bits(), x.decimals()), (375, 3), "1.5 × 0.25 = 0.375");
+        assert_eq!((x.steps(), x.decimals()), (375, 3), "1.5 × 0.25 = 0.375");
     }
 
     #[test]
     fn two_run_time_scales_line_up_in_every_family() {
         let (tenths, hundredths) = (dynamic(15, 1), dynamic(125, 2));
-        assert_eq!(tenths.checked_add(hundredths).map(Decimal::to_bits), Some(275), "1.5 + 1.25");
-        assert_eq!((tenths % hundredths).to_bits(), 25, "1.5 % 1.25 = 0.25");
-        let near = Decimal::<i8, Dynamic>::from_bits(13, Dynamic::new(0).expect("at most 38"));
-        let back = Decimal::<i8, Dynamic>::from_bits(-100, Dynamic::new(1).expect("at most 38"));
-        assert_eq!((near + back).to_bits(), 30, "13 lined up is 130, past an i8, yet 13 - 10 fits");
+        assert_eq!(tenths.checked_add(hundredths).map(Decimal::steps), Some(275), "1.5 + 1.25");
+        assert_eq!((tenths % hundredths).steps(), 25, "1.5 % 1.25 = 0.25");
+        let near = Decimal::<i8, Dynamic>::from_steps(13, Dynamic::new(0).expect("at most 38"));
+        let back = Decimal::<i8, Dynamic>::from_steps(-100, Dynamic::new(1).expect("at most 38"));
+        assert_eq!((near + back).steps(), 30, "13 lined up is 130, past an i8, yet 13 - 10 fits");
     }
 
     #[test]
     fn unsigned_values_never_go_below_zero() {
-        let (a, b) = (UD8::<1>::from_bits(15, Fixed), UD8::<1>::from_bits(25, Fixed));
+        let (a, b) = (UD8::<1>::from_steps(15, Fixed), UD8::<1>::from_steps(25, Fixed));
         assert_eq!(a.checked_sub(b), None, "1.5 - 2.5 is below zero");
-        assert_eq!(a.saturating_sub(b).to_bits(), 0, "held at zero");
-        assert_eq!(a.wrapping_sub(b).to_bits(), 246, "wrapped");
+        assert_eq!(a.saturating_sub(b).steps(), 0, "held at zero");
+        assert_eq!(a.wrapping_sub(b).steps(), 246, "wrapped");
     }
 
     #[test]
@@ -1392,17 +1469,17 @@ mod tests {
     #[cfg(overflow_checks)]
     #[should_panic(expected = "attempt to add with overflow")]
     fn a_lined_up_sum_past_the_range_panics_with_overflow_checks() {
-        let big = Decimal::<i8, Dynamic>::from_bits(100, Dynamic::new(0).expect("at most 38"));
-        let _sum = big + Decimal::from_bits(1, Dynamic::new(1).expect("at most 38"));
+        let big = Decimal::<i8, Dynamic>::from_steps(100, Dynamic::new(0).expect("at most 38"));
+        let _sum = big + Decimal::from_steps(1, Dynamic::new(1).expect("at most 38"));
     }
 
     #[test]
     #[cfg(not(overflow_checks))]
     fn a_lined_up_sum_past_the_range_wraps_without_overflow_checks() {
-        let big = Decimal::<i8, Dynamic>::from_bits(100, Dynamic::new(0).expect("at most 38"));
-        let sum = big + Decimal::from_bits(1, Dynamic::new(1).expect("at most 38"));
+        let big = Decimal::<i8, Dynamic>::from_steps(100, Dynamic::new(0).expect("at most 38"));
+        let sum = big + Decimal::from_steps(1, Dynamic::new(1).expect("at most 38"));
         assert_eq!(
-            sum.to_bits(),
+            sum.steps(),
             1_001_i16.to_le_bytes()[0].cast_signed(),
             "1001's low byte, as i8 wraps"
         );
@@ -1410,8 +1487,8 @@ mod tests {
 
     #[test]
     fn eight_bits_divide_at_their_scale() {
-        let (a, b) = (D8::<1>::from_bits(64, Fixed), D8::<1>::from_bits(5, Fixed));
+        let (a, b) = (D8::<1>::from_steps(64, Fixed), D8::<1>::from_steps(5, Fixed));
         assert_eq!(a.checked_div(b), None, "12.8 is past 12.7");
-        assert_eq!(a.wrapping_div(b).to_bits(), -128, "and wraps");
+        assert_eq!(a.wrapping_div(b).steps(), -128, "and wraps");
     }
 }

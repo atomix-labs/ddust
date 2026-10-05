@@ -1,0 +1,37 @@
+error[E0277]: the trait bound `Nearest: round::sealed::Sealed` is not satisfied
+ --> tests/compile_fail/a_rounding_mode_is_one_of_the_nine.rs:8:23
+  |
+8 | impl RoundingMode for Nearest {
+  |                       ^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `round::sealed::Sealed` is not implemented for `Nearest`
+ --> tests/compile_fail/a_rounding_mode_is_one_of_the_nine.rs:6:1
+  |
+6 | struct Nearest;
+  | ^^^^^^^^^^^^^^
+  = help: the following other types implement trait `round::sealed::Sealed`:
+            Rounding
+            ddust::round::Ceil
+            ddust::round::Expand
+            ddust::round::Floor
+            ddust::round::HalfCeil
+            ddust::round::HalfEven
+            ddust::round::HalfExpand
+            ddust::round::HalfFloor
+          and $N others
+note: required by a bound in `RoundingMode`
+ --> src/round.rs
+  |
+  | pub const trait RoundingMode: sealed::Sealed + Copy {
+  |                               ^^^^^^^^^^^^^^ required by this bound in `RoundingMode`
+  = note: `RoundingMode` is a "sealed trait", because to implement it you also need to implement `ddust::round::sealed::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+  = help: the following types implement the trait:
+            ddust::round::Floor
+            ddust::round::Ceil
+            ddust::round::Trunc
+            ddust::round::Expand
+            ddust::round::HalfFloor
+            ddust::round::HalfCeil
+            ddust::round::HalfTrunc
+            ddust::round::HalfExpand
+          and $N others

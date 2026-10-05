@@ -29,7 +29,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
     {
         let (left, right) = (self.scale(), other.scale());
-        let (a, b) = (self.to_bits(), other.to_bits());
+        let (a, b) = (self.steps(), other.steps());
         if left == right {
             return Some(a.cmp(&b));
         }
@@ -89,11 +89,11 @@ const impl<I: [const] Int, S: [const] Scale> PartialOrd for Decimal<I, S> {
 impl<I: Int, S: Scale> Hash for Decimal<I, S> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if !S::LINES_UP {
-            self.to_bits().hash(state);
+            self.steps().hash(state);
             self.scale().hash(state);
             return;
         }
-        let (mut steps, mut decimals) = (self.to_bits(), self.decimals());
+        let (mut steps, mut decimals) = (self.steps(), self.decimals());
         while decimals > 0 {
             let (tenth, exact) = steps.scale_down(1, Trunc.table());
             if !exact {
@@ -117,8 +117,8 @@ mod tests {
     use crate::{D64, Decimal, Dynamic, Fixed};
 
     /// A decimal at a run-time scale of `decimals`.
-    fn dynamic(bits: i64, decimals: u8) -> Decimal<i64, Dynamic> {
-        Decimal::from_bits(bits, Dynamic::new(decimals).expect("at most 38"))
+    fn dynamic(steps: i64, decimals: u8) -> Decimal<i64, Dynamic> {
+        Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"))
     }
 
     /// FNV-1a over the bytes written: a small, deterministic hasher for the tests.
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn values_of_one_scale_compare_as_their_steps() {
-        let (low, high) = (D64::<2>::from_bits(-15, Fixed), D64::<2>::from_bits(14, Fixed));
+        let (low, high) = (D64::<2>::from_steps(-15, Fixed), D64::<2>::from_steps(14, Fixed));
         assert!(low < high, "below zero first");
         assert_eq!(low.max(high), high, "the larger");
         assert_eq!(dynamic(15, 1), dynamic(150, 2), "1.5 == 1.50");

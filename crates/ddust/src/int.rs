@@ -31,7 +31,7 @@ pub struct Outcome<I> {
 impl<I: Int> Outcome<I> {
     /// A result within the range.
     #[inline]
-    const fn fits(value: I) -> Self {
+    const fn in_range(value: I) -> Self {
         Self { wrapped: value, past: false, negative: false }
     }
 
@@ -362,7 +362,7 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
 ) -> Outcome<I> {
     let negative = exact.negative;
     let (magnitude, beyond) = match exact.magnitude.narrow() {
-        Some(magnitude) => (magnitude, false),
+        Some(magnitude) => (magnitude, exact.beyond),
         None => (exact.magnitude.wrapping_narrow(), true),
     };
     match (beyond, I::join(negative, magnitude)) {
@@ -412,7 +412,7 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
         Some((exact, whole)) => (outcome::<I, I::Double>(exact), whole),
         None => match kernel::scale_down::<I::Unsigned, U256>(negative, a, k, table) {
             Some((exact, whole)) => (outcome::<I, U256>(exact), whole),
-            None => (Outcome::fits(I::ZERO), a == I::Unsigned::ZERO),
+            None => (Outcome::in_range(I::ZERO), a == I::Unsigned::ZERO),
         },
     };
     (exact.wrapped, whole)
@@ -421,8 +421,8 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
 /// `a × b / 10^k`, rounded, for any integer.
 #[inline]
 const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    let negative = na != nb;
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    let negative = negative_a != negative_b;
     settled(exact!(I, mul_down(negative, a, b, k, table)), negative)
 }
 
@@ -437,8 +437,8 @@ const fn multiple<I: [const] Magnitude>(a: I, step: I, table: u16) -> Outcome<I>
 /// arithmetic, which keeps them exactly.
 #[inline]
 const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcome<I> {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    let negative = na != nb;
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    let negative = negative_a != negative_b;
     if let Some(outcome) = exact!(I, mul_up(negative, a, b, k)) {
         return outcome;
     }
@@ -455,34 +455,34 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
 /// `a × 10^k / b`, rounded, for any integer and a `b` that is not zero.
 #[inline]
 const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u16) -> Outcome<I> {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    let negative = na != nb;
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    let negative = negative_a != negative_b;
     settled(exact!(I, div_up(negative, a, k, b, table)), negative)
 }
 
 /// `a / (b × 10^k)`, rounded, for any integer and a `b` that is not zero.
 #[inline]
 const fn div_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    let negative = na != nb;
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    let negative = negative_a != negative_b;
     settled(exact!(I, div_down(negative, a, b, k, table)), negative)
 }
 
 /// `a × b / c`, rounded, for any integer and a `c` that is not zero.
 #[inline]
 const fn mul_div<I: [const] Magnitude>(a: I, b: I, c: I, table: u16) -> Outcome<I> {
-    let ((na, a), (nb, b), (nc, c)) = (a.split(), b.split(), c.split());
-    let negative = (na != nb) != nc;
+    let ((negative_a, a), (negative_b, b), (negative_c, c)) = (a.split(), b.split(), c.split());
+    let negative = (negative_a != negative_b) != negative_c;
     outcome::<I, I::Double>(kernel::mul_div::<I::Unsigned, I::Double>(negative, a, b, c, table))
 }
 
 /// `a × 10^k` and `b` as exact results in the word `D`, or `None` when the first outgrows it.
 #[inline]
 const fn lined_up<U: [const] Narrow, D: [const] Double<U>>(
-    na: bool, a: U, k: u8, nb: bool, b: U,
+    negative_a: bool, a: U, k: u8, negative_b: bool, b: U,
 ) -> Option<(Exact<D>, Exact<D>)> {
-    match kernel::scale_up::<U, D>(na, a, k) {
-        Some(x) => Some((x, Exact { negative: nb, magnitude: D::from_narrow(b) })),
+    match kernel::scale_up::<U, D>(negative_a, a, k) {
+        Some(lifted) => Some((lifted, Exact::new(negative_b, D::from_narrow(b)))),
         None => None,
     }
 }
@@ -490,9 +490,9 @@ const fn lined_up<U: [const] Narrow, D: [const] Double<U>>(
 /// `a × 10^k + b`, exactly, in the word `D`.
 #[inline]
 const fn lined_up_sum<U: [const] Narrow, D: [const] Double<U>>(
-    na: bool, a: U, k: u8, nb: bool, b: U,
+    negative_a: bool, a: U, k: u8, negative_b: bool, b: U,
 ) -> Option<Exact<D>> {
-    match lined_up::<U, D>(na, a, k, nb, b) {
+    match lined_up::<U, D>(negative_a, a, k, negative_b, b) {
         Some((lifted, other)) => kernel::add(lifted, other),
         None => None,
     }
@@ -503,28 +503,28 @@ const fn lined_up_sum<U: [const] Narrow, D: [const] Double<U>>(
 const fn lined_up_add<I: [const] Magnitude + [const] Int>(
     a: I, negate: bool, k: u8, b: I, negate_b: bool,
 ) -> Outcome<I> {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    let (na, nb) = (na != negate, nb != negate_b);
-    let sum = match lined_up_sum::<I::Unsigned, I::Double>(na, a, k, nb, b) {
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    let (negative_a, negative_b) = (negative_a != negate, negative_b != negate_b);
+    let sum = match lined_up_sum::<I::Unsigned, I::Double>(negative_a, a, k, negative_b, b) {
         Some(exact) => Some(outcome::<I, I::Double>(exact)),
-        None => match lined_up_sum::<I::Unsigned, U256>(na, a, k, nb, b) {
+        None => match lined_up_sum::<I::Unsigned, U256>(negative_a, a, k, negative_b, b) {
             Some(exact) => Some(outcome::<I, U256>(exact)),
             None => None,
         },
     };
-    settled(sum, na)
+    settled(sum, negative_a)
 }
 
 /// The order of `a × 10^k` and `b`, for any integer: a lined-up value past even a [`U256`] is
 /// past every other, and its sign decides.
 #[inline]
 const fn lined_up_cmp<I: [const] Magnitude>(a: I, k: u8, b: I) -> Ordering {
-    let ((na, a), (nb, b)) = (a.split(), b.split());
-    match lined_up::<I::Unsigned, I::Double>(na, a, k, nb, b) {
+    let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
+    match lined_up::<I::Unsigned, I::Double>(negative_a, a, k, negative_b, b) {
         Some((lifted, other)) => kernel::compare(lifted, other),
-        None => match lined_up::<I::Unsigned, U256>(na, a, k, nb, b) {
+        None => match lined_up::<I::Unsigned, U256>(negative_a, a, k, negative_b, b) {
             Some((lifted, other)) => kernel::compare(lifted, other),
-            None if na => Ordering::Less,
+            None if negative_a => Ordering::Less,
             None => Ordering::Greater,
         },
     }
@@ -617,7 +617,7 @@ macro_rules! int {
             fn from_magnitude(negative: bool, magnitude: u128) -> Option<Self> {
                 match <$unsigned>::try_from(magnitude) {
                     Ok(magnitude) => Self::join(negative, magnitude),
-                    Err(_) => None,
+                    Err(_out_of_range) => None,
                 }
             }
 
@@ -809,7 +809,7 @@ mod tests {
         #[test]
         fn a_wrapped_result_keeps_the_low_bits(a: i32, b: i32, k in 0_u8..12) {
             let (a128, b128, power) = (i128::from(a), i128::from(b), 10_i128.pow(u32::from(k)));
-            #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "the low bits, as wrapping keeps")]
+            #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "the low steps, as wrapping keeps")]
             let low = |x: i128| x as i32;
             prop_assert_eq!(a.scale_up(k).wrapping(), low(a128 * power));
             prop_assert_eq!(a.lined_up_add(false, k, b, false).wrapping(), low(a128 * power + b128));

@@ -11,7 +11,7 @@ fuzz_target!(|input: (u64, i64, u8)| {
     let (bits, steps, decimals) = input;
     let decimals = decimals % 19;
     // A decimal to its nearest double, as core reads its text.
-    let value = Decimal::from_bits(steps, Dynamic::new(decimals).expect("at most 38"));
+    let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
     let text: f64 = format!("{steps}e-{decimals}").parse().expect("a number");
     assert_eq!(value.to_f64().to_bits(), text.to_bits(), "{steps}e-{decimals}");
     // A double to the decimal its exact value truncates to, as its full expansion spells it.

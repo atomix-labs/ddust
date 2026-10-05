@@ -3,5 +3,5 @@
 use ddust::{Decimal, Fixed};
 
 fn main() {
-    let _price = Decimal::<f64, Fixed<2>>::from_bits(1.5, Fixed).decimals();
+    let _price = Decimal::<f64, Fixed<2>>::from_steps(1.5, Fixed).decimals();
 }

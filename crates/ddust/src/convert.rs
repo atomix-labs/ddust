@@ -14,7 +14,7 @@ macro_rules! lossless {
         const impl<S: [const] Scale> From<Decimal<$from, S>> for Decimal<$to, S> {
             #[inline]
             fn from(value: Decimal<$from, S>) -> Self {
-                Self::from_bits(<$to>::from(value.to_bits()), value.scale())
+                Self::from_steps(<$to>::from(value.steps()), value.scale())
             }
         }
     )*)*};
@@ -36,15 +36,16 @@ macro_rules! lossy {
     ($($from:ty => $($to:ty),*;)*) => {$($(
         /// The same steps at the same scale, or `PosOverflow` or `NegOverflow` when they do not
         /// fit.
-        impl<S: Scale> TryFrom<Decimal<$from, S>> for Decimal<$to, S> {
+        const impl<S: [const] Scale> TryFrom<Decimal<$from, S>> for Decimal<$to, S> {
             type Error = ConvertError;
 
             #[inline]
             fn try_from(value: Decimal<$from, S>) -> Result<Self, ConvertError> {
-                let steps = value.to_bits();
-                <$to>::try_from(steps)
-                    .map(|steps| Self::from_bits(steps, value.scale()))
-                    .map_err(|_| ConvertError::overflow(steps.is_negative()))
+                let steps = value.steps();
+                match <$to>::try_from(steps) {
+                    Ok(narrowed) => Ok(Self::from_steps(narrowed, value.scale())),
+                    Err(_out_of_range) => Err(ConvertError::overflow(steps.is_negative())),
+                }
             }
         }
     )*)*};
@@ -76,14 +77,14 @@ macro_rules! widen {
             /// ```
             /// use ddust::{D64, dec};
             ///
-            /// let (price, size): (D64<8>, D64<8>) = (dec!(60000.37), dec!(125.5));
-            /// let notional = price.widen() * size.widen();
-            /// assert_eq!(notional.decimals(), 16, "an i128 at sixteen decimals, exact");
+            /// let (a, b): (D64<8>, D64<8>) = (dec!(60000.37), dec!(125.5));
+            /// let product = a.widen() * b.widen();
+            /// assert_eq!(product.decimals(), 16, "an i128 at sixteen decimals, exact");
             /// ```
             #[inline]
             #[must_use]
             pub const fn widen(self) -> Decimal<$wide, S> {
-                Decimal::from_bits(<$wide>::from(self.to_bits()), self.scale())
+                Decimal::from_steps(<$wide>::from(self.steps()), self.scale())
             }
         }
     )*};
@@ -92,15 +93,15 @@ macro_rules! widen {
 widen!(i8 => i16, i16 => i32, i32 => i64, i64 => i128, u8 => u16, u16 => u32, u32 => u64, u64 => u128);
 
 /// A static scale's value as a run-time one: the same steps, at the same decimals.
-impl<I: Int, S: StaticScale> From<Decimal<I, S>> for Decimal<I, Dynamic> {
+const impl<I: [const] Int, S: StaticScale> From<Decimal<I, S>> for Decimal<I, Dynamic> {
     #[inline]
     fn from(value: Decimal<I, S>) -> Self {
-        Self::from_bits(value.to_bits(), Dynamic::from(value.scale()))
+        Self::from_steps(value.steps(), Dynamic::from(value.scale()))
     }
 }
 
 /// A run-time scale's value at a static one, exactly.
-impl<I: Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal<I, Fixed<D>> {
+const impl<I: [const] Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal<I, Fixed<D>> {
     type Error = ConvertError;
 
     #[inline]
@@ -116,9 +117,9 @@ impl<I: Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal<I, Fixed<D>> 
 /// ```
 /// use ddust::{D64, dec};
 ///
-/// let (price, size): (D64<2>, D64<4>) = (dec!(60000.37), dec!(0.0125));
-/// let notional: D64<6> = (price * size).into();
-/// assert_eq!(notional, dec!(750.004625), "two decimals and four: six");
+/// let (unit_price, quantity): (D64<2>, D64<3>) = (dec!(19.99), dec!(2.375));
+/// let total: D64<5> = (unit_price * quantity).into();
+/// assert_eq!(total, dec!(47.47625), "two decimals and three: five");
 /// ```
 ///
 /// Any other scale fails the build:
@@ -126,16 +127,16 @@ impl<I: Int, const D: u8> TryFrom<Decimal<I, Dynamic>> for Decimal<I, Fixed<D>> 
 /// ```compile_fail,E0080
 /// use ddust::{D64, dec};
 ///
-/// let (price, size): (D64<2>, D64<4>) = (dec!(60000.37), dec!(0.0125));
-/// let notional: D64<5> = (price * size).into();
+/// let (unit_price, quantity): (D64<2>, D64<3>) = (dec!(19.99), dec!(2.375));
+/// let total: D64<4> = (unit_price * quantity).into();
 /// ```
-impl<I: Int, A: StaticScale, B: StaticScale, const C: u8> From<Decimal<I, Sum<A, B>>>
+const impl<I: [const] Int, A: StaticScale, B: StaticScale, const C: u8> From<Decimal<I, Sum<A, B>>>
     for Decimal<I, Fixed<C>>
 {
     #[inline]
     fn from(value: Decimal<I, Sum<A, B>>) -> Self {
         const { assert!(<Sum<A, B>>::DECIMALS == C, "a product's decimals are the sum of its factors'") };
-        Self::from_bits(value.to_bits(), Fixed)
+        Self::from_steps(value.steps(), Fixed)
     }
 }
 
@@ -149,7 +150,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::{D8, D64, Fixed};
     ///
-    /// assert_eq!(D64::<2>::from_int(5, Fixed)?.to_bits(), 500, "five, in hundredths");
+    /// assert_eq!(D64::<2>::from_int(5, Fixed)?.steps(), 500, "five, in hundredths");
     /// assert!(D8::<2>::from_int(2, Fixed).is_err(), "two is past 1.27");
     /// # Ok::<(), ddust::ConvertError>(())
     /// ```
@@ -180,7 +181,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         S: [const] Scale,
         R: [const] RoundingMode,
     {
-        self.to_bits().scale_down(self.decimals(), mode.table()).0
+        self.steps().scale_down(self.decimals(), mode.table()).0
     }
 }
 
@@ -188,7 +189,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
 macro_rules! from_integer {
     ($($t:ty),*) => {$(
         /// The whole number at the scale, or `PosOverflow` or `NegOverflow` past the range.
-        impl<S: StaticScale> TryFrom<$t> for Decimal<$t, S> {
+        const impl<S: StaticScale + [const] Scale> TryFrom<$t> for Decimal<$t, S> {
             type Error = ConvertError;
 
             #[inline]
@@ -210,16 +211,16 @@ mod tests {
 
     #[test]
     fn a_width_converts_as_the_integers_do() {
-        let small = D32::<2>::from_bits(-1_234, Fixed);
-        assert_eq!(D64::<2>::from(small).to_bits(), -1_234, "every i32 fits an i64");
+        let small = D32::<2>::from_steps(-1_234, Fixed);
+        assert_eq!(D64::<2>::from(small).steps(), -1_234, "every i32 fits an i64");
         assert_eq!(small.widen(), D64::<2>::from(small), "widen, the same");
         let refused = UD64::<2>::try_from(D64::<2>::from(small)).map_err(ConvertError::kind);
         assert_eq!(refused, Err(ConvertErrorKind::NegOverflow), "no negative is unsigned");
         let narrowed =
-            D8::<2>::try_from(D16::<2>::from_bits(300, Fixed)).map_err(ConvertError::kind);
+            D8::<2>::try_from(D16::<2>::from_steps(300, Fixed)).map_err(ConvertError::kind);
         assert_eq!(narrowed, Err(ConvertErrorKind::PosOverflow), "3.00 is past 1.27");
         assert_eq!(
-            D128::<2>::from(UD8::<2>::from_bits(255, Fixed)).to_bits(),
+            D128::<2>::from(UD8::<2>::from_steps(255, Fixed)).steps(),
             255,
             "unsigned to signed"
         );
@@ -227,20 +228,20 @@ mod tests {
 
     #[test]
     fn a_scale_converts_to_run_time_and_back() {
-        let price = D64::<2>::from_bits(6_000_050, Fixed);
-        let run_time = Decimal::<i64, Dynamic>::from(price);
-        assert_eq!((run_time.to_bits(), run_time.decimals()), (6_000_050, 2), "the same");
-        assert_eq!(D64::<4>::try_from(run_time).map(D64::to_bits), Ok(600_005_000), "finer, exact");
-        let coarser = D64::<1>::try_from(run_time).map(D64::to_bits);
+        let value = D64::<2>::from_steps(6_000_050, Fixed);
+        let run_time = Decimal::<i64, Dynamic>::from(value);
+        assert_eq!((run_time.steps(), run_time.decimals()), (6_000_050, 2), "the same");
+        assert_eq!(D64::<4>::try_from(run_time).map(D64::steps), Ok(600_005_000), "finer, exact");
+        let coarser = D64::<1>::try_from(run_time).map(D64::steps);
         assert_eq!(coarser, Ok(600_005), "60000.50 has a digit to spare at one decimal");
         let refused = D64::<0>::try_from(run_time).map_err(ConvertError::kind);
-        assert_eq!(refused, Err(ConvertErrorKind::Inexact), "but not at none");
+        assert_eq!(refused, Err(ConvertErrorKind::TooManyDecimals), "but not at none");
     }
 
     #[test]
     fn a_whole_number_converts_both_ways() {
-        assert_eq!(D64::<2>::try_from(7).map(D64::to_bits), Ok(700), "seven, in hundredths");
-        let x = D64::<2>::from_bits(-250, Fixed);
+        assert_eq!(D64::<2>::try_from(7).map(D64::steps), Ok(700), "seven, in hundredths");
+        let x = D64::<2>::from_steps(-250, Fixed);
         assert_eq!((x.to_int(Floor), x.to_int(Ceil)), (-3, -2), "-2.5, both ways");
     }
 }

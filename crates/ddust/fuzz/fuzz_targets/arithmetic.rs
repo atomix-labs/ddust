@@ -67,24 +67,24 @@ fuzz_target!(|input: Input| {
     let (x, y) = (BigInt::from(input.a), BigInt::from(input.b));
     let fits = |value: BigInt| i128::try_from(value).ok();
 
-    let (left, right) = (Decimal::from_bits(input.a, scale(a)), Decimal::from_bits(input.b, scale(b)));
+    let (left, right) = (Decimal::from_steps(input.a, scale(a)), Decimal::from_steps(input.b, scale(b)));
     let from = a + b;
     let product = if from >= to { divide(&(&x * &y), &pow10(from - to), mode) } else { &x * &y * pow10(to - from) };
-    assert_eq!(left.checked_mul_round_to(right, scale(to), mode).map(Decimal::to_bits), fits(product), "{input:?}");
+    assert_eq!(left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps), fits(product), "{input:?}");
     if input.b != 0 {
         let (up, down) = ((to + b).saturating_sub(a), a.saturating_sub(to + b));
         let quotient = divide(&(&x * pow10(up)), &(&y * pow10(down)), mode);
-        assert_eq!(left.checked_div_round_to(right, scale(to), mode).map(Decimal::to_bits), fits(quotient), "{input:?}");
+        assert_eq!(left.checked_div_round_to(right, scale(to), mode).map(Decimal::steps), fits(quotient), "{input:?}");
     }
     let finer = a.max(b);
     let sum = &x * pow10(finer - a) + &y * pow10(finer - b);
-    assert_eq!(left.checked_add(right).map(Decimal::to_bits), fits(sum), "{input:?}");
+    assert_eq!(left.checked_add(right).map(Decimal::steps), fits(sum), "{input:?}");
 
-    // The same at 64 bits, from the low halves.
+    // The same at 64 steps, from the low halves.
     let (a64, b64) = (input.a as i64, input.b as i64);
     let (x, y) = (BigInt::from(a64), BigInt::from(b64));
-    let (left, right) = (Decimal::from_bits(a64, scale(a)), Decimal::from_bits(b64, scale(b)));
+    let (left, right) = (Decimal::from_steps(a64, scale(a)), Decimal::from_steps(b64, scale(b)));
     let product = if from >= to { divide(&(&x * &y), &pow10(from - to), mode) } else { &x * &y * pow10(to - from) };
     let fits = |value: BigInt| i64::try_from(value).ok();
-    assert_eq!(left.checked_mul_round_to(right, scale(to), mode).map(Decimal::to_bits), fits(product), "{input:?}");
+    assert_eq!(left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps), fits(product), "{input:?}");
 });

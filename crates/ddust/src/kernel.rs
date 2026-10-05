@@ -2,20 +2,31 @@
 //! enough for its result, and rounded once by a mode's table.
 //!
 //! A kernel returns `None` when its result outgrows the word it was given; the caller then runs it
-//! again in a [`U256`], the widest word, where no kernel but [`mul_up`]
-//! outgrows it.
+//! again in a [`U256`], the widest word. There, [`mul_up`] alone has no result past it, and the
+//! caller keeps its low bits by wrapping arithmetic; [`div_up`] past it keeps them itself.
 
 use core::cmp::Ordering;
 
 use crate::word::{Double, Narrow, U256, Word};
 
-/// An exact result: its sign, and its magnitude in a word wide enough to hold it.
+/// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
+/// the widest word, its low bits, which wrapping keeps.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Exact<D> {
     /// Whether the result is below zero.
     pub(crate) negative: bool,
-    /// Its magnitude.
+    /// Its magnitude, modulo the word.
     pub(crate) magnitude: D,
+    /// Whether the magnitude is past the word, and so its low bits alone.
+    pub(crate) beyond: bool,
+}
+
+impl<D> Exact<D> {
+    /// A result the word holds.
+    #[inline]
+    pub(crate) const fn new(negative: bool, magnitude: D) -> Self {
+        Self { negative, magnitude, beyond: false }
+    }
 }
 
 /// How a division's remainder compares with half its divisor: 0 when it is zero, 1 below half, 2
@@ -66,7 +77,7 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
         None => None,
     };
     match magnitude {
-        Some(magnitude) => Some(Exact { negative, magnitude }),
+        Some(magnitude) => Some(Exact::new(negative, magnitude)),
         None => None,
     }
 }
@@ -78,7 +89,7 @@ pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
 ) -> Option<(Exact<D>, bool)> {
     match quotient_pow10(D::from_narrow(a), k) {
         Some((q, class)) => {
-            Some((Exact { negative, magnitude: settle(q, class, negative, table) }, class == 0))
+            Some((Exact::new(negative, settle(q, class, negative, table)), class == 0))
         },
         None => None,
     }
@@ -90,7 +101,7 @@ pub(crate) const fn mul_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
 ) -> Option<Exact<D>> {
     match quotient_pow10(D::widening_mul(a, b), k) {
-        Some((q, class)) => Some(Exact { negative, magnitude: settle(q, class, negative, table) }),
+        Some((q, class)) => Some(Exact::new(negative, settle(q, class, negative, table))),
         None => None,
     }
 }
@@ -108,13 +119,14 @@ pub(crate) const fn mul_up<U: [const] Narrow, D: [const] Double<U>>(
         None => None,
     };
     match magnitude {
-        Some(magnitude) => Some(Exact { negative, magnitude }),
+        Some(magnitude) => Some(Exact::new(negative, magnitude)),
         None => None,
     }
 }
 
 /// `a × 10^k / b`, rounded by `table`, for a `b` that is not zero. Past 38 digits the power is
-/// applied in two steps of long division, so the numerator never outgrows the widest word.
+/// applied in two steps of long division, so the numerator never outgrows the widest word; a
+/// quotient past even that keeps its low bits, which wrapping arithmetic computes exactly.
 pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, b: U, table: u16,
 ) -> Option<Exact<D>> {
@@ -126,17 +138,33 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     };
     let Some(numerator) = numerator else { return None };
     let (mut q, mut remainder) = numerator.div_rem(divisor);
+    let mut beyond = false;
     if rest > 0 {
-        // q · 10^rest + (remainder · 10^rest) / b: the remainder is below b, so its product fits.
+        // q · 10^rest + (remainder · 10^rest) / b: the remainder is below b, so its product fits
+        // the widest word; q's may not, and then only its low bits are kept.
         let Some(power) = D::pow10(rest) else { return None };
-        let Some(lifted) = q.checked_mul(power) else { return None };
         let Some(carried) = remainder.checked_mul(power) else { return None };
         let (low, last) = carried.div_rem(divisor);
-        let Some(sum) = lifted.checked_add(low) else { return None };
-        q = sum;
+        let lifted = match q.checked_mul(power) {
+            Some(lifted) => lifted,
+            None if D::WIDEST => {
+                beyond = true;
+                q.wrapping_mul(power)
+            },
+            None => return None,
+        };
+        q = match lifted.checked_add(low) {
+            Some(sum) => sum,
+            None if D::WIDEST => {
+                beyond = true;
+                lifted.wrapping_add(low)
+            },
+            None => return None,
+        };
         remainder = last;
     }
-    Some(Exact { negative, magnitude: settle(q, class(remainder, divisor), negative, table) })
+    let magnitude = settle(q, class(remainder, divisor), negative, table);
+    Some(Exact { negative, magnitude, beyond })
 }
 
 /// `a / (b × 10^k)`, rounded by `table`, for a `b` that is not zero. In the widest word a divisor
@@ -154,7 +182,7 @@ pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
         None if D::WIDEST => (D::ZERO, u32::from(a != U::ZERO)),
         None => return None,
     };
-    Some(Exact { negative, magnitude: settle(q, class, negative, table) })
+    Some(Exact::new(negative, settle(q, class, negative, table)))
 }
 
 /// `a × b / c`, rounded by `table`, for a `c` that is not zero: never past the word.
@@ -163,7 +191,7 @@ pub(crate) const fn mul_div<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, c: U, table: u16,
 ) -> Exact<D> {
     let (q, class) = quotient(D::widening_mul(a, b), D::from_narrow(c));
-    Exact { negative, magnitude: settle(q, class, negative, table) }
+    Exact::new(negative, settle(q, class, negative, table))
 }
 
 /// The multiple of `step` that `a / step`, rounded by `table`, comes to, for a `step` that is not
@@ -180,7 +208,7 @@ pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
         Some(magnitude) => magnitude,
         None => D::ZERO,
     };
-    Exact { negative: negative && magnitude != D::ZERO, magnitude }
+    Exact::new(negative && magnitude != D::ZERO, magnitude)
 }
 
 /// `5^k` for `k` in `0..=38`: with a power of two, every power of ten a scale needs.
@@ -217,16 +245,16 @@ pub(crate) const fn binary_at_scale(
 pub(crate) const fn add<D: [const] Word>(x: Exact<D>, y: Exact<D>) -> Option<Exact<D>> {
     if x.negative == y.negative {
         return match x.magnitude.checked_add(y.magnitude) {
-            Some(magnitude) => Some(Exact { negative: x.negative, magnitude }),
+            Some(magnitude) => Some(Exact::new(x.negative, magnitude)),
             None => None,
         };
     }
     // Opposite signs: the larger magnitude keeps its sign, and zero is never negative.
     Some(if x.magnitude >= y.magnitude {
         let magnitude = x.magnitude.wrapping_sub(y.magnitude);
-        Exact { negative: x.negative && magnitude != D::ZERO, magnitude }
+        Exact::new(x.negative && magnitude != D::ZERO, magnitude)
     } else {
-        Exact { negative: y.negative, magnitude: y.magnitude.wrapping_sub(x.magnitude) }
+        Exact::new(y.negative, y.magnitude.wrapping_sub(x.magnitude))
     })
 }
 
@@ -320,7 +348,7 @@ mod tests {
 
         #[test]
         fn a_sum_and_an_order_agree_with_signed_arithmetic(x: i32, y: i32) {
-            let exact = |v: i32| Exact { negative: v < 0, magnitude: u64::from(v.unsigned_abs()) };
+            let exact = |v: i32| Exact::new(v < 0, u64::from(v.unsigned_abs()));
             let sum = add(exact(x), exact(y)).expect("two i32 magnitudes fit a u64");
             let expected = i64::from(x) + i64::from(y);
             prop_assert_eq!((sum.negative, sum.magnitude), (expected < 0, expected.unsigned_abs()));
@@ -330,15 +358,9 @@ mod tests {
 
     #[test]
     fn zero_is_never_negative() {
-        let zero = add(
-            Exact { negative: true, magnitude: 5_u32 },
-            Exact { negative: false, magnitude: 5 },
-        );
+        let zero = add(Exact::new(true, 5_u32), Exact::new(false, 5));
         assert_eq!(zero.map(|e| e.negative), Some(false), "-5 + 5 is zero, unsigned");
-        let order = compare(
-            Exact { negative: true, magnitude: 0_u32 },
-            Exact { negative: false, magnitude: 0 },
-        );
+        let order = compare(Exact::new(true, 0_u32), Exact::new(false, 0));
         assert_eq!(order, Ordering::Equal, "-0 and 0 are equal");
     }
 

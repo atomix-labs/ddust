@@ -74,14 +74,14 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     /// use ddust::{D64, D128, dec};
     ///
-    /// let price: D64<2> = dec!(60000.37);
-    /// assert_eq!(price.to_f64(), 60000.37, "the nearest double");
+    /// let reading: D64<2> = dec!(21.37);
+    /// assert_eq!(reading.to_f64(), 21.37, "the nearest double");
     /// let fine: D128<18> = dec!(3249036.838193733988751396);
     /// assert_eq!(fine.to_f64(), 3249036.838193734, "rounded once, not twice");
     /// ```
     #[must_use]
     pub fn to_f64(self) -> f64 {
-        let (negative, magnitude) = self.to_bits().sign_and_magnitude();
+        let (negative, magnitude) = self.steps().sign_and_magnitude();
         let decimals = self.decimals();
         let value = match POW10_F64.get(usize::from(decimals)) {
             // Both exact in a double, so one division rounds once: Clinger's fast path.
@@ -130,7 +130,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         let negative = bits >> 63 == 1;
         let biased = match i32::try_from((bits >> 52) & 0x7FF) {
             Ok(biased) => biased,
-            Err(_) => 0,
+            Err(_out_of_range) => 0,
         };
         let fraction = bits & ((1 << 52) - 1);
         // A subnormal has no implicit leading one; every other double has.
@@ -146,7 +146,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         };
         let Some(magnitude) = magnitude.to_u128() else { return None };
         match I::from_magnitude(negative, magnitude) {
-            Some(steps) => Some(Self::from_bits(steps, scale)),
+            Some(steps) => Some(Self::from_steps(steps, scale)),
             None => None,
         }
     }
@@ -160,20 +160,20 @@ mod tests {
     use proptest::prelude::*;
 
     use crate::round::{Ceil, Floor, HalfEven, Trunc};
-    use crate::{D64, D128, Fixed};
+    use crate::{D64, D128, Decimal, Dynamic, Fixed};
 
     proptest! {
         #[test]
-        fn a_decimal_converts_as_its_text_does(bits: i64, decimals in 0_u8..=18) {
-            let value = crate::Decimal::from_bits(bits, crate::Dynamic::new(decimals).expect("at most 38"));
-            let text: f64 = format!("{bits}e-{decimals}").parse().expect("a number");
+        fn a_decimal_converts_as_its_text_does(steps: i64, decimals in 0_u8..=18) {
+            let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
+            let text: f64 = format!("{steps}e-{decimals}").parse().expect("a number");
             prop_assert_eq!(value.to_f64().to_bits(), text.to_bits(), "correctly rounded");
         }
 
         #[test]
-        fn a_wide_decimal_converts_as_its_text_does(bits: i128) {
-            let value = D128::<18>::from_bits(bits, Fixed);
-            let text: f64 = format!("{bits}e-18").parse().expect("a number");
+        fn a_wide_decimal_converts_as_its_text_does(steps: i128) {
+            let value = D128::<18>::from_steps(steps, Fixed);
+            let text: f64 = format!("{steps}e-18").parse().expect("a number");
             prop_assert_eq!(value.to_f64().to_bits(), text.to_bits(), "correctly rounded");
         }
 
@@ -190,18 +190,18 @@ mod tests {
 
     #[test]
     fn a_tie_in_binary_is_settled_by_the_exact_value() {
-        let near = D64::<7>::from_f64(57_618.883_792_05, Fixed, HalfEven).map(D64::to_bits);
+        let near = D64::<7>::from_f64(57_618.883_792_05, Fixed, HalfEven).map(D64::steps);
         assert_eq!(near, Some(576_188_837_921), "…05000092042: above the tie");
-        let price = D64::<2>::from_f64(96_988_942.685, Fixed, HalfEven).map(D64::to_bits);
-        assert_eq!(price, Some(9_698_894_269), "…68500002384: above the tie");
-        assert_eq!(D64::<2>::from_f64(0.005, Fixed, Ceil).map(D64::to_bits), Some(1), "up");
-        assert_eq!(D64::<2>::from_f64(-0.005, Fixed, Floor).map(D64::to_bits), Some(-1), "down");
+        let cents = D64::<2>::from_f64(96_988_942.685, Fixed, HalfEven).map(D64::steps);
+        assert_eq!(cents, Some(9_698_894_269), "…68500002384: above the tie");
+        assert_eq!(D64::<2>::from_f64(0.005, Fixed, Ceil).map(D64::steps), Some(1), "up");
+        assert_eq!(D64::<2>::from_f64(-0.005, Fixed, Floor).map(D64::steps), Some(-1), "down");
         assert_eq!(D64::<2>::from_f64(1e30, Fixed, HalfEven), None, "past the range");
         assert_eq!(
-            D64::<2>::from_f64(5e-324, Fixed, Ceil).map(D64::to_bits),
+            D64::<2>::from_f64(5e-324, Fixed, Ceil).map(D64::steps),
             Some(1),
             "the least subnormal, up"
         );
-        assert_eq!(D64::<2>::from_bits(150, Fixed).to_f64().to_string(), "1.5", "and back");
+        assert_eq!(D64::<2>::from_steps(150, Fixed).to_f64().to_string(), "1.5", "and back");
     }
 }

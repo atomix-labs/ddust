@@ -33,7 +33,7 @@ macro_rules! check {
             },
             Err(error) if error.kind() == ParseErrorKind::TooManyDecimals => {
                 if let (Ok(floor), Ok(ceil)) = (floor, ceil) {
-                    let step = <$ty>::from_bits(1, Fixed);
+                    let step = <$ty>::from_steps(1, Fixed);
                     assert!(floor < ceil && floor.checked_add(step) == Some(ceil), "a step apart: {data:?}");
                     let even = even.expect("between the two");
                     assert!(even == floor || even == ceil, "the nearest is one of them");

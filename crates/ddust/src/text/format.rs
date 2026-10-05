@@ -8,9 +8,12 @@ use crate::int::Int;
 use crate::scale::Scale;
 use crate::word::pow10_u128;
 
-/// The bytes [`Decimal::write_ascii`] always has room to write in: a sign, 39 digits, a point, and
-/// the eight bytes past the text the writer stores eight at a time.
-pub const MAX_ASCII_LEN: usize = 48;
+/// The longest text a decimal writes: a sign, 39 digits and a point. [`Decimal::write_ascii`]
+/// writes into any buffer that holds its text, so one of this length holds every value's.
+pub const MAX_ASCII_LEN: usize = 41;
+
+/// The room the eight-byte writer stores into: the text, and up to seven bytes past it.
+const EIGHT_BYTE_ROOM: usize = 48;
 
 /// ASCII `'0'` in every byte.
 const ZEROS: u64 = 0x3030_3030_3030_3030;
@@ -107,8 +110,8 @@ impl Text {
         }
     }
 
-    /// Appends `fraction`, below `10^width`, as exactly `width` digits, eight at a time from the
-    /// most significant.
+    /// Appends `fraction`, below `10^width`, as exactly `width` digits, eight at a time from
+    /// the most significant.
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "division by non-zero powers of ten; widths below 40"
@@ -306,44 +309,44 @@ fn pad_number(
 
 /// Puts the eight bytes of `word` at `at` in `out`; `None` when they do not fit.
 #[inline]
-fn put(out: &mut [u8], at: usize, word: u64) -> Option<()> {
-    out.get_mut(at..at.checked_add(8)?)?.copy_from_slice(&word.to_le_bytes());
+fn put(out: &mut [u8], position: usize, word: u64) -> Option<()> {
+    out.get_mut(position..position.checked_add(8)?)?.copy_from_slice(&word.to_le_bytes());
     Some(())
 }
 
 /// Puts `n`, below `10^8`, with no leading zeros (`0` for zero); the end it wrote to.
 #[inline]
 #[expect(clippy::arithmetic_side_effects, reason = "a byte count below 8 times 8")]
-fn put_short(out: &mut [u8], at: usize, n: u64) -> Option<usize> {
+fn put_short(out: &mut [u8], position: usize, n: u64) -> Option<usize> {
     let digits = digits8(n);
     let leading = if n == 0 { 7 } else { digits.trailing_zeros() / 8 };
-    put(out, at, (digits | ZEROS) >> (leading * 8))?;
-    at.checked_add(8_usize.checked_sub(usize::try_from(leading).ok()?)?)
+    put(out, position, (digits | ZEROS) >> (leading * 8))?;
+    position.checked_add(8_usize.checked_sub(usize::try_from(leading).ok()?)?)
 }
 
 /// Puts `n` with no leading zeros, eight digits at a time; the end it wrote to.
 #[inline]
-fn put_integer(out: &mut [u8], at: usize, n: u64) -> Option<usize> {
+fn put_integer(out: &mut [u8], position: usize, n: u64) -> Option<usize> {
     if n < CHUNK {
-        return put_short(out, at, n);
+        return put_short(out, position, n);
     }
     let (high, low) = (n / CHUNK, n % CHUNK);
-    let at = if high < CHUNK {
-        put_short(out, at, high)?
+    let position = if high < CHUNK {
+        put_short(out, position, high)?
     } else {
-        let at = put_short(out, at, high / CHUNK)?;
-        put(out, at, digits8(high % CHUNK) | ZEROS)?;
-        at.checked_add(8)?
+        let position = put_short(out, position, high / CHUNK)?;
+        put(out, position, digits8(high % CHUNK) | ZEROS)?;
+        position.checked_add(8)?
     };
-    put(out, at, digits8(low) | ZEROS)?;
-    at.checked_add(8)
+    put(out, position, digits8(low) | ZEROS)?;
+    position.checked_add(8)
 }
 
-/// Puts `fraction`, below `10^decimals`, as its digits with the trailing zeros dropped, eight at
-/// a time; the end it wrote to.
+/// Puts `fraction`, below `10^decimals`, as its digits with the trailing zeros dropped, eight
+/// at a time; the end it wrote to.
 #[inline]
 #[expect(clippy::arithmetic_side_effects, reason = "division by non-zero powers of ten")]
-fn put_fraction(out: &mut [u8], at: usize, fraction: u64, decimals: u8) -> Option<usize> {
+fn put_fraction(out: &mut [u8], position: usize, fraction: u64, decimals: u8) -> Option<usize> {
     // The fraction as up to three 8-digit chunks, left-aligned: the last padded with zeros.
     let (first, second, third) = match decimals {
         0..=8 => (fraction * u64_pow10(8 - decimals)?, 0, 0),
@@ -356,22 +359,22 @@ fn put_fraction(out: &mut [u8], at: usize, fraction: u64, decimals: u8) -> Optio
             (fraction / rest, fraction % rest / last, fraction % last * u64_pow10(24 - decimals)?)
         },
     };
-    let mut at = at;
+    let mut position = position;
     for (chunk, more) in [(first, second | third != 0), (second, third != 0), (third, false)] {
         let digits = digits8(chunk);
-        put(out, at, digits | ZEROS)?;
+        put(out, position, digits | ZEROS)?;
         if !more {
             let trailing = usize::try_from(digits.leading_zeros() / 8).ok()?;
-            return at.checked_add(8 - trailing);
+            return position.checked_add(8 - trailing);
         }
-        at += 8;
+        position += 8;
     }
-    Some(at)
+    Some(position)
 }
 
 /// Writes `magnitude × 10^-decimals` into `out`, a `-` first when `negative`: the shortest exact
-/// decimal, with no division but the one by the unit, eight bytes at a time. The length written,
-/// or `None` when the text and the eight bytes past it do not fit.
+/// decimal, with no division but the one by the unit, eight bytes at a time. The length
+/// written, or `None` when the text and the eight bytes past it do not fit.
 #[inline]
 #[expect(clippy::arithmetic_side_effects, reason = "division by a non-zero power of ten")]
 pub(crate) fn write_ascii_narrow(
@@ -379,18 +382,18 @@ pub(crate) fn write_ascii_narrow(
 ) -> Option<usize> {
     let unit = u64_pow10(decimals)?;
     let (integer, fraction) = (magnitude / unit, magnitude % unit);
-    let at = if negative && magnitude != 0 {
+    let position = if negative && magnitude != 0 {
         *out.first_mut()? = b'-';
         1
     } else {
         0
     };
-    let mut at = put_integer(out, at, integer)?;
+    let mut position = put_integer(out, position, integer)?;
     if fraction != 0 {
-        *out.get_mut(at)? = b'.';
-        at = put_fraction(out, at.checked_add(1)?, fraction, decimals)?;
+        *out.get_mut(position)? = b'.';
+        position = put_fraction(out, position.checked_add(1)?, fraction, decimals)?;
     }
-    Some(at)
+    Some(position)
 }
 
 /// [`write_ascii_narrow`] for a magnitude past a `u64` or more than 19 decimals, through a
@@ -408,8 +411,8 @@ fn write_ascii_wide(
     Some(written.len())
 }
 
-/// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one is
-/// asked: by the eight-digit writer when it fits a `u64` with at most 19 decimals and no
+/// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one
+/// is asked: by the eight-digit writer when it fits a `u64` with at most 19 decimals and no
 /// precision is asked, through a [`Text`] otherwise.
 fn write<I: Int>(
     f: &mut fmt::Formatter<'_>, steps: I, decimals: u8, precision: Option<usize>,
@@ -420,7 +423,7 @@ fn write<I: Int>(
         && precision.is_none()
     {
         let plain = f.width().is_none() && !f.sign_plus();
-        let mut bytes = [0; MAX_ASCII_LEN];
+        let mut bytes = [0; EIGHT_BYTE_ROOM];
         let len = write_ascii_narrow(negative && plain, narrow, decimals, &mut bytes)
             .ok_or(fmt::Error)?;
         let text = bytes.get(..len).and_then(|text| str::from_utf8(text).ok()).ok_or(fmt::Error)?;
@@ -486,8 +489,8 @@ fn exponent_digits(exponent: i32) -> Exponent {
 
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// Writes the value's shortest exact decimal into `out`, as `Display` does, with no formatter:
-    /// the length written, or `None` when `out` is too short. [`MAX_ASCII_LEN`] bytes always
-    /// suffice.
+    /// the length written, or `None` when the text does not fit. [`MAX_ASCII_LEN`] bytes hold every
+    /// value's.
     ///
     /// # Examples
     /// ```
@@ -500,10 +503,20 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     #[inline]
     pub fn write_ascii(self, out: &mut [u8]) -> Option<usize> {
-        let (negative, magnitude) = self.to_bits().sign_and_magnitude();
+        let (negative, magnitude) = self.steps().sign_and_magnitude();
         let decimals = self.decimals();
         match u64::try_from(magnitude) {
-            Ok(narrow) if decimals <= 19 => write_ascii_narrow(negative, narrow, decimals, out),
+            // Stored eight bytes at a time, past the text: straight into `out` when it has the
+            // room, and through the stack otherwise, then the text alone copied.
+            Ok(narrow) if decimals <= 19 && out.len() >= EIGHT_BYTE_ROOM => {
+                write_ascii_narrow(negative, narrow, decimals, out)
+            },
+            Ok(narrow) if decimals <= 19 => {
+                let mut room = [0; EIGHT_BYTE_ROOM];
+                let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
+                out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
+                Some(len)
+            },
             Ok(_) | Err(_) => write_ascii_wide(negative, magnitude, decimals, out),
         }
     }
@@ -527,7 +540,7 @@ impl<I: Int, S: Scale> fmt::Display for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let decimals = self.decimals();
         let precision = f.precision().or_else(|| f.alternate().then_some(usize::from(decimals)));
-        write(f, self.to_bits(), decimals, precision)
+        write(f, self.steps(), decimals, precision)
     }
 }
 
@@ -537,7 +550,7 @@ impl<I: Int, S: Scale> fmt::Debug for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let decimals = self.decimals();
         let all = usize::from(decimals);
-        write(f, self.to_bits(), decimals, Some(f.precision().unwrap_or(all)))
+        write(f, self.steps(), decimals, Some(f.precision().unwrap_or(all)))
     }
 }
 
@@ -554,14 +567,14 @@ impl<I: Int, S: Scale> fmt::Debug for Decimal<I, S> {
 /// ```
 impl<I: Int, S: Scale> fmt::LowerExp for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_exponent(f, self.to_bits(), self.decimals(), b'e')
+        write_exponent(f, self.steps(), self.decimals(), b'e')
     }
 }
 
 /// As [`LowerExp`](fmt::LowerExp), with `E`.
 impl<I: Int, S: Scale> fmt::UpperExp for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write_exponent(f, self.to_bits(), self.decimals(), b'E')
+        write_exponent(f, self.steps(), self.decimals(), b'E')
     }
 }
 
@@ -584,14 +597,14 @@ mod tests {
     #[case::negative(-1, "-0.000000000000000001")]
     #[case::largest(i128::MAX, "170141183460469231731.687303715884105727")]
     #[case::smallest(i128::MIN, "-170141183460469231731.687303715884105728")]
-    fn a_wide_value_writes_ascii_as_display_does(#[case] bits: i128, #[case] text: &str) {
-        let amount = D128::<18>::from_bits(bits, Fixed);
+    fn a_wide_value_writes_ascii_as_display_does(#[case] steps: i128, #[case] text: &str) {
+        let amount = D128::<18>::from_steps(steps, Fixed);
         let mut out = [0; MAX_ASCII_LEN];
         let len = amount.write_ascii(&mut out).expect("room enough");
         assert_eq!(
             (str::from_utf8(&out[..len]), format!("{amount}").as_str()),
             (Ok(text), text),
-            "{bits}"
+            "{steps}"
         );
     }
 
@@ -603,13 +616,25 @@ mod tests {
     #[case::zero(0, "0")]
     #[case::largest(i64::MAX, "922337203685.4775807")]
     #[case::smallest_negative(i64::MIN, "-922337203685.4775808")]
-    fn a_value_writes_its_shortest_exact_decimal(#[case] bits: i64, #[case] text: &str) {
-        assert_eq!(format!("{}", Price::from_bits(bits, Fixed)), text, "{bits}");
+    fn a_value_writes_its_shortest_exact_decimal(#[case] steps: i64, #[case] text: &str) {
+        assert_eq!(format!("{}", Price::from_steps(steps, Fixed)), text, "{steps}");
+    }
+
+    #[test]
+    fn a_buffer_the_text_fits_is_enough() {
+        let price = Price::from_steps(600_005_000_000, Fixed);
+        let mut exact = [0; 7];
+        assert_eq!(price.write_ascii(&mut exact), Some(7), "seven bytes for `60000.5`");
+        assert_eq!(&exact, b"60000.5");
+        assert_eq!(price.write_ascii(&mut [0; 6]), None, "but not six");
+        let longest = D128::<38>::from_steps(i128::MIN, Fixed);
+        let mut out = [0; MAX_ASCII_LEN];
+        assert_eq!(longest.write_ascii(&mut out), Some(MAX_ASCII_LEN), "the longest text fills it");
     }
 
     #[test]
     fn a_value_honours_the_format_spec() {
-        let price = Price::from_bits(600_005_000_000, Fixed);
+        let price = Price::from_steps(600_005_000_000, Fixed);
         assert_eq!(format!("{price:.3}"), "60000.500", "pads to the precision");
         assert_eq!(format!("{price:.0}"), "60000", "a half rounds to the even digit");
         assert_eq!(format!("{price:>12}"), "     60000.5", "a width");
@@ -622,13 +647,13 @@ mod tests {
 
     #[test]
     fn a_run_time_value_shows_its_scale_in_debug() {
-        let value = Decimal::<i64, Dynamic>::from_bits(150, Dynamic::new(2).expect("at most 38"));
+        let value = Decimal::<i64, Dynamic>::from_steps(150, Dynamic::new(2).expect("at most 38"));
         assert_eq!((format!("{value}"), format!("{value:?}")), ("1.5".into(), "1.50".into()));
     }
 
     #[test]
     fn zeros_past_the_decimals_are_padded_as_digits() {
-        let price = Price::from_bits(-600_005_000_000, Fixed);
+        let price = Price::from_steps(-600_005_000_000, Fixed);
         assert_eq!(format!("{price:>19.9}"), "   -60000.500000000", "right, as a number");
         assert_eq!(format!("{price:<19.9}"), "-60000.500000000   ", "left");
         assert_eq!(format!("{price:^19.9}"), " -60000.500000000  ", "centred, the odd one after");
@@ -642,20 +667,20 @@ mod tests {
     #[case::zero(0, 4, "0e0", "0E0")]
     #[case::negative(-12, 0, "-1.2e1", "-1.2E1")]
     fn a_value_writes_scientific_notation(
-        #[case] bits: i64, #[case] decimals: u8, #[case] lower: &str, #[case] upper: &str,
+        #[case] steps: i64, #[case] decimals: u8, #[case] lower: &str, #[case] upper: &str,
     ) {
-        let value = Decimal::from_bits(bits, Dynamic::new(decimals).expect("at most 38"));
+        let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
         assert_eq!((format!("{value:e}"), format!("{value:E}")), (lower.into(), upper.into()));
     }
 
     #[test]
     fn scientific_notation_rounds_to_its_precision() {
-        let x = D64::<4>::from_bits(12_345_000, Fixed);
+        let x = D64::<4>::from_steps(12_345_000, Fixed);
         assert_eq!(format!("{x:.2e}"), "1.23e3", "1.2345, to two");
         assert_eq!(format!("{x:.3e}"), "1.234e3", "a tie, to the even digit");
         assert_eq!(format!("{x:.6e}"), "1.234500e3", "padded");
         assert_eq!(
-            format!("{:.0e}", D64::<0>::from_bits(95, Fixed)),
+            format!("{:.0e}", D64::<0>::from_steps(95, Fixed)),
             "1e2",
             "the carry moves the exponent"
         );
@@ -664,7 +689,7 @@ mod tests {
     proptest! {
         #[test]
         fn the_eight_digit_writer_agrees_with_the_general_one(magnitude: u64, decimals in 0_u8..=18) {
-            let mut bytes = [0; MAX_ASCII_LEN];
+            let mut bytes = [0; super::EIGHT_BYTE_ROOM];
             let len = super::write_ascii_narrow(false, magnitude, decimals, &mut bytes).expect("room enough");
             let mut text = super::Text::new();
             let _no_zeros = text.push_decimal_unpadded(u128::from(magnitude), decimals, None);
@@ -672,8 +697,8 @@ mod tests {
         }
 
         #[test]
-        fn scientific_notation_reads_back_as_the_value(bits: i64, decimals in 0_u8..=18) {
-            let value = Decimal::from_bits(bits, Dynamic::new(decimals).expect("at most 38"));
+        fn scientific_notation_reads_back_as_the_value(steps: i64, decimals in 0_u8..=18) {
+            let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
             let text = format!("{value:e}");
             let back = Decimal::<i64, Dynamic>::from_ascii(text.as_bytes(), Dynamic::new(decimals).expect("at most 38"));
             prop_assert_eq!(back, Ok(value), "{}", text);

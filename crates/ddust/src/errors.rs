@@ -67,6 +67,8 @@ pub enum ParseErrorKind {
     NegOverflow,
     /// The number has a non-zero digit past the decimal's scale.
     TooManyDecimals,
+    /// The range a number is read at is not within its buffer: the caller's range, not the text.
+    RangeOutsideBuffer,
 }
 
 /// What failed, in words.
@@ -78,6 +80,7 @@ impl fmt::Display for ParseErrorKind {
             Self::PosOverflow => "the number is above the decimal's range",
             Self::NegOverflow => "the number is below the decimal's range",
             Self::TooManyDecimals => "the number has more fraction digits than the decimal's scale",
+            Self::RangeOutsideBuffer => "the range to read is not within the buffer",
         })
     }
 }
@@ -89,7 +92,7 @@ impl fmt::Display for ParseErrorKind {
 /// use ddust::{ConvertErrorKind, D64, Fixed};
 ///
 /// let refused = D64::<2>::new(1_005, 3, Fixed).expect_err("1.005 has three decimals");
-/// assert_eq!(refused.kind(), ConvertErrorKind::Inexact, "two decimals, never rounded");
+/// assert_eq!(refused.kind(), ConvertErrorKind::TooManyDecimals, "two decimals, never rounded");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConvertError {
@@ -150,8 +153,8 @@ pub enum ConvertErrorKind {
     PosOverflow,
     /// The value is below the target's range.
     NegOverflow,
-    /// The target cannot hold every digit of the value.
-    Inexact,
+    /// The value has a non-zero digit past the target's scale.
+    TooManyDecimals,
 }
 
 /// What failed, in words.
@@ -160,7 +163,7 @@ impl fmt::Display for ConvertErrorKind {
         f.write_str(match self {
             Self::PosOverflow => "the value is above the target's range",
             Self::NegOverflow => "the value is below the target's range",
-            Self::Inexact => "the target cannot hold every digit of the value",
+            Self::TooManyDecimals => "the value has more fraction digits than the target's scale",
         })
     }
 }
@@ -191,6 +194,10 @@ mod tests {
         ParseErrorKind::TooManyDecimals,
         "parse error: the number has more fraction digits than the decimal's scale"
     )]
+    #[case::range(
+        ParseErrorKind::RangeOutsideBuffer,
+        "parse error: the range to read is not within the buffer"
+    )]
     fn a_parse_error_says_why(#[case] kind: ParseErrorKind, #[case] message: &str) {
         assert_eq!(ParseError::from(kind).to_string(), message, "{kind:?}");
     }
@@ -204,9 +211,9 @@ mod tests {
         ConvertErrorKind::NegOverflow,
         "convert error: the value is below the target's range"
     )]
-    #[case::inexact(
-        ConvertErrorKind::Inexact,
-        "convert error: the target cannot hold every digit of the value"
+    #[case::decimals(
+        ConvertErrorKind::TooManyDecimals,
+        "convert error: the value has more fraction digits than the target's scale"
     )]
     fn a_convert_error_says_why(#[case] kind: ConvertErrorKind, #[case] message: &str) {
         assert_eq!(ConvertError::from(kind).to_string(), message, "{kind:?}");

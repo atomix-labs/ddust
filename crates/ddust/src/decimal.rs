@@ -27,14 +27,13 @@ use crate::scale::{Fixed, Scale, StaticScale};
 ///
 /// # Examples
 /// ```
-/// use ddust::round::{Ceil, Floor};
+/// use ddust::round::{Ceil, HalfExpand};
 /// use ddust::{D64, dec};
 ///
-/// let price: D64<2> = dec!(60000.37);
-/// let tick: D64<2> = dec!(0.5);
-/// assert_eq!(price.round_to(tick, Floor), dec!(60000), "down to the tick");
-/// assert_eq!(price.round_to(tick, Ceil), dec!(60000.5), "up to the tick");
-/// assert_eq!((price + tick).to_string(), "60000.87", "the sum, exact");
+/// let (total, cash): (D64<2>, D64<2>) = (dec!(19.97), dec!(0.05));
+/// assert_eq!(total.round_to(cash, HalfExpand), dec!(19.95), "to the five cents cash is paid in");
+/// assert_eq!(total.round_to(cash, Ceil), dec!(20), "or up");
+/// assert_eq!((total + cash).to_string(), "20.02", "the sum, exact");
 /// ```
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -66,7 +65,8 @@ pub type UD64<const D: u8> = Decimal<u64, Fixed<D>>;
 /// An unsigned decimal of `u128` steps at `D` decimals: sixteen bytes.
 pub type UD128<const D: u8> = Decimal<u128, Fixed<D>>;
 
-/// `value`, given at `from` decimals, at `to`, exactly: `Inexact` for a non-zero digit past `to`.
+/// `value`, given at `from` decimals, at `to`, exactly: `TooManyDecimals` for a non-zero digit past
+/// `to`.
 #[inline]
 const fn shift<I: [const] Int>(value: I, from: u8, to: u8) -> Result<I, ConvertError> {
     if to >= from {
@@ -77,7 +77,7 @@ const fn shift<I: [const] Int>(value: I, from: u8, to: u8) -> Result<I, ConvertE
     }
     match value.scale_down(from.wrapping_sub(to), Trunc.table()) {
         (steps, true) => Ok(steps),
-        (_, false) => Err(ConvertError::new(ConvertErrorKind::Inexact)),
+        (_, false) => Err(ConvertError::new(ConvertErrorKind::TooManyDecimals)),
     }
 }
 
@@ -93,23 +93,47 @@ const fn shift_round<I: [const] Int, R: [const] RoundingMode>(
 }
 
 impl<I: Int, S: Scale> Decimal<I, S> {
-    /// The decimal of `bits` steps at `scale`: its raw representation, for storage and for types
+    /// The decimal of `steps` steps at `scale`: its raw representation, for storage and for types
     /// built on it; [`new`](Self::new), [`dec!`](crate::dec!) and parsing are what a program reads
     /// values with.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, Fixed};
+    ///
+    /// let stored = D64::<2>::from_steps(1_234, Fixed);
+    /// assert_eq!(stored.to_string(), "12.34", "1,234 hundredths");
+    /// ```
     #[inline]
     #[must_use]
-    pub const fn from_bits(bits: I, scale: S) -> Self {
-        Self { steps: bits, scale }
+    pub const fn from_steps(steps: I, scale: S) -> Self {
+        Self { steps, scale }
     }
 
-    /// The steps: the raw representation [`from_bits`](Self::from_bits) takes.
+    /// The steps: the raw representation [`from_steps`](Self::from_steps) takes.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, dec};
+    ///
+    /// let amount: D64<2> = dec!(12.34);
+    /// assert_eq!(amount.steps(), 1_234, "1,234 hundredths");
+    /// ```
     #[inline]
     #[must_use]
-    pub const fn to_bits(self) -> I {
+    pub const fn steps(self) -> I {
         self.steps
     }
 
     /// The scale.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, Fixed, dec};
+    ///
+    /// let amount: D64<2> = dec!(12.34);
+    /// assert_eq!(amount.scale(), Fixed::<2>);
+    /// ```
     #[inline]
     #[must_use]
     pub const fn scale(self) -> S {
@@ -117,6 +141,15 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     }
 
     /// How many decimals a step is.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{Decimal, Dynamic};
+    ///
+    /// let read: Decimal<i64, Dynamic> = "12.340".parse()?;
+    /// assert_eq!(read.decimals(), 3, "the scale its text spells");
+    /// # Ok::<(), ddust::ParseError>(())
+    /// ```
     #[inline]
     #[must_use]
     pub const fn decimals(self) -> u8
@@ -129,7 +162,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// `digits × 10^-decimals` at `scale`, exactly: `new(600_005, 1, Fixed)` is 60000.5.
     ///
     /// # Errors
-    /// [`ConvertError`]: `Inexact` for a non-zero digit past the scale, `PosOverflow` or
+    /// [`ConvertError`]: `TooManyDecimals` for a non-zero digit past the scale, `PosOverflow` or
     /// `NegOverflow` past the range.
     ///
     /// # Examples
@@ -184,16 +217,16 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// The value as digits at `decimals`, exactly: 60000.5 at 4 decimals is 600,005,000.
     ///
     /// # Errors
-    /// [`ConvertError`]: `Inexact` when the value has more decimals, `PosOverflow` or
+    /// [`ConvertError`]: `TooManyDecimals` when the value has more decimals, `PosOverflow` or
     /// `NegOverflow` past the integer's range; [`widen`](Decimal::widen) first for more room.
     ///
     /// # Examples
     /// ```
     /// use ddust::{D64, dec};
     ///
-    /// let price: D64<2> = dec!(60000.5);
-    /// assert_eq!(price.to_digits(4), Ok(600_005_000), "more decimals");
-    /// assert!(price.to_digits(0).is_err(), "fewer: the half would be lost");
+    /// let length: D64<2> = dec!(60000.5);
+    /// assert_eq!(length.to_digits(4), Ok(600_005_000), "more decimals");
+    /// assert!(length.to_digits(0).is_err(), "fewer: the half would be lost");
     /// ```
     #[inline]
     pub const fn to_digits(self, decimals: u8) -> Result<I, ConvertError>
@@ -214,8 +247,8 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// use ddust::round::HalfExpand;
     /// use ddust::{D64, dec};
     ///
-    /// let price: D64<2> = dec!(60000.5);
-    /// assert_eq!(price.to_digits_round(0, HalfExpand), Ok(60_001), "a half, away from zero");
+    /// let length: D64<2> = dec!(60000.5);
+    /// assert_eq!(length.to_digits_round(0, HalfExpand), Ok(60_001), "a half, away from zero");
     /// ```
     #[inline]
     pub const fn to_digits_round<R>(self, decimals: u8, mode: R) -> Result<I, ConvertError>
@@ -230,17 +263,17 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// The value at another scale, exactly.
     ///
     /// # Errors
-    /// [`ConvertError`]: `Inexact` when the value has more decimals than `scale`, `PosOverflow`
+    /// [`ConvertError`]: `TooManyDecimals` when the value has more decimals than `scale`, `PosOverflow`
     /// or `NegOverflow` past the range.
     ///
     /// # Examples
     /// ```
     /// use ddust::{D64, Dynamic, Fixed, dec};
     ///
-    /// let price: D64<2> = dec!(60000.5);
-    /// let finer: D64<4> = price.rescale(Fixed)?;
-    /// assert_eq!(finer.to_bits(), 600_005_000, "four decimals");
-    /// assert_eq!(price.rescale(Dynamic::new(1).expect("at most 38"))?.to_bits(), 600_005);
+    /// let length: D64<2> = dec!(60000.5);
+    /// let finer: D64<4> = length.rescale(Fixed)?;
+    /// assert_eq!(finer.steps(), 600_005_000, "four decimals");
+    /// assert_eq!(length.rescale(Dynamic::new(1).expect("at most 38"))?.steps(), 600_005);
     /// # Ok::<(), ddust::ConvertError>(())
     /// ```
     #[inline]
@@ -286,6 +319,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     }
 
     /// Whether the value is zero.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::D64;
+    ///
+    /// assert!(D64::<2>::ZERO.is_zero() && !D64::<2>::ONE.is_zero());
+    /// ```
     #[inline]
     #[must_use]
     pub const fn is_zero(self) -> bool
@@ -296,6 +336,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     }
 
     /// Whether the value is above zero.
+    ///
+    /// # Examples
+    /// ```
+    /// use ddust::{D64, dec};
+    ///
+    /// assert!(dec!(0.01: D64<2>).is_positive() && !D64::<2>::ZERO.is_positive());
+    /// ```
     #[inline]
     #[must_use]
     pub const fn is_positive(self) -> bool
@@ -308,10 +355,25 @@ impl<I: Int, S: Scale> Decimal<I, S> {
 
 impl<I: Int, S: StaticScale> Decimal<I, S> {
     /// Zero.
+    ///
+    /// # Examples
+    /// ```
+    /// assert_eq!(ddust::D64::<2>::ZERO.steps(), 0);
+    /// ```
     pub const ZERO: Self = Self { steps: I::ZERO, scale: S::INSTANCE };
     /// The smallest value.
+    ///
+    /// # Examples
+    /// ```
+    /// assert_eq!(ddust::D8::<1>::MIN.to_string(), "-12.8");
+    /// ```
     pub const MIN: Self = Self { steps: I::MIN, scale: S::INSTANCE };
     /// The largest value.
+    ///
+    /// # Examples
+    /// ```
+    /// assert_eq!(ddust::D8::<1>::MAX.to_string(), "12.7");
+    /// ```
     pub const MAX: Self = Self { steps: I::MAX, scale: S::INSTANCE };
 }
 
@@ -322,7 +384,7 @@ impl<I: const Int, S: StaticScale + const Scale> Decimal<I, S> {
     /// ```
     /// use ddust::D64;
     ///
-    /// assert_eq!(D64::<2>::ONE.to_bits(), 100, "a hundred hundredths");
+    /// assert_eq!(D64::<2>::ONE.steps(), 100, "a hundred hundredths");
     /// ```
     ///
     /// Naming it where one does not fit fails the build:
@@ -335,7 +397,7 @@ impl<I: const Int, S: StaticScale + const Scale> Decimal<I, S> {
         assert!(one.is_ok(), "one is past the decimal's range");
         match one {
             Ok(one) => one,
-            Err(_) => Self::ZERO,
+            Err(_past_the_range) => Self::ZERO,
         }
     };
 }
@@ -360,17 +422,17 @@ mod tests {
 
     #[rstest]
     #[case::exact(1_005, 1, Ok(10_050))]
-    #[case::more_decimals(1_005, 3, Err(ConvertErrorKind::Inexact))]
+    #[case::more_decimals(1_005, 3, Err(ConvertErrorKind::TooManyDecimals))]
     #[case::whole(25, 0, Ok(2_500))]
     #[case::above(i64::MAX, 0, Err(ConvertErrorKind::PosOverflow))]
     #[case::below(i64::MIN, 0, Err(ConvertErrorKind::NegOverflow))]
-    #[case::far_below(1, 60, Err(ConvertErrorKind::Inexact))]
+    #[case::far_below(1, 60, Err(ConvertErrorKind::TooManyDecimals))]
     #[case::zero_far_below(0, 60, Ok(0))]
     fn new_takes_digits_at_any_decimals(
         #[case] digits: i64, #[case] decimals: u8, #[case] expected: Result<i64, ConvertErrorKind>,
     ) {
         let made =
-            Cents::new(digits, decimals, Fixed).map(Cents::to_bits).map_err(ConvertError::kind);
+            Cents::new(digits, decimals, Fixed).map(Cents::steps).map_err(ConvertError::kind);
         assert_eq!(made, expected, "{digits} at {decimals}");
     }
 
@@ -379,21 +441,28 @@ mod tests {
     #[case::ceil(Rounding::Ceil, 101)]
     #[case::half_even(Rounding::HalfEven, 100)]
     #[case::half_expand(Rounding::HalfExpand, 101)]
-    fn new_round_rounds_extra_decimals(#[case] mode: Rounding, #[case] bits: i64) {
-        let made = Cents::new_round(10_050, 4, Fixed, mode).map(Cents::to_bits);
-        assert_eq!(made, Ok(bits), "1.005 at two decimals, {mode:?}");
+    fn new_round_rounds_extra_decimals(#[case] mode: Rounding, #[case] steps: i64) {
+        let made = Cents::new_round(10_050, 4, Fixed, mode).map(Cents::steps);
+        assert_eq!(made, Ok(steps), "1.005 at two decimals, {mode:?}");
     }
 
     #[test]
     fn digits_come_out_at_any_decimals() {
-        let price = Cents::from_bits(6_000_045, Fixed);
-        assert_eq!(price.to_digits(4), Ok(600_004_500), "more decimals");
-        assert_eq!(price.to_digits(1).map_err(ConvertError::kind), Err(ConvertErrorKind::Inexact));
-        assert_eq!(price.to_digits_round(1, HalfEven), Ok(600_004), "a tie to the even digit");
-        assert_eq!(price.to_digits_round(1, HalfExpand), Ok(600_005), "or away from zero");
-        assert_eq!(Cents::from_bits(-1, Fixed).to_digits_round(0, Floor), Ok(-1), "floor of -0.01");
+        let value = Cents::from_steps(6_000_045, Fixed);
+        assert_eq!(value.to_digits(4), Ok(600_004_500), "more decimals");
         assert_eq!(
-            Cents::from_bits(1, Fixed).to_digits_round(60, Trunc).map_err(ConvertError::kind),
+            value.to_digits(1).map_err(ConvertError::kind),
+            Err(ConvertErrorKind::TooManyDecimals)
+        );
+        assert_eq!(value.to_digits_round(1, HalfEven), Ok(600_004), "a tie to the even digit");
+        assert_eq!(value.to_digits_round(1, HalfExpand), Ok(600_005), "or away from zero");
+        assert_eq!(
+            Cents::from_steps(-1, Fixed).to_digits_round(0, Floor),
+            Ok(-1),
+            "floor of -0.01"
+        );
+        assert_eq!(
+            Cents::from_steps(1, Fixed).to_digits_round(60, Trunc).map_err(ConvertError::kind),
             Err(ConvertErrorKind::PosOverflow),
             "past an i64"
         );
@@ -401,32 +470,31 @@ mod tests {
 
     #[test]
     fn a_rescale_is_exact_or_rounded() {
-        let price = Cents::from_bits(6_000_045, Fixed);
+        let value = Cents::from_steps(6_000_045, Fixed);
         let tenths = Dynamic::new(1).expect("at most 38");
         assert_eq!(
-            price.rescale(tenths).map_err(ConvertError::kind),
-            Err(ConvertErrorKind::Inexact)
+            value.rescale(tenths).map_err(ConvertError::kind),
+            Err(ConvertErrorKind::TooManyDecimals)
         );
-        assert_eq!(price.rescale_round(tenths, Ceil).map(Decimal::to_bits), Ok(600_005), "up");
-        let finer = price.rescale(Fixed::<18>).map_err(ConvertError::kind);
+        assert_eq!(value.rescale_round(tenths, Ceil).map(Decimal::steps), Ok(600_005), "up");
+        let finer = value.rescale(Fixed::<18>).map_err(ConvertError::kind);
         assert_eq!(
             finer,
             Err(ConvertErrorKind::PosOverflow),
             "60000.45 has no room at 18 in an i64"
         );
-        let wide =
-            D128::<2>::from_bits(6_000_045, Fixed).rescale(Fixed::<18>).map(Decimal::to_bits);
+        let wide = D128::<2>::from_steps(6_000_045, Fixed).rescale(Fixed::<18>).map(Decimal::steps);
         assert_eq!(wide, Ok(60_000_450_000_000_000_000_000), "but has in an i128");
     }
 
     #[test]
     fn the_constants_are_the_integers() {
         assert_eq!(
-            (Cents::ZERO.to_bits(), Cents::MIN.to_bits(), Cents::MAX.to_bits()),
+            (Cents::ZERO.steps(), Cents::MIN.steps(), Cents::MAX.steps()),
             (0, i64::MIN, i64::MAX)
         );
-        assert_eq!((Cents::ONE.to_bits(), D8::<2>::ONE.to_bits()), (100, 100), "one: 10^2 steps");
-        assert_eq!(UD64::<0>::ONE.to_bits(), 1, "at no decimals, one step");
+        assert_eq!((Cents::ONE.steps(), D8::<2>::ONE.steps()), (100, 100), "one: 10^2 steps");
+        assert_eq!(UD64::<0>::ONE.steps(), 1, "at no decimals, one step");
         assert_eq!(Decimal::<i64, Dynamic>::default().decimals(), 0, "a run-time zero has none");
         assert!(Cents::ZERO.is_zero() && !Cents::ZERO.is_positive() && Cents::ONE.is_positive());
     }

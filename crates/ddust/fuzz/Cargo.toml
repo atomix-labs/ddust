@@ -11,12 +11,6 @@ cargo-fuzz = true
 # `fuzz_target!` expands to code the workspace's lints refuse.
 [workspace]
 
-[dependencies]
-ddust         = { path = ".." }
-libfuzzer-sys = { version = "0.4.13", features = ["arbitrary-derive"] }
-num-bigint    = "0.4.6"
-num-integer   = "0.1.46"
-
 [[bin]]
 name  = "parse_narrow"
 path  = "fuzz_targets/parse_narrow.rs"
@@ -44,3 +38,9 @@ path  = "fuzz_targets/floats.rs"
 test  = false
 doc   = false
 bench = false
+
+[dependencies]
+ddust         = { path = ".." }
+libfuzzer-sys = { version = "0.4.13", features = ["arbitrary-derive"] }
+num-bigint    = "0.4.6"
+num-integer   = "0.1.46"

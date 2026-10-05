@@ -41,6 +41,8 @@ pub(crate) const trait Word: Copy + [const] Ord {
     fn wrapping_add(self, other: Self) -> Self;
     /// The difference, modulo the word.
     fn wrapping_sub(self, other: Self) -> Self;
+    /// The product, modulo the word.
+    fn wrapping_mul(self, other: Self) -> Self;
     /// The quotient and the remainder, for a divisor that is not zero.
     fn div_rem(self, divisor: Self) -> (Self, Self);
     /// Whether the value is odd.
@@ -79,7 +81,7 @@ macro_rules! word {
                 match pow10_u128(k) {
                     Some(power) => match <$t>::try_from(power) {
                         Ok(power) => Some(power),
-                        Err(_) => None,
+                        Err(_out_of_range) => None,
                     },
                     None => None,
                 }
@@ -106,6 +108,11 @@ macro_rules! word {
             }
 
             #[inline]
+            fn wrapping_mul(self, other: Self) -> Self {
+                <$t>::wrapping_mul(self, other)
+            }
+
+            #[inline]
             #[expect(clippy::arithmetic_side_effects, reason = "the divisor is not zero")]
             fn div_rem(self, divisor: Self) -> (Self, Self) {
                 (self / divisor, self % divisor)
@@ -128,7 +135,7 @@ macro_rules! word {
                 // The masked value always fits: the conversion is the truncation, spelled exactly.
                 match <$t>::try_from(wide & u128::from(<$t>::MAX)) {
                     Ok(low) => low,
-                    Err(_) => 0,
+                    Err(_out_of_range) => 0,
                 }
             }
         }
@@ -150,7 +157,7 @@ macro_rules! double {
             fn narrow(self) -> Option<$narrow> {
                 match <$narrow>::try_from(self) {
                     Ok(narrow) => Some(narrow),
-                    Err(_) => None,
+                    Err(_out_of_range) => None,
                 }
             }
 
@@ -159,7 +166,7 @@ macro_rules! double {
                 // The masked value always fits: the conversion is the truncation, spelled exactly.
                 match <$narrow>::try_from(self & <$wide>::from(<$narrow>::MAX)) {
                     Ok(low) => low,
-                    Err(_) => 0,
+                    Err(_out_of_range) => 0,
                 }
             }
 
@@ -203,24 +210,27 @@ impl U256 {
         const HALF: u128 = 1 << 64;
         let shift = divisor.leading_zeros();
         let divisor = divisor << shift;
-        let (d1, d0) = (divisor >> 64, divisor & (HALF - 1));
+        let (divisor_high, divisor_low) = (divisor >> 64, divisor & (HALF - 1));
         let top = if shift == 0 { high } else { (high << shift) | (low >> (128 - shift)) };
         let rest = low << shift;
-        let (n1, n0) = (rest >> 64, rest & (HALF - 1));
-        let (q1, partial) = Self::digit(top, n1, d1, d0, divisor);
-        let (q0, remainder) = Self::digit(partial, n0, d1, d0, divisor);
+        let (next_high, next_low) = (rest >> 64, rest & (HALF - 1));
+        let (q1, partial) = Self::digit(top, next_high, divisor_high, divisor_low, divisor);
+        let (q0, remainder) = Self::digit(partial, next_low, divisor_high, divisor_low, divisor);
         ((q1 << 64) | q0, remainder >> shift)
     }
 
-    /// One digit of the long division: `(top:next) / (d1:d0)`, in base `2^64`, and the remainder.
+    /// One digit of the long division: `(top:next) / (divisor_high:divisor_low)`, in base `2^64`,
+    /// and the remainder.
     #[expect(clippy::arithmetic_side_effects, reason = "bounded as `div_rem_narrow` says")]
-    const fn digit(top: u128, next: u128, d1: u128, d0: u128, divisor: u128) -> (u128, u128) {
+    const fn digit(
+        top: u128, next: u128, divisor_high: u128, divisor_low: u128, divisor: u128,
+    ) -> (u128, u128) {
         const HALF: u128 = 1 << 64;
-        let mut quotient = top / d1;
-        let mut estimate = top - quotient * d1;
-        while quotient >= HALF || quotient * d0 > ((estimate << 64) | next) {
+        let mut quotient = top / divisor_high;
+        let mut estimate = top - quotient * divisor_high;
+        while quotient >= HALF || quotient * divisor_low > ((estimate << 64) | next) {
             quotient -= 1;
-            estimate += d1;
+            estimate += divisor_high;
             if estimate >= HALF {
                 break;
             }
@@ -395,6 +405,16 @@ const impl Word for U256 {
     fn wrapping_add(self, other: Self) -> Self {
         let (low, carry) = self.low.overflowing_add(other.low);
         Self { high: self.high.wrapping_add(other.high).wrapping_add(u128::from(carry)), low }
+    }
+
+    #[inline]
+    fn wrapping_mul(self, other: Self) -> Self {
+        // The low 256 bits: the low halves' whole product, and the cross terms' low halves above
+        // it.
+        let (low, carry) = self.low.carrying_mul(other.low, 0);
+        let cross =
+            self.high.wrapping_mul(other.low).wrapping_add(self.low.wrapping_mul(other.high));
+        Self { high: carry.wrapping_add(cross), low }
     }
 
     #[inline]

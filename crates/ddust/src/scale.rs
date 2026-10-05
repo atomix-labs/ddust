@@ -90,7 +90,7 @@ impl<const D: u8> StaticScale for Fixed<D> {
 }
 
 /// A scale chosen at run time and carried beside the integer: a precision read from a
-/// configuration or a peer, or the scale a number's text spells.
+/// configuration or a database column, or the scale a number's text spells.
 ///
 /// Two values of different run-time scales line up exactly at the finer one, as SQL's `DECIMAL`
 /// does: `1.5 + 1.25` is `2.75`, and `1.5 == 1.50`.
@@ -129,6 +129,12 @@ impl Dynamic {
         assert!(decimals <= MAX_DECIMALS, "a product's decimals are past 38");
         Self { decimals }
     }
+
+    /// The scale of a product, or `None` past [`MAX_DECIMALS`].
+    #[inline]
+    const fn checked_product(a: u8, b: u8) -> Option<Self> {
+        Self::new(a.saturating_add(b))
+    }
 }
 
 const impl Scale for Dynamic {
@@ -141,7 +147,7 @@ const impl Scale for Dynamic {
 }
 
 /// A static scale as a run-time one, at the same decimals.
-impl<S: StaticScale> From<S> for Dynamic {
+const impl<S: StaticScale> From<S> for Dynamic {
     #[inline]
     fn from(_scale: S) -> Self {
         Self { decimals: S::DECIMALS }
@@ -162,11 +168,6 @@ impl<S: StaticScale> From<S> for Dynamic {
 /// ```
 pub struct Sum<A, B>(PhantomData<fn() -> (A, B)>);
 
-impl<A, B> Sum<A, B> {
-    /// The scale itself.
-    const VALUE: Self = Self(PhantomData);
-}
-
 impl<A, B> Clone for Sum<A, B> {
     #[inline]
     fn clone(&self) -> Self {
@@ -179,7 +180,7 @@ impl<A, B> Copy for Sum<A, B> {}
 impl<A, B> Default for Sum<A, B> {
     #[inline]
     fn default() -> Self {
-        Self::VALUE
+        Self(PhantomData)
     }
 }
 
@@ -230,7 +231,7 @@ const impl<A: StaticScale, B: StaticScale> Scale for Sum<A, B> {
 }
 
 impl<A: StaticScale, B: StaticScale> StaticScale for Sum<A, B> {
-    const INSTANCE: Self = Self::VALUE;
+    const INSTANCE: Self = Self(PhantomData);
     const DECIMALS: u8 = {
         let decimals = A::DECIMALS.saturating_add(B::DECIMALS);
         assert!(decimals <= MAX_DECIMALS, "a product's decimals are past 38");
@@ -259,6 +260,9 @@ pub const trait Times<Rhs: Scale>: Scale {
     /// For a run-time product past 38 decimals; a static one fails the build instead.
     #[track_caller]
     fn times(self, rhs: Rhs) -> Self::Output;
+
+    /// The product's scale, or `None` for a run-time product past 38 decimals.
+    fn checked_times(self, rhs: Rhs) -> Option<Self::Output>;
 }
 
 const impl<A: StaticScale, B: StaticScale> Times<B> for A {
@@ -267,6 +271,11 @@ const impl<A: StaticScale, B: StaticScale> Times<B> for A {
     #[inline]
     fn times(self, _rhs: B) -> Sum<A, B> {
         Sum::<A, B>::INSTANCE
+    }
+
+    #[inline]
+    fn checked_times(self, _rhs: B) -> Option<Sum<A, B>> {
+        Some(Sum::<A, B>::INSTANCE)
     }
 }
 
@@ -278,6 +287,11 @@ const impl<A: StaticScale> Times<Dynamic> for A {
     fn times(self, rhs: Dynamic) -> Dynamic {
         Dynamic::product(A::DECIMALS, rhs.decimals)
     }
+
+    #[inline]
+    fn checked_times(self, rhs: Dynamic) -> Option<Dynamic> {
+        Dynamic::checked_product(A::DECIMALS, rhs.decimals)
+    }
 }
 
 const impl<B: [const] Scale> Times<B> for Dynamic {
@@ -287,6 +301,11 @@ const impl<B: [const] Scale> Times<B> for Dynamic {
     #[track_caller]
     fn times(self, rhs: B) -> Dynamic {
         Dynamic::product(self.decimals, rhs.decimals())
+    }
+
+    #[inline]
+    fn checked_times(self, rhs: B) -> Option<Dynamic> {
+        Dynamic::checked_product(self.decimals, rhs.decimals())
     }
 }
 
@@ -317,6 +336,17 @@ mod tests {
         assert_eq!(Fixed::<2>.times(three).decimals(), 5, "static times run time");
         assert_eq!(three.times(Fixed::<2>).decimals(), 5, "and the other way");
         assert_eq!(three.times(three).decimals(), 6, "run time times run time");
+    }
+
+    #[test]
+    fn a_run_time_product_past_38_decimals_has_no_scale() {
+        let fine = Dynamic::new(20).expect("at most 38");
+        assert_eq!(fine.checked_times(fine), None, "40 decimals");
+        assert_eq!(
+            fine.checked_times(Fixed::<18>).map(Scale::decimals),
+            Some(38),
+            "38, the finest"
+        );
     }
 
     #[test]

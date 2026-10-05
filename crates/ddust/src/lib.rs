@@ -23,14 +23,13 @@
 //!
 //! # Types
 //!
-//! - **The decimal.** [`Decimal`], and an alias for each integer at a static scale: [`D8`] to
-//!   [`D128`] and [`UD8`] to [`UD128`].
+//! - **The decimal.** [`Decimal`]; an alias for each integer at a static scale, [`D8`] to [`D128`]
+//!   and [`UD8`] to [`UD128`]; and [`dec!`], a literal checked when the constant is evaluated.
 //! - **Integers.** [`Int`], implemented by the ten primitive integers, and [`Signed`].
 //! - **Scales.** [`Scale`]; [`Fixed`] and [`Dynamic`]; [`StaticScale`]; and in [`scale`], a
 //!   product's [`Sum`](scale::Sum) and the [`Times`](scale::Times) that gives it.
 //! - **Rounding.** The nine modes in [`round`], each a zero-sized type, and
 //!   [`Rounding`](round::Rounding), one chosen at run time.
-//! - **Literals.** [`dec!`], checked when the constant is evaluated.
 //! - **Refusals.** [`ParseError`] and [`ConvertError`], each with a kind.
 //!
 //! # Examples

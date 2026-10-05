@@ -23,9 +23,6 @@ default = []
 [lints]
 workspace = true
 
-[lib]
-bench = false
-
 [dev-dependencies]
 # external
 proptest = { workspace = true }

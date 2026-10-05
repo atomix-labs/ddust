@@ -57,7 +57,7 @@ macro_rules! modes {
             }
         )*
 
-        /// A rounding mode chosen at run time, from a configuration or a peer's rules: one of the
+        /// A rounding mode chosen at run time, from a configuration or a protocol's rules: one of the
         /// nine mode types as a value.
         ///
         /// Its discriminant is the mode's table, so an operation reads it as it reads a type's,
@@ -90,9 +90,9 @@ macro_rules! modes {
 }
 
 modes! {
-    /// Toward negative infinity: a bid to its tick, a size to its lot.
+    /// Toward negative infinity, as `f64::floor` does.
     Floor = 0xEE00;
-    /// Toward positive infinity: an ask to its tick, a fee owed.
+    /// Toward positive infinity, as `f64::ceil` does: a charge up to the smallest coin.
     Ceil = 0x00EE;
     /// Toward zero, as the integers' `/` does.
     Trunc = 0x0000;
