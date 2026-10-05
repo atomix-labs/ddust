@@ -14,6 +14,7 @@ homepage     = "https://atomix-labs.github.io/ddust/"
 [workspace.dependencies]
 # external
 proptest = { version = "1.11.0" }
+rstest   = { version = "0.27.0", default-features = false }
 
 [workspace.lints]
 

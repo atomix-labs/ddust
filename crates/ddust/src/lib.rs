@@ -10,6 +10,7 @@
 
 mod int;
 mod kernel;
+pub mod round;
 mod word;
 
 #[doc(hidden)]
