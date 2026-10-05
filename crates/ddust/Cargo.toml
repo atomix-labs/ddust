@@ -12,5 +12,20 @@ readme                 = "../../README.md"
 keywords               = ["decimal", "fixed-point", "rounding", "no-std", "simd"]
 categories             = ["mathematics", "finance", "no-std", "no-std::no-alloc"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets      = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+
+[features]
+default = []
+
 [lints]
 workspace = true
+
+[lib]
+bench = false
+
+[dev-dependencies]
+# external
+proptest = { workspace = true }
