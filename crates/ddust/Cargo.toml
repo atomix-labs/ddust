@@ -1,0 +1,16 @@
+[package]
+name                   = "ddust"
+description            = "fixed-point decimals that leave no dust: exact, typed, as fast as the integers beneath them."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+readme                 = "../../README.md"
+keywords               = ["decimal", "fixed-point", "rounding", "no-std", "simd"]
+categories             = ["mathematics", "finance", "no-std", "no-std::no-alloc"]
+
+[lints]
+workspace = true
