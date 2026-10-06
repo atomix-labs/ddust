@@ -40,9 +40,16 @@ with the profile, on `devset update`. Never edit `.devset/`.
 A Cargo workspace for `ddust`, a crate of exact fixed-point decimals: a whole
 number of steps of `10^-decimals` in an integer from `i8` to `i128`, the scale a
 type or a value carried at run time. The crate is `crates/ddust`, and inherits
-its version, edition, licence and lints from the root `Cargo.toml`. The book is
+its version, edition, licence and lints from the root `Cargo.toml`. Beside it,
+each a workspace of its own that `just check` does not build, are its fuzz
+targets, `crates/ddust/fuzz/`, and its benchmarks, `crates/ddust/bench/`: a
+harness that counts the CPU's events, an adapter for each crate it is compared
+with, an exact oracle, and the runs committed under `results/`. The book is
 under `docs/`. The toolchain is the nightly `rust-toolchain.toml` pins, and the
 crate builds only on nightly; the tools are the versions `.config/mise/` pins.
+`.github/workflows/platforms.yml` and `bench.yml` are the repository's own: the
+tests on arm64 Linux and macOS, bare metal and 32-bit, the fuzz targets, and the
+bench crate's tests, callgrind counts and assembly gate.
 
 The design and what is left for later are in `.notes/`, which git ignores.
 
@@ -115,6 +122,25 @@ What a change here keeps, beyond what the checks hold it to.
   -max_total_time=300` in `crates/ddust/fuzz/`, for each target it touches; what
   it adds to the corpus is kept small with `cargo fuzz cmin`, and a crash it
   finds, shrunk with `cargo fuzz tmin`, becomes a unit test.
+- A change to a kernel, an operator, a conversion, reading or writing runs the
+  benches on an isolated core, `just bench-run <pr> <what> <host>`, and commits
+  the run under `crates/ddust/bench/results/` when a figure the book cites
+  moves. A run is named for its time in UTC, its pull request, what it measures
+  and its machine (`2026-10-06T09-30Z-pr3-baseline-graviton4`); its passes
+  agree, by 2% in time and cycles and 0.5% in instructions, or it is taken again
+  with five, and the book cites the median of their medians.
+- Contenders are compared within one binary and one run, never across builds,
+  since code layout alone moves a figure by 5%. A claim that one form is faster
+  cites the run that shows it.
+- A crate compared is an adapter in `crates/ddust/bench/src/contenders/`, on
+  each operation's fastest correct call, and a line in `contenders!` for each
+  operation it has; the equivalence test holds every result to the oracle, and a
+  row that differs says so, `EXACT = false`, with its reason in its docs.
+- A kernel that divides only by constants is gated: `just bench-code` refuses a
+  division instruction or routine in it on either architecture, and the gate's
+  list in `crates/ddust/bench/scripts/code.py` grows as kernels join it.
+- The bench crate's lints are the root's `[workspace.lints]`, copied, which
+  `just check-bench-lints` holds equal.
 
 <!-- >>> devset: cargo-deny >>> -->
 
