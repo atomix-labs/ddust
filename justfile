@@ -1,5 +1,15 @@
 # The repository's own recipes go here, above the block the just profile writes.
 
+# Holds the bench workspace's lints, a copy of the root's `[workspace.lints]`, equal to them.
+check-bench-lints:
+    #!/usr/bin/env -S mise exec -- python3
+    import sys, tomllib
+    root = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["lints"]
+    bench = tomllib.load(open("crates/ddust/bench/Cargo.toml", "rb"))["lints"]
+    if root != bench:
+        sys.exit("crates/ddust/bench/Cargo.toml: its [lints] differ from the root's [workspace.lints]; copy them again")
+    print("bench lints: the root's")
+
 # >>> devset: just >>>
 # Each active profile's recipes.
 import? '.just/agents.just'
