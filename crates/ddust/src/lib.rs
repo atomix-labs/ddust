@@ -65,6 +65,8 @@
 #![feature(const_unsigned_bigint_helpers)]
 // Overflow decided by the profile's `overflow-checks`, as the integers' own operators decide it.
 #![feature(cfg_overflow_checks)]
+// `mul_add` and `floor` in a `const fn`, for `from_f64`'s exact residual where an FMA is hardware.
+#![cfg_attr(any(target_arch = "aarch64", target_feature = "fma"), feature(core_float_math))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(test)]

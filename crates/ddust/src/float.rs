@@ -1,10 +1,15 @@
 //! `f64`, correctly rounded both ways: a decimal to its nearest double, and a double's exact value
 //! at a scale, rounded once by a mode.
 
+#[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+use core::f64::math::{floor, mul_add};
+
 use crate::decimal::Decimal;
 use crate::int::Int;
 use crate::round::RoundingMode;
 use crate::scale::Scale;
+#[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+use crate::word::rounds_up_by_class;
 use crate::{kernel, reciprocal};
 
 /// `10^k` for `k` in `0..=22`: every power of ten an `f64` holds exactly.
@@ -22,6 +27,74 @@ const POW10_F64: [f64; 23] = {
 
 /// The largest magnitude an `f64` holds every integer up to: `2^53`.
 const EXACT_IN_F64: u128 = 1 << 53;
+
+/// `2^52`, the biased exponent `1023 + 52` with no fraction: from it, every double is whole.
+#[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+const WHOLE_FROM: f64 = f64::from_bits(1075 << 52);
+
+/// `x × 10^decimals` rounded by `table` for a result of sign `negative`, for a finite `x` that is
+/// not negative, from the product's double `p` and its residual `e = x·10^d − p`, which an FMA
+/// computes exactly; or `None` past 22 decimals or from `2^52`, which [`exactly`] takes.
+///
+/// Below `2^52` every whole number and every half is a double, and `p` is the double nearest
+/// `p + e`, so none lies strictly between them: `p`'s fraction is the value's, but where it is zero
+/// or a half, where `e`'s sign says which side of it the value is on. Below half a step the
+/// fraction is never either, so a residual that underflows is never read. The class is computed
+/// with selects: as branches, mixed values mispredicted them.
+#[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+#[expect(clippy::indexing_slicing, reason = "checked against the table's length first")]
+#[expect(clippy::as_conversions, reason = "a whole double below 2^52 converts exactly")]
+#[expect(clippy::cast_possible_truncation, reason = "a whole double below 2^52 converts exactly")]
+#[expect(clippy::cast_sign_loss, reason = "every double here is not negative")]
+#[expect(clippy::float_cmp, reason = "a fraction against zero and a half, both exact")]
+const fn by_residual(x: f64, decimals: u8, negative: bool, table: u16) -> Option<u128> {
+    let d = usize::from(decimals);
+    if d >= POW10_F64.len() {
+        return None;
+    }
+    let power = POW10_F64[d];
+    let p = x * power;
+    // An infinity too: `x` and the power are finite, so `p` is not a NaN.
+    if p >= WHOLE_FROM {
+        return None;
+    }
+    let e = mul_add(x, power, -p);
+    let whole = floor(p);
+    let fraction = p - whole;
+    let (above, below) = (u32::from(e > 0.0), u32::from(e < 0.0));
+    let (at_zero, at_half) = (fraction == 0.0, fraction == 0.5);
+    // At a whole number, just above it is below half a step, and just below it, a step down, is
+    // above half; at a half, the residual's side is the class's.
+    let class = if at_zero {
+        above | below.wrapping_mul(3)
+    } else if at_half {
+        2_u32.wrapping_add(above).wrapping_sub(below)
+    } else {
+        1 | (u32::from(fraction > 0.5) << 1)
+    };
+    let quotient = (whole as u64).wrapping_sub(u64::from(at_zero) & u64::from(below));
+    let up = rounds_up_by_class(class, quotient & 1 == 1, negative, table);
+    Some(u128::from(quotient.wrapping_add(u64::from(up))))
+}
+
+/// `x × 10^decimals`, for a finite `x`, rounded by `table` for `x`'s sign, from the double's exact
+/// binary value: `m · 2^e`, with `m` its 53 bits, and `e` its exponent less 52. `None` past 128
+/// bits.
+const fn exactly(x: f64, decimals: u8, table: u16) -> Option<u128> {
+    let bits = x.to_bits();
+    let biased = match i32::try_from((bits >> 52) & 0x7FF) {
+        Ok(biased) => biased,
+        Err(_out_of_range) => 0,
+    };
+    let fraction = bits & ((1 << 52) - 1);
+    // A subnormal has no implicit leading one; every other double has.
+    let (mantissa, exponent) = if biased == 0 {
+        (fraction, -1074_i32)
+    } else {
+        (fraction | (1 << 52), biased.wrapping_sub(1075))
+    };
+    kernel::binary_at_scale(x.is_sign_negative(), mantissa, exponent, decimals, table)
+}
 
 /// The nearest `f64` to `magnitude × 10^-decimals`, ties to even, for a magnitude that is not
 /// zero: the general path, where the steps or the power are past what a double holds exactly.
@@ -115,24 +188,19 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         if !x.is_finite() {
             return None;
         }
-        let bits = x.to_bits();
-        let negative = bits >> 63 == 1;
-        let biased = match i32::try_from((bits >> 52) & 0x7FF) {
-            Ok(biased) => biased,
-            Err(_out_of_range) => 0,
-        };
-        let fraction = bits & ((1 << 52) - 1);
-        // A subnormal has no implicit leading one; every other double has.
-        let (mantissa, exponent) = if biased == 0 {
-            (fraction, -1074_i32)
-        } else {
-            (fraction | (1 << 52), biased.wrapping_sub(1075))
-        };
-        let Some(magnitude) =
-            kernel::binary_at_scale(negative, mantissa, exponent, scale.decimals(), mode.table())
-        else {
-            return None;
-        };
+        let negative = x.is_sign_negative();
+        // Up to a word: a wider integer's values are past 2^52 at its scales, and the residual's
+        // test only costs it a mispredicted branch.
+        #[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+        if size_of::<I>() <= size_of::<u64>()
+            && let Some(magnitude) = by_residual(x.abs(), scale.decimals(), negative, mode.table())
+        {
+            return match I::from_magnitude(negative, magnitude) {
+                Some(steps) => Some(Self::from_steps(steps, scale)),
+                None => None,
+            };
+        }
+        let Some(magnitude) = exactly(x, scale.decimals(), mode.table()) else { return None };
         match I::from_magnitude(negative, magnitude) {
             Some(steps) => Some(Self::from_steps(steps, scale)),
             None => None,
@@ -236,6 +304,53 @@ mod tests {
     fn a_double_past_128_bits_is_refused() {
         assert_eq!(D128::<2>::from_f64(1e300, Fixed, Trunc), None, "a power of five in one word");
         assert_eq!(D128::<30>::from_f64(1e300, Fixed, Trunc), None, "and in two");
+    }
+
+    /// The residual where an FMA is hardware, against the exact value.
+    #[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+    mod residual {
+        use proptest::prelude::*;
+
+        use super::super::{POW10_F64, by_residual, exactly};
+        use crate::round::{Rounding, RoundingMode};
+
+        /// Every mode, as a value.
+        const MODES: [Rounding; 9] = [
+            Rounding::Floor,
+            Rounding::Ceil,
+            Rounding::Trunc,
+            Rounding::Expand,
+            Rounding::HalfFloor,
+            Rounding::HalfCeil,
+            Rounding::HalfTrunc,
+            Rounding::HalfExpand,
+            Rounding::HalfEven,
+        ];
+
+        proptest! {
+            #[test]
+            fn the_residual_rounds_as_the_exact_value_does(
+                raw: u64, small: u32, biased in 933_u64..=1063, decimals in 0_u8..=22, family in 0_u8..3,
+                negative: bool,
+            ) {
+                let x = match family {
+                    // Any double from 2^-90 to 2^40.
+                    0 => f64::from_bits((biased << 52) | (raw & ((1 << 52) - 1))),
+                    // A tie: an odd number of halves of 10^-d, so x · 10^d is a half, held exactly
+                    // in the product's double or only with the residual.
+                    1 => f64::from(small | 1) * 0.5_f64.powi(i32::from(decimals)) * 0.5,
+                    // Near a whole number of steps: n / 10^d, the nearest double.
+                    _ => f64::from(small) / POW10_F64[usize::from(decimals)],
+                };
+                let x = if negative { -x } else { x };
+                for mode in MODES {
+                    let table = mode.table();
+                    if let Some(got) = by_residual(x.abs(), decimals, negative, table) {
+                        prop_assert_eq!(Some(got), exactly(x, decimals, table), "{:?} at {}", mode, decimals);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
