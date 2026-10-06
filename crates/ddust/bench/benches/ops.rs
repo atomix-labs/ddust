@@ -67,10 +67,16 @@ fn values<C: Contender>(steps: &[i128]) -> Vec<C::Value> {
     steps.iter().filter_map(|&steps| C::from_steps(steps)).collect()
 }
 
-/// Times `operation` over each pair of `set`'s values, the results kept in a vector it reuses.
+/// Times `operation` over each pair of the values `set` builds, unless the filters pass the name
+/// over, the results kept in a vector it reuses.
 fn throughput<C: Contender, R>(
-    harness: &mut Harness, name: &str, set: &Pairs, operation: impl Fn(&C::Value, &C::Value) -> R,
+    harness: &mut Harness, name: &str, set: impl FnOnce() -> Pairs,
+    operation: impl Fn(&C::Value, &C::Value) -> R,
 ) -> io::Result<()> {
+    if !harness.runs(name) {
+        return Ok(());
+    }
+    let set = set();
     let (left, right) = (values::<C>(&set.left), values::<C>(&set.right));
     let mut out: Vec<R> = left.iter().zip(&right).map(|(a, b)| operation(a, b)).collect();
     harness.measure(name, u64::try_from(out.len()).unwrap_or(0), || {
@@ -82,12 +88,17 @@ fn throughput<C: Contender, R>(
     })
 }
 
-/// Times `operation` as a chain over `set`: each pair's index mixes in the fingerprint of the
-/// result before, through a zero the compiler cannot see, so each waits for the last.
+/// Times `operation` as a chain over the values `set` builds: each pair's index mixes in the
+/// fingerprint of the result before, through a zero the compiler cannot see, so each waits for
+/// the last.
 fn latency<C: Contender>(
-    harness: &mut Harness, name: &str, set: &Pairs,
+    harness: &mut Harness, name: &str, set: impl FnOnce() -> Pairs,
     operation: impl Fn(&C::Value, &C::Value) -> Option<C::Value>,
 ) -> io::Result<()> {
+    if !harness.runs(name) {
+        return Ok(());
+    }
+    let set = set();
     let (left, right) = (values::<C>(&set.left), values::<C>(&set.right));
     let mask = left.len().saturating_sub(1);
     let zero = black_box(0_usize);
@@ -104,10 +115,17 @@ fn latency<C: Contender>(
     })
 }
 
-/// Times `operation` over each of `inputs`, the results kept in a vector it reuses.
+/// Times `operation` over each of the inputs `build` makes, unless the filters pass the name over,
+/// the results kept in a vector it reuses.
 fn each_one<I, R>(
-    harness: &mut Harness, name: &str, inputs: &[I], mut operation: impl FnMut(&I) -> R,
+    harness: &mut Harness, name: &str, build: impl FnOnce() -> Vec<I>,
+    mut operation: impl FnMut(&I) -> R,
 ) -> io::Result<()> {
+    if !harness.runs(name) {
+        return Ok(());
+    }
+    let inputs = build();
+    let inputs = inputs.as_slice();
     let mut out: Vec<R> = inputs.iter().map(&mut operation).collect();
     harness.measure(name, u64::try_from(out.len()).unwrap_or(0), || {
         for (input, slot) in black_box(inputs).iter().zip(out.iter_mut()) {
@@ -119,12 +137,22 @@ fn each_one<I, R>(
 
 /// The checked sum.
 fn add<C: Add>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    throughput::<C, _>(harness, &name::<C>("add", inputs), &inputs::sums(C::WIDTH, inputs), C::add)
+    throughput::<C, _>(
+        harness,
+        &name::<C>("add", inputs),
+        || inputs::sums(C::WIDTH, inputs),
+        C::add,
+    )
 }
 
 /// The checked sum, as a chain.
 fn add_chain<C: Add>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    latency::<C>(harness, &name::<C>("add-chain", inputs), &inputs::sums(C::WIDTH, inputs), C::add)
+    latency::<C>(
+        harness,
+        &name::<C>("add-chain", inputs),
+        || inputs::sums(C::WIDTH, inputs),
+        C::add,
+    )
 }
 
 /// The order of two values.
@@ -132,7 +160,7 @@ fn compare<C: Compare>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> 
     throughput::<C, _>(
         harness,
         &name::<C>("compare", inputs),
-        &inputs::sums(C::WIDTH, inputs),
+        || inputs::sums(C::WIDTH, inputs),
         C::less,
     )
 }
@@ -142,7 +170,7 @@ fn mul_round<C: MulRound>(harness: &mut Harness, inputs: Inputs) -> io::Result<(
     throughput::<C, _>(
         harness,
         &name::<C>("mul-round", inputs),
-        &inputs::products(C::WIDTH, inputs),
+        || inputs::products(C::WIDTH, inputs),
         C::mul_round,
     )
 }
@@ -152,7 +180,7 @@ fn mul_round_chain<C: MulRound>(harness: &mut Harness, inputs: Inputs) -> io::Re
     latency::<C>(
         harness,
         &name::<C>("mul-round-chain", inputs),
-        &inputs::products(C::WIDTH, inputs),
+        || inputs::products(C::WIDTH, inputs),
         C::mul_round,
     )
 }
@@ -162,7 +190,7 @@ fn div_round<C: DivRound>(harness: &mut Harness, inputs: Inputs) -> io::Result<(
     throughput::<C, _>(
         harness,
         &name::<C>("div-round", inputs),
-        &inputs::quotients(C::WIDTH, inputs),
+        || inputs::quotients(C::WIDTH, inputs),
         C::div_round,
     )
 }
@@ -172,28 +200,28 @@ fn div_round_chain<C: DivRound>(harness: &mut Harness, inputs: Inputs) -> io::Re
     latency::<C>(
         harness,
         &name::<C>("div-round-chain", inputs),
-        &inputs::quotients(C::WIDTH, inputs),
+        || inputs::quotients(C::WIDTH, inputs),
         C::div_round,
     )
 }
 
 /// A value rounded to cents.
 fn rescale<C: Rescale>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let values = values::<C>(&inputs::values(C::WIDTH, inputs));
-    each_one(harness, &name::<C>("rescale", inputs), &values, C::rescale)
+    let build = || values::<C>(&inputs::values(C::WIDTH, inputs));
+    each_one(harness, &name::<C>("rescale", inputs), build, C::rescale)
 }
 
 /// A value read from its shortest text.
 fn parse<C: Parse>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let texts = inputs::texts(C::WIDTH, inputs);
-    each_one(harness, &name::<C>("parse", inputs), &texts, |text| C::parse(text))
+    let build = || inputs::texts(C::WIDTH, inputs);
+    each_one(harness, &name::<C>("parse", inputs), build, |text| C::parse(text))
 }
 
 /// A value written into a reused buffer.
 fn format<C: Format>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let values = values::<C>(&inputs::values(C::WIDTH, inputs));
+    let build = || values::<C>(&inputs::values(C::WIDTH, inputs));
     let mut buffer = Buffer::new();
-    each_one(harness, &name::<C>("format", inputs), &values, |value| {
+    each_one(harness, &name::<C>("format", inputs), build, |value| {
         C::format(value, &mut buffer);
         buffer.as_bytes().len()
     })
@@ -201,23 +229,26 @@ fn format<C: Format>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
 
 /// A value as the nearest double.
 fn to_f64<C: ToF64>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let values = values::<C>(&inputs::values(C::WIDTH, inputs));
-    each_one(harness, &name::<C>("to-f64", inputs), &values, C::to_f64)
+    let build = || values::<C>(&inputs::values(C::WIDTH, inputs));
+    each_one(harness, &name::<C>("to-f64", inputs), build, C::to_f64)
 }
 
 /// A double as a value, rounded.
 fn from_f64<C: FromF64>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let doubles = inputs::doubles(C::WIDTH, inputs);
-    each_one(harness, &name::<C>("from-f64", inputs), &doubles, |&x| C::from_f64(x))
+    let build = || inputs::doubles(C::WIDTH, inputs);
+    each_one(harness, &name::<C>("from-f64", inputs), build, |&x| C::from_f64(x))
 }
 
 /// A price times a quantity, exactly.
 fn mul_exact<C: MulExact>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
+    let name = format!("mul-exact/{}/{}/{}", C::WIDTH.name(), inputs.name(), C::NAME);
+    if !harness.runs(&name) {
+        return Ok(());
+    }
     let set = inputs::prices_and_quantities(inputs);
     let prices: Vec<C::Price> = set.left.iter().filter_map(|&steps| C::price(steps)).collect();
     let quantities: Vec<C::Quantity> =
         set.right.iter().filter_map(|&steps| C::quantity(steps)).collect();
-    let name = format!("mul-exact/{}/{}/{}", C::WIDTH.name(), inputs.name(), C::NAME);
     let mut out: Vec<Option<C::Product>> =
         prices.iter().zip(&quantities).map(|(a, b)| C::mul(a, b)).collect();
     harness.measure(&name, u64::try_from(out.len()).unwrap_or(0), || {

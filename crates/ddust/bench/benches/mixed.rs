@@ -41,6 +41,10 @@ fn run(harness: &mut Harness) -> io::Result<()> {
 /// The five operations in turn over a product set's pairs and a quotient set's, five operations
 /// a pair.
 fn mix<C: Mix>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
+    let name = format!("mixed/{}/{}/{}", C::WIDTH.name(), inputs.name(), C::NAME);
+    if !harness.runs(&name) {
+        return Ok(());
+    }
     let values = |steps: &[i128]| -> Vec<C::Value> {
         steps.iter().filter_map(|&steps| C::from_steps(steps)).collect()
     };
@@ -48,7 +52,6 @@ fn mix<C: Mix>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
     let quotients = inputs::quotients(C::WIDTH, inputs);
     let (left, right) = (values(&products.left), values(&products.right));
     let (dividends, divisors) = (values(&quotients.left), values(&quotients.right));
-    let name = format!("mixed/{}/{}/{}", C::WIDTH.name(), inputs.name(), C::NAME);
     let operations = u64::try_from(left.len().saturating_mul(5)).unwrap_or(0);
     harness.measure(&name, operations, || {
         let (left, right) = (black_box(left.as_slice()), black_box(right.as_slice()));
