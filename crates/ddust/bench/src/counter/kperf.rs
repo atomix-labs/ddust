@@ -48,17 +48,17 @@ impl Counters {
         1
     }
 
-    /// Runs `routine` `iterations` times with the set counting, and what it counted.
+    /// Runs `routine` `calls` times with the set counting, and what it counted.
     #[expect(
         clippy::needless_pass_by_ref_mut,
         reason = "the signature every platform's counters share"
     )]
     pub(crate) fn sample<F: FnMut()>(
-        &mut self, _set: usize, iterations: u64, routine: &mut F,
+        &mut self, _set: usize, calls: u64, routine: &mut F,
     ) -> io::Result<Sample> {
         let Ok(sampler) = &self.sampler else {
             let start = Instant::now();
-            for _ in 0..iterations {
+            for _ in 0..calls {
                 routine();
             }
             return Ok(Sample { elapsed: start.elapsed(), ..Sample::default() });
@@ -68,7 +68,7 @@ impl Counters {
         thread.start().map_err(failed)?;
         let before = thread.sample().map_err(failed)?;
         let start = Instant::now();
-        for _ in 0..iterations {
+        for _ in 0..calls {
             routine();
         }
         let elapsed = start.elapsed();

@@ -18,7 +18,8 @@ pub(crate) use none::Counters;
 #[cfg(target_os = "linux")]
 pub(crate) use perf::Counters;
 
-/// An event the CPU counts, by perf's portable name, which each platform maps to its CPU's own.
+/// An event the CPU counts, named after perf's generic events, which each platform maps to its
+/// CPU's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Event {
     /// Core clock cycles.
@@ -34,24 +35,12 @@ pub enum Event {
     /// Data loads that missed the level 1 data cache.
     L1dMisses,
     /// Cycles the front end delivered nothing to issue.
-    FrontendStalls,
+    StalledCyclesFrontend,
     /// Cycles the back end could not take what the front end delivered.
-    BackendStalls,
+    StalledCyclesBackend,
 }
 
 impl Event {
-    /// Every event, in the order a table shows them.
-    pub const ALL: [Self; 8] = [
-        Self::Cycles,
-        Self::Instructions,
-        Self::Branches,
-        Self::BranchMisses,
-        Self::L1iMisses,
-        Self::L1dMisses,
-        Self::FrontendStalls,
-        Self::BackendStalls,
-    ];
-
     /// The event's name in a table's header and a result's key.
     #[must_use]
     pub const fn name(self) -> &'static str {
@@ -62,8 +51,8 @@ impl Event {
             Self::BranchMisses => "branch-misses",
             Self::L1iMisses => "l1i-misses",
             Self::L1dMisses => "l1d-misses",
-            Self::FrontendStalls => "frontend-stalls",
-            Self::BackendStalls => "backend-stalls",
+            Self::StalledCyclesFrontend => "stalled-cycles-frontend",
+            Self::StalledCyclesBackend => "stalled-cycles-backend",
         }
     }
 }

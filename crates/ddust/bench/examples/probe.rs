@@ -1,48 +1,49 @@
 //! One function an operation and contender, out of line, so each kernel's code can be measured
 //! and read: `nm` sizes it, `objdump` prints it, and the assembly gate checks it. A probe is named
 //! by its operation and its contender, as
-//! `probe::mul_round::<ddust_bench::contenders::ddust::Narrow>`.
+//! `probe::mul_round::<ddust_bench::contender::ddust::Narrow>`.
 //!
 //! ```text
 //! cargo build --profile bench --example probe
-//! python3 scripts/code.py sizes target/release/examples/probe
+//! python3 scripts/assembly.py sizes target/release/examples/probe
 //! ```
 
 use core::hint::black_box;
 
-use ddust_bench::contenders;
-use ddust_bench::contenders::{
-    Add, Buffer, Compare, DivRound, Format, FromF64, MulExact, MulRound, Parse, Rescale, ToF64,
+use ddust_bench::contender::{
+    Buffer, CheckedAdd, Compare, DivRound, Format, FromF64, MulExact, MulRound, Parse,
+    RescaleRound, ToF64,
 };
+use ddust_bench::for_each_contender;
 
 /// The checked sum.
 #[inline(never)]
-fn add<C: Add>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
-    C::add(a, b)
+fn add<C: CheckedAdd>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
+    C::checked_add(a, b)
 }
 
 /// The order.
 #[inline(never)]
 fn compare<C: Compare>(a: &C::Value, b: &C::Value) -> bool {
-    C::less(a, b)
+    C::is_less(a, b)
 }
 
 /// The rounded product.
 #[inline(never)]
 fn mul_round<C: MulRound>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
-    C::mul_round(a, b)
+    C::checked_mul_round(a, b)
 }
 
 /// The rounded quotient.
 #[inline(never)]
 fn div_round<C: DivRound>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
-    C::div_round(a, b)
+    C::checked_div_round(a, b)
 }
 
 /// The value to cents.
 #[inline(never)]
-fn rescale<C: Rescale>(value: &C::Value) -> Option<C::Rounded> {
-    C::rescale(value)
+fn rescale_round<C: RescaleRound>(value: &C::Value) -> Option<C::Rounded> {
+    C::rescale_round(value)
 }
 
 /// The value read from text.
@@ -72,7 +73,7 @@ fn from_f64<C: FromF64>(x: f64) -> Option<C::Value> {
 /// The price times the quantity.
 #[inline(never)]
 fn mul_exact<C: MulExact>(price: &C::Price, quantity: &C::Quantity) -> Option<C::Product> {
-    C::mul(price, quantity)
+    C::checked_mul(price, quantity)
 }
 
 /// Hands every probe's address to `black_box`, so the linker keeps each.
@@ -82,14 +83,14 @@ fn main() {
             black_box($probe::<$contender> as *const ());
         };
     }
-    contenders!(add, keep, add);
-    contenders!(compare, keep, compare);
-    contenders!(mul_round, keep, mul_round);
-    contenders!(div_round, keep, div_round);
-    contenders!(rescale, keep, rescale);
-    contenders!(parse, keep, parse);
-    contenders!(format, keep, format);
-    contenders!(to_f64, keep, to_f64);
-    contenders!(from_f64, keep, from_f64);
-    contenders!(mul_exact, keep, mul_exact);
+    for_each_contender!(add, keep, add);
+    for_each_contender!(compare, keep, compare);
+    for_each_contender!(mul_round, keep, mul_round);
+    for_each_contender!(div_round, keep, div_round);
+    for_each_contender!(rescale_round, keep, rescale_round);
+    for_each_contender!(parse, keep, parse);
+    for_each_contender!(format, keep, format);
+    for_each_contender!(to_f64, keep, to_f64);
+    for_each_contender!(from_f64, keep, from_f64);
+    for_each_contender!(mul_exact, keep, mul_exact);
 }

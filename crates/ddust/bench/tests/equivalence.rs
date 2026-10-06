@@ -10,12 +10,12 @@
 mod tests {
     use core::fmt::{Debug, Display};
 
-    use ddust_bench::contenders::{
-        Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-        Parse, Rescale, ToF64,
+    use ddust_bench::contender::{
+        Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact,
+        MulRound, Parse, RescaleRound, ToF64,
     };
-    use ddust_bench::inputs::{self, Inputs, Width};
-    use ddust_bench::{contenders, oracle};
+    use ddust_bench::input::{self, Predictability, Width};
+    use ddust_bench::{for_each_contender, oracle};
 
     /// What one row's results came to against the oracle's.
     #[derive(Default)]
@@ -48,7 +48,7 @@ mod tests {
             if matches!(kind, Kind::Floor | Kind::Binary) {
                 return;
             }
-            let row = format!("{operation} {name} at {} bits", width.name());
+            let row = format!("{operation} {name} at {} decimals", width.decimals());
             let first = self.first.unwrap_or_default();
             if self.checked == 0 {
                 failures.push(format!("{row}: nothing checked"));
@@ -79,17 +79,17 @@ mod tests {
             .collect()
     }
 
-    fn add<C: Add>(failures: &mut Vec<String>) {
+    fn add<C: CheckedAdd>(failures: &mut Vec<String>) {
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let set = inputs::sums(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let set = input::addends(C::WIDTH, predictability);
             for ((a, b), (x, y)) in values::<C>(&set.left)
                 .iter()
                 .zip(&values::<C>(&set.right))
                 .zip(set.left.iter().zip(&set.right))
             {
                 tally.count(
-                    &C::add(a, b).and_then(|sum| C::to_steps(&sum)),
+                    &C::checked_add(a, b).and_then(|sum| C::to_steps(&sum)),
                     &oracle::add(*x, *y),
                     format_args!("{x} + {y}"),
                 );
@@ -100,14 +100,18 @@ mod tests {
 
     fn compare<C: Compare>(failures: &mut Vec<String>) {
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let set = inputs::sums(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let set = input::addends(C::WIDTH, predictability);
             for ((a, b), (x, y)) in values::<C>(&set.left)
                 .iter()
                 .zip(&values::<C>(&set.right))
                 .zip(set.left.iter().zip(&set.right))
             {
-                tally.count(&C::less(a, b), &(x < y), format_args!("{x} < {y}"));
+                tally.count(
+                    &C::is_less(a, b),
+                    &oracle::compare(*x, *y).is_lt(),
+                    format_args!("{x} < {y}"),
+                );
             }
         }
         tally.verdict("compare", C::NAME, C::WIDTH, C::KIND, true, failures);
@@ -116,8 +120,8 @@ mod tests {
     fn mul_round<C: MulRound>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let set = inputs::products(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let set = input::factors(C::WIDTH, predictability);
             for ((a, b), (x, y)) in values::<C>(&set.left)
                 .iter()
                 .zip(&values::<C>(&set.right))
@@ -125,7 +129,7 @@ mod tests {
             {
                 let expected = oracle::mul_round(*x, *y, decimals, C::MODE);
                 tally.count(
-                    &C::mul_round(a, b).and_then(|product| C::to_steps(&product)),
+                    &C::checked_mul_round(a, b).and_then(|product| C::to_steps(&product)),
                     &expected,
                     format_args!("{x} × {y}"),
                 );
@@ -137,8 +141,8 @@ mod tests {
     fn div_round<C: DivRound>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let set = inputs::quotients(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let set = input::dividends_and_divisors(C::WIDTH, predictability);
             for ((a, b), (x, y)) in values::<C>(&set.left)
                 .iter()
                 .zip(&values::<C>(&set.right))
@@ -146,7 +150,7 @@ mod tests {
             {
                 let expected = oracle::div_round(*x, *y, decimals, C::MODE);
                 tally.count(
-                    &C::div_round(a, b).and_then(|quotient| C::to_steps(&quotient)),
+                    &C::checked_div_round(a, b).and_then(|quotient| C::to_steps(&quotient)),
                     &expected,
                     format_args!("{x} / {y}"),
                 );
@@ -155,28 +159,28 @@ mod tests {
         tally.verdict("div-round", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
     }
 
-    fn rescale<C: Rescale>(failures: &mut Vec<String>) {
+    fn rescale_round<C: RescaleRound>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let steps = inputs::values(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let steps = input::steps(C::WIDTH, predictability);
             for (value, x) in values::<C>(&steps).iter().zip(&steps) {
-                let expected = oracle::rescale(*x, decimals, 2, C::MODE);
+                let expected = oracle::rescale_round(*x, decimals, 2, C::MODE);
                 tally.count(
-                    &C::rescale(value).and_then(|rounded| C::rounded_steps(&rounded)),
+                    &C::rescale_round(value).and_then(|rounded| C::rounded_steps(&rounded)),
                     &expected,
                     format_args!("{x} to cents"),
                 );
             }
         }
-        tally.verdict("rescale", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
+        tally.verdict("rescale-round", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
     }
 
     fn parse<C: Parse>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            for text in inputs::texts(C::WIDTH, inputs) {
+        for predictability in Predictability::ALL {
+            for text in input::texts(C::WIDTH, predictability) {
                 let got = C::parse(&text).and_then(|value| C::to_steps(&value));
                 tally.count(&got, &oracle::parse(&text, decimals), format_args!("{text:?}"));
             }
@@ -188,12 +192,12 @@ mod tests {
         let decimals = C::WIDTH.decimals();
         let mut buffer = Buffer::new();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let steps = inputs::values(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let steps = input::steps(C::WIDTH, predictability);
             for (value, x) in values::<C>(&steps).iter().zip(&steps) {
                 C::format(value, &mut buffer);
                 tally.count(
-                    &oracle::parse(buffer.as_str(), decimals),
+                    &buffer.to_str().and_then(|text| oracle::parse(text, decimals)),
                     &Some(*x),
                     format_args!("{x} written {buffer:?}"),
                 );
@@ -205,8 +209,8 @@ mod tests {
     fn to_f64<C: ToF64>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let steps = inputs::values(C::WIDTH, inputs);
+        for predictability in Predictability::ALL {
+            let steps = input::steps(C::WIDTH, predictability);
             for (value, x) in values::<C>(&steps).iter().zip(&steps) {
                 tally.count(
                     &C::to_f64(value).to_bits(),
@@ -221,8 +225,8 @@ mod tests {
     fn from_f64<C: FromF64>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            for x in inputs::doubles(C::WIDTH, inputs) {
+        for predictability in Predictability::ALL {
+            for x in input::doubles(C::WIDTH, predictability) {
                 let got = C::from_f64(x).and_then(|value| C::to_steps(&value));
                 tally.count(&got, &oracle::from_f64(x, decimals, C::MODE), format_args!("{x:e}"));
             }
@@ -232,12 +236,13 @@ mod tests {
 
     fn mul_exact<C: MulExact>(failures: &mut Vec<String>) {
         let mut tally = Tally::default();
-        for inputs in Inputs::ALL {
-            let set = inputs::prices_and_quantities(inputs);
+        for predictability in Predictability::ALL {
+            let set = input::prices_and_quantities(predictability);
             for (&x, &y) in set.left.iter().zip(&set.right) {
                 let (price, quantity) =
                     (C::price(x).expect("a price"), C::quantity(y).expect("a quantity"));
-                let got = C::mul(&price, &quantity).and_then(|product| C::product_steps(&product));
+                let got = C::checked_mul(&price, &quantity)
+                    .and_then(|product| C::product_steps(&product));
                 tally.count(&got, &oracle::mul_exact(x, y), format_args!("{x} × {y}"));
             }
         }
@@ -256,7 +261,7 @@ mod tests {
                         $function::<$contender>(&mut failures);
                     };
                 }
-                contenders!($operation, check, $check);
+                for_each_contender!($operation, check, $check);
                 assert!(failures.is_empty(), "{}", failures.join("\n"));
             }
         };
@@ -266,7 +271,7 @@ mod tests {
     every!(every_order_agrees: compare by compare);
     every!(every_rounded_product_agrees: mul_round by mul_round);
     every!(every_rounded_quotient_agrees: div_round by div_round);
-    every!(every_value_to_cents_agrees: rescale by rescale);
+    every!(every_value_to_cents_agrees: rescale_round by rescale_round);
     every!(every_text_reads_as_the_oracle_does: parse by parse);
     every!(every_text_written_reads_back: format by format);
     every!(every_double_is_the_nearest: to_f64 by to_f64);

@@ -8,10 +8,10 @@
 use decimal_rs::Decimal;
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, display, low_byte, steps_of,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, format_by_display, low_byte, steps_of,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// The value of `steps` steps at `decimals`.
@@ -57,15 +57,15 @@ macro_rules! decimal_rs {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -74,7 +74,7 @@ macro_rules! decimal_rs {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some(a.checked_mul(b)?.round($decimals))
             }
         }
@@ -83,17 +83,17 @@ macro_rules! decimal_rs {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some(a.checked_div(b)?.round($decimals))
             }
         }
 
         /// `round(2)`.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfExpand;
             type Rounded = Decimal;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.round(2))
             }
 
@@ -112,7 +112,7 @@ macro_rules! decimal_rs {
         /// `Display`.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                display(value, buffer);
+                format_by_display(value, buffer);
             }
         }
 
@@ -168,7 +168,7 @@ impl MulExact for Notional {
         value(steps, 5)
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         price.checked_mul(quantity)
     }
 

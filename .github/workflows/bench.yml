@@ -44,7 +44,7 @@ jobs:
       - run: cargo test --locked --release
       # One short sample of every 64-bit operation on the predictable set, through the harness's
       # counters where the runner lends them, and its time alone where it does not.
-      - run: cargo bench --locked --bench ops -- --quick /64/predictable/
+      - run: cargo bench --locked --bench ops -- --quick /narrow/predictable/
 
   callgrind:
     strategy:
@@ -60,15 +60,20 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install --yes valgrind
       # The runner gungraun's library calls, at the library's version.
       - run: cargo install gungraun-runner --version 0.20.0 --locked
-      # main's counts, from its last run, for gungraun to compare against: a pull request restores
-      # the newest, and main saves each.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # main's counts, from its newest run, for gungraun to compare against. Only main saves them, so
+      # a pull request's second push compares with main again, never with its own first.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: crates/ddust/bench/target/gungraun
           key: callgrind-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
           restore-keys: callgrind-${{ runner.os }}-${{ runner.arch }}-
       # A kernel whose instructions rise more than 1% over main's fails the job.
       - run: cargo bench --locked --bench callgrind
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: crates/ddust/bench/target/gungraun
+          key: callgrind-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
 
   assembly:
     strategy:
@@ -82,5 +87,5 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo build --locked --profile bench --example probe
-      - run: python3 scripts/code.py sizes target/release/examples/probe
-      - run: python3 scripts/code.py gate target/release/examples/probe
+      - run: python3 scripts/assembly.py sizes target/release/examples/probe
+      - run: python3 scripts/assembly.py gate target/release/examples/probe

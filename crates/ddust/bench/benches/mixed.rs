@@ -10,14 +10,14 @@
 use core::hint::black_box;
 use std::io;
 
-use ddust_bench::contenders::{Add, Compare, DivRound, MulRound, Rescale};
-use ddust_bench::inputs::{self, Inputs};
-use ddust_bench::{Harness, contenders};
+use ddust_bench::contender::{CheckedAdd, Compare, DivRound, MulRound, RescaleRound};
+use ddust_bench::input::{self, Predictability};
+use ddust_bench::{Harness, for_each_contender};
 
 /// Every operation the mix holds.
-trait Mix: Add + Compare + MulRound + DivRound + Rescale {}
+trait Mix: CheckedAdd + Compare + MulRound + DivRound + RescaleRound {}
 
-impl<C: Add + Compare + MulRound + DivRound + Rescale> Mix for C {}
+impl<C: CheckedAdd + Compare + MulRound + DivRound + RescaleRound> Mix for C {}
 
 fn main() -> io::Result<()> {
     let mut harness = Harness::from_args();
@@ -27,42 +27,43 @@ fn main() -> io::Result<()> {
 
 /// Every contender with all five operations, on both sets.
 fn run(harness: &mut Harness) -> io::Result<()> {
-    for inputs in Inputs::ALL {
+    for predictability in Predictability::ALL {
         macro_rules! bench {
             ($contender:ty, $function:ident) => {
-                $function::<$contender>(harness, inputs)?;
+                $function::<$contender>(harness, predictability)?;
             };
         }
-        contenders!(rescale, bench, mix);
+        for_each_contender!(rescale_round, bench, mix);
     }
     Ok(())
 }
 
 /// The five operations in turn over a product set's pairs and a quotient set's, five operations
 /// a pair.
-fn mix<C: Mix>(harness: &mut Harness, inputs: Inputs) -> io::Result<()> {
-    let name = format!("mixed/{}/{}/{}", C::WIDTH.name(), inputs.name(), C::NAME);
-    if !harness.runs(&name) {
+fn mix<C: Mix>(harness: &mut Harness, predictability: Predictability) -> io::Result<()> {
+    let name = format!("mixed/{}/{}/{}", C::WIDTH.name(), predictability.name(), C::NAME);
+    if !harness.is_selected(&name) {
         return Ok(());
     }
     let values = |steps: &[i128]| -> Vec<C::Value> {
         steps.iter().filter_map(|&steps| C::from_steps(steps)).collect()
     };
-    let products = inputs::products(C::WIDTH, inputs);
-    let quotients = inputs::quotients(C::WIDTH, inputs);
-    let (left, right) = (values(&products.left), values(&products.right));
-    let (dividends, divisors) = (values(&quotients.left), values(&quotients.right));
+    let factors = input::factors(C::WIDTH, predictability);
+    let dividends_and_divisors = input::dividends_and_divisors(C::WIDTH, predictability);
+    let (left, right) = (values(&factors.left), values(&factors.right));
+    let (dividends, divisors) =
+        (values(&dividends_and_divisors.left), values(&dividends_and_divisors.right));
     let operations = u64::try_from(left.len().saturating_mul(5)).unwrap_or(0);
     harness.measure(&name, operations, || {
         let (left, right) = (black_box(left.as_slice()), black_box(right.as_slice()));
         let (dividends, divisors) =
             (black_box(dividends.as_slice()), black_box(divisors.as_slice()));
         for (((a, b), dividend), divisor) in left.iter().zip(right).zip(dividends).zip(divisors) {
-            black_box(C::add(a, b));
-            black_box(C::less(a, b));
-            black_box(C::mul_round(a, b));
-            black_box(C::div_round(dividend, divisor));
-            black_box(C::rescale(a));
+            black_box(C::checked_add(a, b));
+            black_box(C::is_less(a, b));
+            black_box(C::checked_mul_round(a, b));
+            black_box(C::checked_div_round(dividend, divisor));
+            black_box(C::rescale_round(a));
         }
     })
 }

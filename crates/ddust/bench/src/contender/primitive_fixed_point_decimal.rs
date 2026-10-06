@@ -8,10 +8,10 @@
 use primitive_fixed_point_decimal::{ConstScaleFpdec, Rounding};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, cents, display, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, cents, format_by_display, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// Implements every operation for `ConstScaleFpdec<$integer, $decimals>`.
@@ -41,15 +41,15 @@ macro_rules! fpdec {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(*b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -58,7 +58,7 @@ macro_rules! fpdec {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_mul_ext::<$integer, $decimals, $decimals>(*b, Rounding::Round)
             }
         }
@@ -67,17 +67,17 @@ macro_rules! fpdec {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_div_ext::<$integer, $decimals, $decimals>(*b, Rounding::Round)
             }
         }
 
         /// `round_ext` to 2 decimals, at the same scale.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfExpand;
             type Rounded = ConstScaleFpdec<$integer, $decimals>;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.round_ext(2, Rounding::Round))
             }
 
@@ -96,7 +96,7 @@ macro_rules! fpdec {
         /// `Display`, the shortest form.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                display(value, buffer);
+                format_by_display(value, buffer);
             }
         }
 
@@ -159,7 +159,7 @@ impl MulExact for Notional {
         Some(ConstScaleFpdec::from_mantissa(i64::try_from(steps).ok()?))
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         price.checked_mul_ext::<i64, 5, 7>(*quantity, Rounding::Round)
     }
 

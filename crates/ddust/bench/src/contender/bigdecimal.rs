@@ -15,10 +15,10 @@ use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive as _};
 use num_bigint::BigInt;
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, low_byte, steps_of,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, low_byte, steps_of,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// The steps at `decimals` of `value`.
@@ -55,15 +55,15 @@ macro_rules! bigdecimal {
         }
 
         /// `+` on references, exact.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some(a + b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -72,7 +72,7 @@ macro_rules! bigdecimal {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some((a * b).with_scale_round($decimals, RoundingMode::HalfEven))
             }
         }
@@ -81,17 +81,17 @@ macro_rules! bigdecimal {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some((a / b).with_scale_round($decimals, RoundingMode::HalfEven))
             }
         }
 
         /// `with_scale_round(2)`.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfEven;
             type Rounded = BigDecimal;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.with_scale_round(2, RoundingMode::HalfEven))
             }
 
@@ -166,7 +166,7 @@ impl MulExact for Notional {
         Some(BigDecimal::new(BigInt::from(steps), 5))
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         Some(price * quantity)
     }
 

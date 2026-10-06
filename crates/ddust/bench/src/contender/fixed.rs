@@ -1,13 +1,13 @@
 //! `fixed` 1.31.0: `I64F64`, an `i128` with 64 fraction bits: binary, not decimal.
 //!
 //! It stands beside the decimals for contrast, in the sum, the order and the product, the
-//! operations a binary type has in common with them; its values are the nearest to the set's
+//! operations a binary type has in common with them; its values are the nearest to the inputs'
 //! decimals, so the oracle does not check them.
 
 use fixed::types::I64F64;
 
-use super::{Add, Compare, Contender, Kind, MulRound, low_byte};
-use crate::inputs::Width;
+use super::{CheckedAdd, Compare, Contender, Kind, MulRound, low_byte};
+use crate::input::Width;
 use crate::oracle::{self, Mode};
 
 /// `I64F64`, beside the 64-bit decimals.
@@ -34,15 +34,15 @@ impl Contender for Narrow {
 }
 
 /// `checked_add`.
-impl Add for Narrow {
-    fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+impl CheckedAdd for Narrow {
+    fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
         a.checked_add(*b)
     }
 }
 
 /// `<`.
 impl Compare for Narrow {
-    fn less(a: &Self::Value, b: &Self::Value) -> bool {
+    fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
         a < b
     }
 }
@@ -51,7 +51,7 @@ impl Compare for Narrow {
 impl MulRound for Narrow {
     const MODE: Mode = Mode::Floor;
 
-    fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+    fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
         a.checked_mul(*b)
     }
 }

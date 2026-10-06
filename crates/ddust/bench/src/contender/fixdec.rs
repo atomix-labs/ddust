@@ -8,10 +8,10 @@
 use fixdec::D64;
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse, Rescale,
-    ToF64, cents, display, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
+    RescaleRound, ToF64, cents, format_by_display, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// `D64`.
@@ -38,15 +38,15 @@ impl Contender for Narrow {
 }
 
 /// `checked_add`.
-impl Add for Narrow {
-    fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+impl CheckedAdd for Narrow {
+    fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
         a.checked_add(*b)
     }
 }
 
 /// `<`.
 impl Compare for Narrow {
-    fn less(a: &Self::Value, b: &Self::Value) -> bool {
+    fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
         a < b
     }
 }
@@ -56,7 +56,7 @@ impl MulRound for Narrow {
     const MODE: Mode = Mode::Trunc;
     const EXACT: bool = false;
 
-    fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+    fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
         a.checked_mul(*b)
     }
 }
@@ -65,17 +65,17 @@ impl MulRound for Narrow {
 impl DivRound for Narrow {
     const MODE: Mode = Mode::Trunc;
 
-    fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+    fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
         a.checked_div(*b)
     }
 }
 
 /// `round_dp(2)`, half to even, at the same scale.
-impl Rescale for Narrow {
+impl RescaleRound for Narrow {
     const MODE: Mode = Mode::HalfEven;
     type Rounded = D64;
 
-    fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+    fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
         Some(value.round_dp(2))
     }
 
@@ -94,7 +94,7 @@ impl Parse for Narrow {
 /// `Display`, the shortest form.
 impl Format for Narrow {
     fn format(value: &Self::Value, buffer: &mut Buffer) {
-        display(value, buffer);
+        format_by_display(value, buffer);
     }
 }
 

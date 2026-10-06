@@ -19,10 +19,10 @@ use fastnum::decimal::{Context, RoundingMode, Sign};
 use fastnum::{D64, D128};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, display, low_byte, steps_of,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, format_by_display, low_byte, steps_of,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// The sign of `steps`, as fastnum names it.
@@ -73,8 +73,8 @@ macro_rules! fastnum {
         }
 
         /// `+`, refused where the flags say it rounded or overflowed.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 let sum = *a + *b;
                 (sum.is_finite() && !sum.is_op_rounded()).then_some(sum)
             }
@@ -82,7 +82,7 @@ macro_rules! fastnum {
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -92,7 +92,7 @@ macro_rules! fastnum {
             const MODE: Mode = Mode::HalfExpand;
             const EXACT: bool = $product;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 let product = (*a * *b).with_rounding_mode(RoundingMode::HalfUp).round($decimals);
                 product.is_finite().then_some(product)
             }
@@ -103,18 +103,18 @@ macro_rules! fastnum {
             const MODE: Mode = Mode::HalfExpand;
             const EXACT: bool = $quotient;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 let quotient = (*a / *b).with_rounding_mode(RoundingMode::HalfUp).round($decimals);
                 quotient.is_finite().then_some(quotient)
             }
         }
 
         /// `round(2)` with `HalfUp`.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfExpand;
             type Rounded = $type;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.with_rounding_mode(RoundingMode::HalfUp).round(2))
             }
 
@@ -135,7 +135,7 @@ macro_rules! fastnum {
         /// `Display`, which allocates, and writes every decimal of the scale.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                display(value, buffer);
+                format_by_display(value, buffer);
             }
         }
 
@@ -204,7 +204,7 @@ impl MulExact for Notional {
         Some(D64::from_parts(digits, -5, sign(steps), Context::default()))
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         let product = *price * *quantity;
         (product.is_finite() && !product.is_op_rounded()).then_some(product)
     }

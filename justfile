@@ -10,17 +10,19 @@ check-bench-lints:
         sys.exit("crates/ddust/bench/Cargo.toml: its [lints] differ from the root's [workspace.lints]; copy them again")
     print("bench lints: the root's")
 
-# Runs the benches twice, on an isolated core on Linux, into `crates/ddust/bench/results/` with a
-# manifest: `just bench-run 3 baseline graviton4`, and `--core`, `--filter` or `--purpose` after.
-bench-run pr what host *options:
-    cd crates/ddust/bench && mise exec -- python3 scripts/run.py --pr {{ pr }} --what {{ what }} --host {{ host }} {{ options }}
+# Runs the benches twice, on an isolated CPU on Linux, into `crates/ddust/bench/results/` with a
+# manifest: `just bench-run 3 baseline graviton4`, and `--cpu`, `--passes`, `--filter` or
+# `--purpose` after. Each word reaches the script as one argument, quoted.
+[positional-arguments]
+bench-run pr subject host *options:
+    cd crates/ddust/bench && pr="$1" subject="$2" host="$3" && shift 3 && mise exec -- python3 scripts/run.py --pr "$pr" --subject "$subject" --host "$host" "$@"
 
 # Builds the bench's probe, prints each kernel's instructions with those of every function it calls,
 # and holds ddust's kernels to dividing by constants alone.
-bench-code:
+bench-assembly:
     cd crates/ddust/bench && mise exec -- cargo build --locked --profile bench --example probe
-    cd crates/ddust/bench && mise exec -- python3 scripts/code.py sizes target/release/examples/probe
-    cd crates/ddust/bench && mise exec -- python3 scripts/code.py gate target/release/examples/probe
+    cd crates/ddust/bench && mise exec -- python3 scripts/assembly.py sizes target/release/examples/probe
+    cd crates/ddust/bench && mise exec -- python3 scripts/assembly.py gate target/release/examples/probe
 
 # >>> devset: just >>>
 # Each active profile's recipes.

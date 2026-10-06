@@ -18,7 +18,7 @@ use super::{Event, Sample};
 const SETS: [[Event; 2]; 4] = [
     [Event::Instructions, Event::BranchMisses],
     [Event::L1iMisses, Event::L1dMisses],
-    [Event::FrontendStalls, Event::BackendStalls],
+    [Event::StalledCyclesFrontend, Event::StalledCyclesBackend],
     [Event::Branches, Event::Instructions],
 ];
 
@@ -56,13 +56,13 @@ impl Counters {
         self.sets.len().max(1)
     }
 
-    /// Runs `routine` `iterations` times with set `set` counting, and what it counted.
+    /// Runs `routine` `calls` times with set `set` counting, and what it counted.
     pub(crate) fn sample<F: FnMut()>(
-        &mut self, set: usize, iterations: u64, routine: &mut F,
+        &mut self, set: usize, calls: u64, routine: &mut F,
     ) -> io::Result<Sample> {
         let Some(open) = self.sets.get_mut(set) else {
             let start = Instant::now();
-            for _ in 0..iterations {
+            for _ in 0..calls {
                 routine();
             }
             return Ok(Sample { elapsed: start.elapsed(), ..Sample::default() });
@@ -70,7 +70,7 @@ impl Counters {
         open.group.reset()?;
         open.group.enable()?;
         let start = Instant::now();
-        for _ in 0..iterations {
+        for _ in 0..calls {
             routine();
         }
         let elapsed = start.elapsed();
@@ -140,7 +140,7 @@ fn builder(event: Event) -> Builder<'static> {
         Event::BranchMisses => Builder::new(Hardware::BRANCH_MISSES),
         Event::L1iMisses => Builder::new(miss(CacheId::L1I)),
         Event::L1dMisses => Builder::new(miss(CacheId::L1D)),
-        Event::FrontendStalls => Builder::new(Hardware::STALLED_CYCLES_FRONTEND),
-        Event::BackendStalls => Builder::new(Hardware::STALLED_CYCLES_BACKEND),
+        Event::StalledCyclesFrontend => Builder::new(Hardware::STALLED_CYCLES_FRONTEND),
+        Event::StalledCyclesBackend => Builder::new(Hardware::STALLED_CYCLES_BACKEND),
     }
 }

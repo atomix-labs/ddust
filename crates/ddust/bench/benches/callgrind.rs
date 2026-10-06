@@ -18,11 +18,11 @@
 
 use core::hint::black_box;
 
-use ddust_bench::contenders::{
-    Add as _, Buffer, Compare as _, Contender, DivRound as _, Format, FromF64, MulExact,
-    MulRound as _, Parse, Rescale as _, ToF64 as _, ddust,
+use ddust_bench::contender::{
+    Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, Format, FromF64, MulExact,
+    MulRound as _, Parse, RescaleRound as _, ToF64 as _, ddust,
 };
-use ddust_bench::inputs::{self, Inputs, Pairs};
+use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::oracle;
 use gungraun::{
     Callgrind, EventKind, LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main,
@@ -43,42 +43,42 @@ fn pairs<C: Contender>(set: &Pairs) -> (Vec<C::Value>, Vec<C::Value>) {
 }
 
 /// Operands of a sum.
-fn sums<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
-    pairs::<C>(&inputs::sums(C::WIDTH, Inputs::Unpredictable))
+fn addends<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
+    pairs::<C>(&input::addends(C::WIDTH, Predictability::Unpredictable))
 }
 
 /// Operands of a product.
-fn products<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
-    pairs::<C>(&inputs::products(C::WIDTH, Inputs::Unpredictable))
+fn factors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
+    pairs::<C>(&input::factors(C::WIDTH, Predictability::Unpredictable))
 }
 
 /// Operands of a quotient.
-fn quotients<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
-    pairs::<C>(&inputs::quotients(C::WIDTH, Inputs::Unpredictable))
+fn dividends_and_divisors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
+    pairs::<C>(&input::dividends_and_divisors(C::WIDTH, Predictability::Unpredictable))
 }
 
 /// Values to round, write or convert.
 fn singles<C: Contender>() -> Vec<C::Value> {
-    values::<C>(&inputs::values(C::WIDTH, Inputs::Unpredictable))
+    values::<C>(&input::steps(C::WIDTH, Predictability::Unpredictable))
 }
 
 /// Texts to read: only the [`COUNT`] it needs, since glibc defers the work of freeing many small
 /// allocations to the next `malloc`, which would land in the count.
 fn texts<C: Contender>() -> Vec<String> {
     let decimals = C::WIDTH.decimals();
-    let values = inputs::values(C::WIDTH, Inputs::Unpredictable);
+    let values = input::steps(C::WIDTH, Predictability::Unpredictable);
     values.iter().take(COUNT).map(|&steps| oracle::text(steps, decimals)).collect()
 }
 
 /// Doubles to convert.
 fn doubles<C: Contender>() -> Vec<f64> {
-    inputs::doubles(C::WIDTH, Inputs::Unpredictable).into_iter().take(COUNT).collect()
+    input::doubles(C::WIDTH, Predictability::Unpredictable).into_iter().take(COUNT).collect()
 }
 
 /// Prices and quantities, at 2 and 5 decimals.
 fn notionals()
 -> (Vec<<ddust::Notional as MulExact>::Price>, Vec<<ddust::Notional as MulExact>::Quantity>) {
-    let set = inputs::prices_and_quantities(Inputs::Unpredictable);
+    let set = input::prices_and_quantities(Predictability::Unpredictable);
     (
         set.left.iter().take(COUNT).filter_map(|&steps| ddust::Notional::price(steps)).collect(),
         set.right
@@ -96,10 +96,10 @@ fn over_pairs<V, W, R>(left: &[V], right: &[W], operation: impl Fn(&V, &W) -> R)
     left.iter().zip(right).map(|(a, b)| operation(a, b)).collect()
 }
 
-/// `operation` over each input, out of line, for the same reason.
+/// `operation` over each operand, out of line, for the same reason.
 #[inline(never)]
-fn over_each<I, R>(inputs: &[I], operation: impl FnMut(&I) -> R) -> Vec<R> {
-    inputs.iter().map(operation).collect()
+fn over_each<I, R>(operands: &[I], operation: impl FnMut(&I) -> R) -> Vec<R> {
+    operands.iter().map(operation).collect()
 }
 
 /// Reads each text, out of line. A closure would do, but one written in a bench function is named
@@ -130,9 +130,9 @@ fn written<C: Format>(values: &[C::Value]) -> Vec<usize> {
 
 /// A bench function `$name`: `$operation` of `$contender` over `$setup`'s values, out of line.
 ///
-/// Each bench function hands its inputs back, so gungraun drops them after the count stops: dropped
-/// inside, freeing 4,096 strings would outweigh the parse it measures. gungraun's attribute takes
-/// no doc comment, so the bench functions carry plain comments.
+/// Each bench function hands its predictability back, so gungraun drops them after the count stops:
+/// dropped inside, freeing 4,096 strings would outweigh the parse it measures. gungraun's attribute
+/// takes no doc comment, so the bench functions carry plain comments.
 macro_rules! kernel {
     ($name:ident : $contender:ty,pairs $setup:ident, $operation:expr) => {
         #[library_benchmark]
@@ -150,25 +150,25 @@ macro_rules! kernel {
         #[library_benchmark]
         #[bench::values(setup = $setup::<$contender>)]
         fn $name(
-            inputs: Vec<<$contender as Contender>::Value>,
+            predictability: Vec<<$contender as Contender>::Value>,
         ) -> Vec<<$contender as Contender>::Value> {
-            black_box(over_each(&inputs, $operation));
-            inputs
+            black_box(over_each(&predictability, $operation));
+            predictability
         }
     };
 }
 
-kernel!(add_narrow: ddust::Narrow, pairs sums, ddust::Narrow::add);
-kernel!(compare_narrow: ddust::Narrow, pairs sums, ddust::Narrow::less);
-kernel!(mul_round_narrow: ddust::Narrow, pairs products, ddust::Narrow::mul_round);
-kernel!(div_round_narrow: ddust::Narrow, pairs quotients, ddust::Narrow::div_round);
-kernel!(rescale_narrow: ddust::Narrow, each singles, ddust::Narrow::rescale);
+kernel!(add_narrow: ddust::Narrow, pairs addends, ddust::Narrow::checked_add);
+kernel!(compare_narrow: ddust::Narrow, pairs addends, ddust::Narrow::is_less);
+kernel!(mul_round_narrow: ddust::Narrow, pairs factors, ddust::Narrow::checked_mul_round);
+kernel!(div_round_narrow: ddust::Narrow, pairs dividends_and_divisors, ddust::Narrow::checked_div_round);
+kernel!(rescale_round_narrow: ddust::Narrow, each singles, ddust::Narrow::rescale_round);
 kernel!(to_f64_narrow: ddust::Narrow, each singles, ddust::Narrow::to_f64);
-kernel!(add_wide: ddust::Wide, pairs sums, ddust::Wide::add);
-kernel!(compare_wide: ddust::Wide, pairs sums, ddust::Wide::less);
-kernel!(mul_round_wide: ddust::Wide, pairs products, ddust::Wide::mul_round);
-kernel!(div_round_wide: ddust::Wide, pairs quotients, ddust::Wide::div_round);
-kernel!(rescale_wide: ddust::Wide, each singles, ddust::Wide::rescale);
+kernel!(add_wide: ddust::Wide, pairs addends, ddust::Wide::checked_add);
+kernel!(compare_wide: ddust::Wide, pairs addends, ddust::Wide::is_less);
+kernel!(mul_round_wide: ddust::Wide, pairs factors, ddust::Wide::checked_mul_round);
+kernel!(div_round_wide: ddust::Wide, pairs dividends_and_divisors, ddust::Wide::checked_div_round);
+kernel!(rescale_round_wide: ddust::Wide, each singles, ddust::Wide::rescale_round);
 kernel!(to_f64_wide: ddust::Wide, each singles, ddust::Wide::to_f64);
 
 // Reads each text.
@@ -232,7 +232,7 @@ fn mul_exact_narrow(
         Vec<<ddust::Notional as MulExact>::Quantity>,
     ),
 ) -> (Vec<<ddust::Notional as MulExact>::Price>, Vec<<ddust::Notional as MulExact>::Quantity>) {
-    black_box(over_pairs(&prices, &quantities, ddust::Notional::mul));
+    black_box(over_pairs(&prices, &quantities, ddust::Notional::checked_mul));
     (prices, quantities)
 }
 
@@ -244,7 +244,7 @@ library_benchmark_group!(
         mul_exact_narrow,
         mul_round_narrow,
         div_round_narrow,
-        rescale_narrow,
+        rescale_round_narrow,
         parse_narrow,
         format_narrow,
         to_f64_narrow,
@@ -259,7 +259,7 @@ library_benchmark_group!(
         compare_wide,
         mul_round_wide,
         div_round_wide,
-        rescale_wide,
+        rescale_round_wide,
         parse_wide,
         format_wide,
         to_f64_wide,

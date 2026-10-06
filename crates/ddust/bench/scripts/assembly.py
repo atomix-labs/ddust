@@ -1,6 +1,6 @@
 """What each probe's code is: its size with every function it calls, and whether it divides.
 
-Usage: code.py sizes <probe> | code.py gate <probe>
+Usage: assembly.py sizes <probe> | assembly.py gate <probe>
 
 `sizes` prints each probe of `examples/probe.rs`, named by its operation and contender: its instructions, and those of every function it
 reaches by a call or a tail call but a panic's cold path, which is the code an operation brings into
@@ -18,13 +18,13 @@ import sys
 # product and rescale, which divide by 10^k through `__udivti3` until their kernels divide by a
 # reciprocal, and join this list then.
 GATED = [
-    f"probe::{operation}::<ddust_bench::contenders::ddust::{width}>"
+    f"probe::{operation}::<ddust_bench::contender::ddust::{width}>"
     for width in ("Narrow", "Wide")
-    for operation in ("add", "compare", "mul_round", "rescale", "parse", "format", "to_f64", "from_f64")
-    if (width, operation) not in {("Wide", "mul_round"), ("Wide", "rescale")}
+    for operation in ("add", "compare", "mul_round", "rescale_round", "parse", "format", "to_f64", "from_f64")
+    if (width, operation) not in {("Wide", "mul_round"), ("Wide", "rescale_round")}
 ]
 # What a probe's name says of its contender, beyond the crate's own path.
-PREFIX = "ddust_bench::contenders::"
+PREFIX = "ddust_bench::contender::"
 
 # A hardware division, on aarch64 and on x86_64.
 DIVISION = re.compile(r"^(udiv|sdiv|div[bwlq]?|idiv[bwlq]?)$")

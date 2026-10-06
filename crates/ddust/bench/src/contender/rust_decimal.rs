@@ -13,10 +13,10 @@ use rust_decimal::prelude::{FromPrimitive as _, ToPrimitive as _};
 use rust_decimal::{Decimal, RoundingStrategy};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, display, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, format_by_display, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// The steps of `value` at `decimals`, if it has no digit past them.
@@ -53,15 +53,15 @@ macro_rules! rust_decimal {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(*b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -71,7 +71,7 @@ macro_rules! rust_decimal {
             const MODE: Mode = Mode::HalfEven;
             const EXACT: bool = $rounds_once;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some(a.checked_mul(*b)?.round_dp_with_strategy($decimals, RoundingStrategy::MidpointNearestEven))
             }
         }
@@ -81,17 +81,17 @@ macro_rules! rust_decimal {
             const MODE: Mode = Mode::HalfEven;
             const EXACT: bool = $rounds_once;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 Some(a.checked_div(*b)?.round_dp_with_strategy($decimals, RoundingStrategy::MidpointNearestEven))
             }
         }
 
         /// `round_dp_with_strategy` to 2 decimals.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfEven;
             type Rounded = Decimal;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.round_dp_with_strategy(2, RoundingStrategy::MidpointNearestEven))
             }
 
@@ -110,7 +110,7 @@ macro_rules! rust_decimal {
         /// `Display`, which writes every decimal of the value's scale.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                display(value, buffer);
+                format_by_display(value, buffer);
             }
         }
 
@@ -170,7 +170,7 @@ impl MulExact for Notional {
         Decimal::try_from_i128_with_scale(steps, 5).ok()
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         price.checked_mul(*quantity)
     }
 

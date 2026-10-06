@@ -9,10 +9,10 @@
 use nexus_decimal::Decimal;
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse, Rescale,
-    ToF64, cents, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
+    RescaleRound, ToF64, cents, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// Implements every operation for `Decimal<$integer, $decimals>`.
@@ -42,15 +42,15 @@ macro_rules! nexus {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(*b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -59,7 +59,7 @@ macro_rules! nexus {
         impl MulRound for $name {
             const MODE: Mode = Mode::Trunc;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_mul(*b)
             }
         }
@@ -68,17 +68,17 @@ macro_rules! nexus {
         impl DivRound for $name {
             const MODE: Mode = Mode::Trunc;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_div(*b)
             }
         }
 
         /// `round_dp(2)`, half to even, at the same scale.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfEven;
             type Rounded = Decimal<$integer, $decimals>;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 Some(value.round_dp(2))
             }
 
@@ -97,7 +97,7 @@ macro_rules! nexus {
         /// `write_to_buf`, into the buffer's 64 bytes.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                let (bytes, len) = buffer.front();
+                let (bytes, len) = buffer.fill_from_front();
                 *len = value.write_to_buf(bytes);
             }
         }

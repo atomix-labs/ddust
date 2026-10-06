@@ -5,10 +5,10 @@ use ddust::scale::Sum;
 use ddust::{Decimal, Fixed};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound, Parse,
-    Rescale, ToF64, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
+    Parse, RescaleRound, ToF64, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// Implements every operation for ddust's type over `$integer` at `$decimals`.
@@ -38,15 +38,15 @@ macro_rules! ddust {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(*b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -55,7 +55,7 @@ macro_rules! ddust {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_mul_round(*b, HalfEven)
             }
         }
@@ -64,17 +64,17 @@ macro_rules! ddust {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_div_round(*b, HalfEven)
             }
         }
 
         /// `rescale_round` to `Fixed<2>`, another type.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfEven;
             type Rounded = Decimal<$integer, Fixed<2>>;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 value.rescale_round(Fixed, HalfEven).ok()
             }
 
@@ -93,7 +93,7 @@ macro_rules! ddust {
         /// `write_ascii`, into the buffer's bytes.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                let (bytes, len) = buffer.front();
+                let (bytes, len) = buffer.fill_from_front();
                 *len = value.write_ascii(bytes).unwrap_or(0);
             }
         }
@@ -153,7 +153,7 @@ impl MulExact for Notional {
         Some(Decimal::from_steps(i64::try_from(steps).ok()?, Fixed))
     }
 
-    fn mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
+    fn checked_mul(price: &Self::Price, quantity: &Self::Quantity) -> Option<Self::Product> {
         price.checked_mul(*quantity)
     }
 

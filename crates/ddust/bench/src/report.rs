@@ -4,7 +4,7 @@
 use core::fmt::{self, Write as _};
 use std::io;
 
-use crate::counters::Event;
+use crate::counter::Event;
 use crate::harness::{Config, Figure, Measurement};
 
 /// The width of the name column.
@@ -40,7 +40,7 @@ pub fn write_header<W: io::Write>(out: &mut W) -> io::Result<()> {
 /// # Errors
 /// When `out` refuses the line.
 pub fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Result<()> {
-    let median = |event| measurement.event(event).map(|figure| figure.median);
+    let median = |event| measurement.figure(event).map(|figure| figure.median);
     let cell = |value: Option<f64>, decimals: usize| {
         value.map_or_else(|| "n/a".to_owned(), |value| format!("{value:.decimals$}"))
     };
@@ -59,8 +59,8 @@ pub fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Re
         cell(median(Event::BranchMisses), 4),
         cell(median(Event::L1iMisses), 4),
         cell(median(Event::L1dMisses), 4),
-        cell(median(Event::FrontendStalls), 3),
-        cell(median(Event::BackendStalls), 3),
+        cell(median(Event::StalledCyclesFrontend), 3),
+        cell(median(Event::StalledCyclesBackend), 3),
         cell(clock, 2),
         measurement.nanoseconds.spread() * 100.0,
     )?;
@@ -77,7 +77,7 @@ pub fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Re
 pub fn write_toml(
     out: &mut String, backend: &str, config: &Config, measurements: &[Measurement],
 ) -> fmt::Result {
-    writeln!(out, "counters = {}", quoted(backend))?;
+    writeln!(out, "backend = {}", quoted(backend))?;
     writeln!(out, "warm-up-ms = {}", config.warm_up.as_millis())?;
     writeln!(out, "sample-us = {}", config.sample_time.as_micros())?;
     writeln!(out, "samples-per-set = {}", config.samples_per_set)?;
@@ -119,14 +119,14 @@ fn quoted(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{quoted, write_row, write_toml};
-    use crate::counters::Event;
+    use crate::counter::Event;
     use crate::harness::{Config, Figure, Measurement};
 
     /// A measurement of one nanosecond and three cycles an operation.
     fn measurement() -> Measurement {
         let figure = |median| Figure { median, low: median, high: median };
         Measurement {
-            name: "add/predictable/i64".to_owned(),
+            name: "add/narrow/predictable/i64".to_owned(),
             operations: 1024,
             calls: 7,
             nanoseconds: figure(1.0),
@@ -140,7 +140,7 @@ mod tests {
         let mut row = Vec::new();
         write_row(&mut row, &measurement()).expect("a Vec takes the row");
         let row = String::from_utf8(row).expect("ASCII");
-        assert!(row.starts_with("add/predictable/i64"), "{row}");
+        assert!(row.starts_with("add/narrow/predictable/i64"), "{row}");
         assert!(row.contains(" 3.000 ") && row.contains(" 2.00 "), "cycles, and IPC: {row}");
         assert!(row.contains("n/a"), "what no set counted: {row}");
     }
@@ -149,7 +149,7 @@ mod tests {
     fn a_saved_run_holds_every_figure() {
         let mut text = String::new();
         write_toml(&mut text, "none", &Config::QUICK, &[measurement()]).expect("a String takes it");
-        assert!(text.contains("[[measurement]]\nname = \"add/predictable/i64\""), "{text}");
+        assert!(text.contains("[[measurement]]\nname = \"add/narrow/predictable/i64\""), "{text}");
         assert!(text.contains("cycles = { median = 3, low = 3, high = 3 }"), "{text}");
     }
 

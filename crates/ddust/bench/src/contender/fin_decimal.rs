@@ -9,10 +9,10 @@
 use fin_decimal::{AmountSign, Decimal, Decimal128, Rounding, str_i64};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse, Rescale,
-    ToF64, cents, display, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
+    RescaleRound, ToF64, cents, format_by_display, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// Implements every operation but writing for `$type`, on `$integer` at `$decimals`.
@@ -42,15 +42,15 @@ macro_rules! fin_decimal {
         }
 
         /// `checked_add`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_add(*b)
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -59,7 +59,7 @@ macro_rules! fin_decimal {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_mul_rounded::<$decimals>(*b, Rounding::HalfEven)
             }
         }
@@ -68,17 +68,17 @@ macro_rules! fin_decimal {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfEven;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.checked_div_rounded(*b, Rounding::HalfEven)
             }
         }
 
         /// `checked_round_dp(2)` with `Rounding::HalfEven`, at the same scale.
-        impl Rescale for $name {
+        impl RescaleRound for $name {
             const MODE: Mode = Mode::HalfEven;
             type Rounded = $type<$decimals>;
 
-            fn rescale(value: &Self::Value) -> Option<Self::Rounded> {
+            fn rescale_round(value: &Self::Value) -> Option<Self::Rounded> {
                 value.checked_round_dp(2, Rounding::HalfEven)
             }
 
@@ -137,7 +137,7 @@ fin_decimal!(
 /// `str_i64`, which fills the buffer from the back.
 impl Format for Narrow {
     fn format(value: &Self::Value, buffer: &mut Buffer) {
-        let (bytes, start) = buffer.back();
+        let (bytes, start) = buffer.fill_from_back();
         let written = str_i64(value.0, 8, None, AmountSign::Negative, bytes).map_or(0, str::len);
         *start = bytes.len().saturating_sub(written);
     }
@@ -146,6 +146,6 @@ impl Format for Narrow {
 /// `Display`: the 128-bit type has no writer of its own.
 impl Format for Wide {
     fn format(value: &Self::Value, buffer: &mut Buffer) {
-        display(value, buffer);
+        format_by_display(value, buffer);
     }
 }

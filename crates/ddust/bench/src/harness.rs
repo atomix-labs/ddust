@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 use std::{env, fs};
 
-use crate::counters::{Counters, Event};
+use crate::counter::{Counters, Event};
 use crate::report;
 
 /// How long a measurement runs.
@@ -78,7 +78,8 @@ impl Figure {
 /// What one measurement found, each figure per operation.
 #[derive(Debug, Clone)]
 pub struct Measurement {
-    /// Its name: the operation, the inputs and the contender, as `mul-round/unpredictable/ddust`.
+    /// Its name: the operation, the width, the predictability and the contender, as
+    /// `mul-round/narrow/unpredictable/ddust D64<8>`.
     pub name: String,
     /// The operations one call of the routine performs.
     pub operations: u64,
@@ -95,7 +96,7 @@ pub struct Measurement {
 impl Measurement {
     /// The figure for `event`, if it was counted.
     #[must_use]
-    pub fn event(&self, event: Event) -> Option<Figure> {
+    pub fn figure(&self, event: Event) -> Option<Figure> {
         self.events.iter().find(|(counted, _)| *counted == event).map(|(_, figure)| *figure)
     }
 }
@@ -111,7 +112,7 @@ pub struct Harness {
     /// The names to run, by any part of them: every measurement when empty.
     filters: Vec<String>,
     /// Where to write the measurements at the end, if anywhere.
-    save: Option<PathBuf>,
+    save_path: Option<PathBuf>,
     /// The measurements so far.
     measurements: Vec<Measurement>,
 }
@@ -124,7 +125,7 @@ impl Harness {
             counters: Counters::open(),
             config,
             filters: Vec::new(),
-            save: None,
+            save_path: None,
             measurements: Vec::new(),
         }
     }
@@ -139,7 +140,7 @@ impl Harness {
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
                 "--quick" => harness.config = Config::QUICK,
-                "--save" => harness.save = arguments.next().map(PathBuf::from),
+                "--save" => harness.save_path = arguments.next().map(PathBuf::from),
                 "--bench" => {},
                 word => harness.filters.push(word.to_owned()),
             }
@@ -150,7 +151,7 @@ impl Harness {
     /// Whether a measurement named `name` runs: when it holds one of the filters, or there are
     /// none.
     #[must_use]
-    pub fn runs(&self, name: &str) -> bool {
+    pub fn is_selected(&self, name: &str) -> bool {
         self.filters.is_empty() || self.filters.iter().any(|filter| name.contains(filter.as_str()))
     }
 
@@ -162,7 +163,7 @@ impl Harness {
     pub fn measure<F: FnMut()>(
         &mut self, name: &str, operations: u64, mut routine: F,
     ) -> io::Result<()> {
-        if !self.runs(name) {
+        if !self.is_selected(name) {
             return Ok(());
         }
         if self.measurements.is_empty() {
@@ -213,7 +214,7 @@ impl Harness {
     /// When the file cannot be written.
     pub fn finish(self) -> io::Result<()> {
         io::stdout().lock().flush()?;
-        let Some(path) = self.save else { return Ok(()) };
+        let Some(path) = self.save_path else { return Ok(()) };
         let mut text = String::new();
         report::write_toml(&mut text, &self.counters.backend(), &self.config, &self.measurements)
             .map_err(io::Error::other)?;
@@ -286,7 +287,7 @@ mod tests {
     fn a_filter_passes_over_what_it_does_not_name() {
         let mut harness = Harness::new(Config::QUICK);
         harness.filters.push("mul".to_owned());
-        assert!(harness.runs("mul-round/predictable/ddust"), "named");
-        assert!(!harness.runs("add/predictable/ddust"), "passed over");
+        assert!(harness.is_selected("mul-round/narrow/predictable/ddust D64<8>"), "named");
+        assert!(!harness.is_selected("add/narrow/predictable/ddust D64<8>"), "passed over");
     }
 }

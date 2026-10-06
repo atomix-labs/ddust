@@ -1,5 +1,5 @@
 //! ddust's benchmarks: a harness that times an operation and counts the CPU's events while it runs,
-//! the inputs every contender reads, and the exact oracle each result is checked against.
+//! the predictability every contender reads, and the exact oracle each result is checked against.
 //!
 //! divan has no hardware counters, criterion takes one figure a pass, and gungraun counts a
 //! routine once, cold. This harness takes each operation in steady state, and reads time,
@@ -31,12 +31,12 @@
 //! | ------- | ------------ |
 //! | `kperf` | The CPU's counters on macOS, through darwin-kperf, for a run as root |
 
-pub mod contenders;
-mod counters;
+pub mod contender;
+mod counter;
 mod harness;
-pub mod inputs;
+pub mod input;
 pub mod oracle;
 pub mod report;
 
-pub use counters::Event;
+pub use counter::Event;
 pub use harness::{Config, Figure, Harness, Measurement};

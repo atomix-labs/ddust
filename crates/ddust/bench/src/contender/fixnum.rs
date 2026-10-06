@@ -10,10 +10,10 @@ use fixnum::ops::{CheckedAdd as _, RoundMode, RoundingDiv as _, RoundingMul as _
 use fixnum::typenum::{U8, U18};
 
 use super::{
-    Add, Buffer, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse, ToF64,
-    display, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
+    ToF64, format_by_display, low_byte,
 };
-use crate::inputs::Width;
+use crate::input::Width;
 use crate::oracle::Mode;
 
 /// Implements every operation for `FixedPoint<$integer, $precision>`.
@@ -43,15 +43,15 @@ macro_rules! fixnum {
         }
 
         /// `cadd`.
-        impl Add for $name {
-            fn add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+        impl CheckedAdd for $name {
+            fn checked_add(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.cadd(*b).ok()
             }
         }
 
         /// `<`.
         impl Compare for $name {
-            fn less(a: &Self::Value, b: &Self::Value) -> bool {
+            fn is_less(a: &Self::Value, b: &Self::Value) -> bool {
                 a < b
             }
         }
@@ -60,7 +60,7 @@ macro_rules! fixnum {
         impl MulRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_mul_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.rmul(*b, RoundMode::Nearest).ok()
             }
         }
@@ -69,7 +69,7 @@ macro_rules! fixnum {
         impl DivRound for $name {
             const MODE: Mode = Mode::HalfExpand;
 
-            fn div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+            fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
                 a.rdiv(*b, RoundMode::Nearest).ok()
             }
         }
@@ -84,7 +84,7 @@ macro_rules! fixnum {
         /// `Display`, which writes a whole number as `5.0`.
         impl Format for $name {
             fn format(value: &Self::Value, buffer: &mut Buffer) {
-                display(value, buffer);
+                format_by_display(value, buffer);
             }
         }
 

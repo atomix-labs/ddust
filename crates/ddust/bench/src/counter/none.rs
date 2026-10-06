@@ -27,12 +27,12 @@ impl Counters {
         1
     }
 
-    /// Times `routine`, called `iterations` times.
+    /// Times `routine`, called `calls` times.
     pub(crate) fn sample<F: FnMut()>(
-        &mut self, _set: usize, iterations: u64, routine: &mut F,
+        &mut self, _set: usize, calls: u64, routine: &mut F,
     ) -> io::Result<Sample> {
         let start = Instant::now();
-        for _ in 0..iterations {
+        for _ in 0..calls {
             routine();
         }
         Ok(Sample { elapsed: start.elapsed(), ..Sample::default() })

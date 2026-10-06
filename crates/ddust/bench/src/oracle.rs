@@ -37,24 +37,6 @@ pub enum Mode {
     HalfEven,
 }
 
-impl Mode {
-    /// The mode's name, as a table names it.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Floor => "floor",
-            Self::Ceil => "ceil",
-            Self::Trunc => "trunc",
-            Self::Expand => "expand",
-            Self::HalfFloor => "half-floor",
-            Self::HalfCeil => "half-ceil",
-            Self::HalfTrunc => "half-trunc",
-            Self::HalfExpand => "half-expand",
-            Self::HalfEven => "half-even",
-        }
-    }
-}
-
 /// `a + b`, or `None` past an `i128`.
 #[must_use]
 pub const fn add(a: i128, b: i128) -> Option<i128> {
@@ -92,7 +74,7 @@ pub fn div_round(a: i128, b: i128, decimals: u8, mode: Mode) -> Option<i128> {
 /// `a`, at `from` decimals, at `to`, rounded by `mode` where `to` is the fewer; `None` past an
 /// `i128`.
 #[must_use]
-pub fn rescale(a: i128, from: u8, to: u8, mode: Mode) -> Option<i128> {
+pub fn rescale_round(a: i128, from: u8, to: u8, mode: Mode) -> Option<i128> {
     match from.cmp(&to) {
         Ordering::Greater => narrow(divide(&BigInt::from(a), &power(from - to), mode)),
         Ordering::Equal => Some(a),
@@ -223,7 +205,9 @@ mod tests {
 
     use rstest::rstest;
 
-    use super::{Mode, compare, div_round, from_f64, mul_round, parse, rescale, text, to_f64};
+    use super::{
+        Mode, compare, div_round, from_f64, mul_round, parse, rescale_round, text, to_f64,
+    };
 
     /// Every mode on the ties and near-ties of ECMA-402's table, at one decimal to none.
     #[rstest]
@@ -238,14 +222,14 @@ mod tests {
     #[case::half_even(Mode::HalfEven, [1, 2, 3, -1, -2, -3])]
     fn every_mode_rounds_as_ecma_402_says(#[case] mode: Mode, #[case] expected: [i128; 6]) {
         let rounded = [14, 15, 26, -14, -15, -26]
-            .map(|tenths| rescale(tenths, 1, 0, mode).expect("in range"));
+            .map(|tenths| rescale_round(tenths, 1, 0, mode).expect("in range"));
         assert_eq!(rounded, expected, "{mode:?}: 1.4, 1.5, 2.6, -1.4, -1.5, -2.6");
     }
 
     #[test]
     fn a_tie_to_even_looks_at_the_quotient() {
-        assert_eq!(rescale(25, 1, 0, Mode::HalfEven), Some(2), "2.5 to 2");
-        assert_eq!(rescale(35, 1, 0, Mode::HalfEven), Some(4), "3.5 to 4");
+        assert_eq!(rescale_round(25, 1, 0, Mode::HalfEven), Some(2), "2.5 to 2");
+        assert_eq!(rescale_round(35, 1, 0, Mode::HalfEven), Some(4), "3.5 to 4");
     }
 
     #[test]
