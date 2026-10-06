@@ -1,0 +1,4 @@
+Fixed-point decimals that leave no dust: exact, typed, as fast as the integers
+beneath them.
+
+<!-- changes -->

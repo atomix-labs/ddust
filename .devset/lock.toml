@@ -1,0 +1,512 @@
+version = 2
+
+[[profiles]]
+name = "just"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "cd5e54dd05f45c8fcddda248a9d51c7039ae166cef5f9e141384d5aee3652b65"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "agents"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "5933d56a59acd1a848bf0ec9f699da4f154abb08a5ab5e30d873050e0da3771b"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+hook = ["default"]
+readability = ["default"]
+security = ["default"]
+
+[[profiles]]
+name = "cargo-workspace"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "3c8f121155e0a6f38d1cc197124001dc3844b72e26122906520b9de597f15a40"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "mise"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "5f35eeb235a92af1d548ae0b46847ef02d0b79be82e498a6ad5ad702965c59b6"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "rust-toolchain"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "2098828db77909e211a3b1016488a529d0430df9adbdf1da34569252367412eb"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "cargo-bump"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "fe20b6a63b5f1f02c6b1266dbb8b876de4ccb2c0d1d2902f12aa949cc9184a18"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "cargo-deny"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "8ec4da2e0d996c401c6bf77190843824b8dec04f237bd82537be496ce0289944"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+strict = ["rust/strict"]
+
+[[profiles]]
+name = "cargo-hack"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "89b9f55f062f149f4318b00214098feb6d8c5d06ec7329ea0d5a8cc0a7461514"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "cargo-manifest"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "ad5a26da7c2fd54f3dad2a832d096b25e84020c29fa2249852d6189fb6871564"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+
+[[profiles]]
+name = "cargo-nextest"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "3db5e81eacd4614fda6577a980d49bd0286d3551ca568d2761bf37cb98926a76"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+
+[[profiles]]
+name = "cargo-profiles"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "d42be5bfa7120d0f9c9adfcd2f977889562b9f79aaf5841af2e43f3122d9d5a4"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+strict = ["rust/strict"]
+
+[[profiles]]
+name = "cargo-publish"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "febb9c5c31f679b29fd30e6185822c4b0dcd4985be14d7b1b1b0c3278d75691e"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "cargo-unused"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "93112bbaf084c84be4b446bdd0e004397f4a12f4e5986a31def40654f72a4962"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+machete = ["default"]
+shear = ["default"]
+
+[[profiles]]
+name = "devset"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "df355ce87f39e51efefd62f1e03bcfce88d122cae1f4992ba2b0753516378cb7"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+
+[[profiles]]
+name = "editorconfig"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "e1b9c57689290be868ff3a1d81e40985cbdaff418a0ac7f638d3d9b63132298a"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "git-attributes"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "1f0e46fc40b06a0acb7518bf5cbbaa084b035cf1cbc5fd969dc29897806087ab"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "git-changelog"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "dbde36959254c1385871a07406e60e931df89a26e25a392c4d8b76b9da9003bc"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+breaking-changes = ["project/breaking-changes"]
+
+[[profiles]]
+name = "git-commits"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "f65b004d4e5e81eb41a9c24e456bef24584eca2ed5eed6f8a7f3028a9f36b380"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+
+[[profiles]]
+name = "git-ignore"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "1fd8a8c36ef5530a189d137ec7487162280e10cc8b3aa667624a519750788425"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-automation"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "d4c7137b7067d8e479099f9e69ae5f29f3bde6b2712beee61308d2e092b01c65"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-watch"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "67ee3e4eff704a12d016dc5dc8a33b97cc5602bc9ecc6195803c6fbb7e407d3e"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-bump"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "fcd5b746123c398ae7e04a1d514633a89803372db70448a89ec8b5103ce0333c"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-ci"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "85767ea6d24fe23af33779a69ff6cbd95cd39b72c1ae6b6c50948f086f4d6014"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+pages = ["mdbook/pages"]
+
+[[profiles]]
+name = "github-dependabot"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "0d391809a41f9ba8259d4f442be6cd02f0d5f7f66f7e0e6ab51315b84b6d5fcf"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-labels"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "1a6a875b5308a45d2aa57d642a087615730c2fea63639c2c160570ad09b52279"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-nightly"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "f0d0470cb532becbcc5979685bc1335cb53a1ec563286286a48f8bd96c1ccc81"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "github-release"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "c8547f9f198dfb086b5a5e42d9819c469edc2d78ba8d6137d77f31dcc04fb395"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+
+[[profiles]]
+name = "github-templates"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "475c26c82f2e1be6d8a39df85ac8dbb8420c0a089758a6a2854071d680c2621f"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+discussions = ["target"]
+
+[[profiles]]
+name = "github-workflow-lint"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "87401a21b27ccd7a988d0dccdc2c18e8947161b89104fb6ec32b869d36bf7466"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+actionlint = ["default"]
+policies = ["default"]
+zizmor = ["default"]
+
+[[profiles]]
+name = "dprint"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "cc751577affd1ff40fa8689d13eefb6247c8fe20c069b386575ae0131fb82ee5"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "markdown"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "75442bf10ec9c3f3dcd3e9e15d427f2fc9fecfc42375fc08ce3346969b617b6e"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+format = ["default"]
+lint = ["default"]
+
+[[profiles]]
+name = "lychee"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "1d2c03ac88735d7cce4a53416f3871c1ddaacd887a6c6c85614cfc6fcf1c7c1c"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "mdbook-tool"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "cb1f9e1264ba2549d29990d93cab21c61c0bfe371ceb3b963a0416760ecbdc62"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "mdbook"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "19c87f01de4a14786f94aa3f3cbd1ebd684b13e8c9123ca5819bd8f2040e957e"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+api = ["default"]
+katex = ["default"]
+links = ["default"]
+pages = ["default"]
+
+[[profiles]]
+name = "project"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "83088e4f16e82dca5fc334affffca3d32c4025cd51c9c2947ee713c0cdf9dad5"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+breaking-changes = ["default"]
+conduct = ["rust/oss"]
+contributing = ["default"]
+devset-badge = ["target"]
+license = ["default"]
+readme = ["default"]
+security = ["default"]
+support = ["rust/oss"]
+
+[[profiles]]
+name = "rust-clippy"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "e0fd7ce1d0d694f30545e2dc69203ff879a1538e6f12c2dcaba9233adb61cc9c"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "rust-doc"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "a6c2c37943afd71d9130cc44dca44511c6d9065fc5e71c32956de935becd6ead"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+strict = ["rust/strict"]
+
+[[profiles]]
+name = "rust-fmt"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "95cc546d1d0b3910bfc6b87db3effeba8cdcb5e7fb436601d248c868f5708b07"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "rust-lints"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "61f706e305761e6fce6f5cd6c85c565d920f69bdf924d4eb32a4340f79f2615d"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["rust/agents"]
+nightly = ["rust/nightly"]
+strict = ["rust/strict"]
+
+[[profiles]]
+name = "setup"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "cc9c45dadae34cdc08410966d1fc984945ae2a69330d12ecaee45b350e184d68"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "shell"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "1c5096572121f2c6f701d2447286eed65623592fd977d8670b4f7e684e72c72c"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+lint = ["default"]
+
+[[profiles]]
+name = "spelling"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "172e999cb3e525669e536963dde38ed2632c29e3b4813d064967595f0e670e22"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[[profiles]]
+name = "toml"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "66c0e88456b0130151ee844e3e7505fe0826bca1931ae838d02b12378d000b4a"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+format = ["default"]
+lint = ["default"]
+
+[[profiles]]
+name = "yaml"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "00f89f851f790fbb9ed82d614f4a02a629a3c2a01dc9941676e3454b51091353"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+format = ["default"]
+lint = ["default"]
+
+[[profiles]]
+name = "rust"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "e5193968ff930229ca287a3ee492fc021964321597aa13a2295006a7382b21d7"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
+
+[profiles.features]
+agents = ["target"]
+docs = ["target"]
+nightly = ["target"]
+oss = ["target"]
+publish = ["target"]
+strict = ["target"]
+
+[[profiles]]
+name = "vscode"
+rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
+digest = "c741706d51d6a5ee5b63225a8b154478e59a62bc15620be9dadd4864eb110627"
+
+[profiles.source]
+git = "https://github.com/atomix-labs/atxp"
+tag = "v0.21.0"
