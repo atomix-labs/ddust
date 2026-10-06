@@ -133,7 +133,6 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         else {
             return None;
         };
-        let Some(magnitude) = magnitude.to_u128() else { return None };
         match I::from_magnitude(negative, magnitude) {
             Some(steps) => Some(Self::from_steps(steps, scale)),
             None => None,

@@ -656,17 +656,10 @@ macro_rules! signed {
 
             #[inline]
             fn join(negative: bool, magnitude: $unsigned) -> Option<Self> {
-                if negative {
-                    if magnitude <= <$t>::MIN.unsigned_abs() {
-                        Some(magnitude.cast_signed().wrapping_neg())
-                    } else {
-                        None
-                    }
-                } else if magnitude <= <$t>::MAX.cast_unsigned() {
-                    Some(magnitude.cast_signed())
-                } else {
-                    None
-                }
+                // MIN's magnitude is MAX's and one: one comparison and a select, where a branch on
+                // the sign is mispredicted as often as the signs are mixed.
+                let limit = <$t>::MAX.cast_unsigned().wrapping_add(<$unsigned>::from(negative));
+                if magnitude <= limit { Some(Self::wrapping_join(negative, magnitude)) } else { None }
             }
 
             #[inline]

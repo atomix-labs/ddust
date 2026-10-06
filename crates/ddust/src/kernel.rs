@@ -7,7 +7,7 @@
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, U256, Word};
+use crate::word::{Double, Narrow, U256, Word, class};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
 /// the widest word, its low bits, which wrapping keeps.
@@ -229,20 +229,52 @@ const POW5: [u128; 39] = {
 };
 
 /// The magnitude of `mantissa × 2^exponent × 10^decimals`, rounded by `table` for a value of sign
-/// `negative`: a double's exact value at a scale, rounded once. `None` past 256 bits, which no
+/// `negative`: a double's exact value at a scale, rounded once. `None` past 128 bits, which no
 /// integer holds.
 #[expect(clippy::indexing_slicing, reason = "decimals are at most 38, the table's last index")]
 pub(crate) const fn binary_at_scale(
     negative: bool, mantissa: u64, exponent: i32, decimals: u8, table: u16,
-) -> Option<U256> {
+) -> Option<u128> {
     // mantissa · 2^e · 10^d is mantissa · 5^d · 2^(e + d): one product, then one shift.
-    let product = U256::widening(u128::from(mantissa), POW5[usize::from(decimals)]);
+    let power = POW5[usize::from(decimals)];
     let shift = exponent.wrapping_add(i32::from(decimals));
+    let Ok(five) = u64::try_from(power) else {
+        // Past 27 decimals: a product of up to 142 bits.
+        let product = U256::widening(u128::from(mantissa), power);
+        let magnitude = if shift >= 0 {
+            let Some(magnitude) = product.checked_shl(shift.cast_unsigned()) else { return None };
+            magnitude
+        } else {
+            let (quotient, class) = product.shr_classed(shift.unsigned_abs());
+            settle(quotient, class, negative, table)
+        };
+        return magnitude.to_u128();
+    };
+    // 53 bits by at most 63: a product below 2^117.
+    let product = u128::from(mantissa).wrapping_mul(u128::from(five));
     if shift >= 0 {
-        return product.checked_shl(shift.cast_unsigned());
+        let shift = shift.cast_unsigned();
+        return if product == 0 {
+            Some(0)
+        } else if shift <= product.leading_zeros() {
+            product.checked_shl(shift)
+        } else {
+            None
+        };
     }
-    let (quotient, class) = product.shr_classed(shift.unsigned_abs());
+    let (quotient, class) = shr_classed(product, shift.unsigned_abs());
     Some(settle(quotient, class, negative, table))
+}
+
+/// `value >> shift` and the [`class`] of the bits shifted out, for a `shift` that is not zero and a
+/// value below `2^127`: past 127 bits all of it shifts out, below half.
+#[inline]
+const fn shr_classed(value: u128, shift: u32) -> (u128, u32) {
+    if shift >= 128 {
+        return (0, u32::from(value != 0));
+    }
+    let rest = value & (u128::MAX >> 128_u32.wrapping_sub(shift));
+    (value >> shift, class(rest, 1 << shift))
 }
 
 /// The exact sum of two results.
@@ -285,8 +317,8 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use super::{Exact, add, compare, div_down, div_up, mul_div, mul_down, scale_down};
-    use crate::word::{Double, U256, class};
+    use super::{Exact, add, class, compare, div_down, div_up, mul_div, mul_down, scale_down};
+    use crate::word::{Double, U256};
 
     /// Truncation's table.
     const TRUNC: u16 = 0x0000;
