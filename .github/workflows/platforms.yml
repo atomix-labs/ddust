@@ -1,0 +1,89 @@
+# What `check.yml`, on x86_64 Linux, cannot show: the tests on arm64 Linux and on macOS, on Apple
+# silicon and on Intel, where 128-bit and 256-bit arithmetic compile to other instructions; the
+# crate built for bare metal, where a use of `std` fails the build, and checked for 32-bit Linux;
+# and every fuzz target run from the corpus committed under `crates/ddust/fuzz/`.
+name: platforms
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # cargo installs the toolchain rust-toolchain.toml names, on every runner.
+  RUSTUP_AUTO_INSTALL: "1"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # With every feature, and with none; and in release, where overflow wraps rather than panics.
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo test --workspace --locked
+      - run: cargo test --workspace --locked --release
+
+  no-std:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup target add aarch64-unknown-none x86_64-unknown-none
+      # With no feature, and with every feature.
+      - run: |
+          for target in aarch64-unknown-none x86_64-unknown-none; do
+            cargo build --locked --package ddust --target "$target"
+            cargo build --locked --package ddust --target "$target" --all-features
+          done
+
+  linux-32-bit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup target add i686-unknown-linux-gnu
+      - run: cargo check --locked --workspace --all-features --target i686-unknown-linux-gnu
+
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: crates/ddust/fuzz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No profile pins cargo-fuzz.
+      - run: cargo install cargo-fuzz --version 0.13.2 --locked
+      # Each seed once, then a minute of new inputs.
+      - run: |
+          for target in parse_narrow parse_wide arithmetic floats; do
+            cargo fuzz run "$target" -- -runs=0
+            cargo fuzz run "$target" -- -max_total_time=60 -max_len=64
+          done
+      # The input that crashed a target, for `cargo fuzz tmin` to shrink.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-artifacts
+          path: crates/ddust/fuzz/artifacts/

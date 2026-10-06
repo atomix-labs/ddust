@@ -1,0 +1,15 @@
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+ --> tests/compile_fail/a_lossy_operation_takes_a_mode.rs:7:27
+  |
+7 |     let _rounded = amount.mul_round(rate);
+  |                           ^^^^^^^^^------ argument #2 is missing
+  |
+note: method defined here
+ --> src/rounded.rs
+  |
+  |     pub const fn mul_round<T, R>(self, rhs: Decimal<I, T>, mode: R) -> Self
+  |                  ^^^^^^^^^
+help: provide the argument
+  |
+7 |     let _rounded = amount.mul_round(rate, /* mode */);
+  |                                         ++++++++++++

@@ -1,0 +1,46 @@
+[package]
+name    = "ddust-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# A workspace of its own: cargo-fuzz builds it with flags and a profile of its own, and
+# `fuzz_target!` expands to code the workspace's lints refuse.
+[workspace]
+
+[[bin]]
+name  = "parse_narrow"
+path  = "fuzz_targets/parse_narrow.rs"
+test  = false
+doc   = false
+bench = false
+
+[[bin]]
+name  = "parse_wide"
+path  = "fuzz_targets/parse_wide.rs"
+test  = false
+doc   = false
+bench = false
+
+[[bin]]
+name  = "arithmetic"
+path  = "fuzz_targets/arithmetic.rs"
+test  = false
+doc   = false
+bench = false
+
+[[bin]]
+name  = "floats"
+path  = "fuzz_targets/floats.rs"
+test  = false
+doc   = false
+bench = false
+
+[dependencies]
+ddust         = { path = ".." }
+libfuzzer-sys = { version = "0.4.13", features = ["arbitrary-derive"] }
+num-bigint    = "0.4.6"
+num-integer   = "0.1.46"
