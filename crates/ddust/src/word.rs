@@ -57,6 +57,14 @@ pub(crate) const trait Word: Copy + [const] Ord {
     /// The quotient and the remainder, for a divisor that is not zero.
     fn div_rem(self, divisor: Self) -> (Self, Self);
 
+    /// The quotient and the [`class`] of its remainder, for a divisor that is not zero. A word
+    /// wider than a primitive's classes the remainder in the narrowest word that holds it.
+    #[inline]
+    fn divide(self, divisor: Self) -> (Self, u32) {
+        let (quotient, remainder) = self.div_rem(divisor);
+        (quotient, class(remainder, divisor))
+    }
+
     /// `self / 10^k` and the [`class`] of its remainder, or `None` when `10^k` is past the
     /// word. A word whose compiler has no cheap division by a constant divides by the power's
     /// reciprocal, and classes the remainder in the narrowest word that holds it.
@@ -94,7 +102,8 @@ pub(crate) const trait Double<U: [const] Narrow>: [const] Word {
     fn widening_mul(a: U, b: U) -> Self;
 }
 
-/// The words for each primitive, forwarded to its own methods, with any more a word has.
+/// The words for each primitive, forwarded to its own methods, with the items of a block a word is
+/// given.
 macro_rules! word {
     ($($t:ty $({ $($more:item)* })?),*) => {$(
         const impl Word for $t {
@@ -170,6 +179,18 @@ macro_rules! word {
 }
 
 word!(u8, u16, u32, u64, u128 {
+    // A quotient that fits a word, by a divisor that fits one, is a 128-by-64-bit division, whose
+    // remainder fits a word too.
+    #[inline]
+    fn divide(self, divisor: Self) -> (Self, u32) {
+        if let Ok(word) = u64::try_from(divisor)
+            && let Some((quotient, remainder)) = reciprocal::divide_u128_by_u64(self, word)
+        {
+            return (u128::from(quotient), class(remainder, word));
+        }
+        divide_past_a_word(self, divisor)
+    }
+
     // LLVM divides a `u128` by a constant through a multiply-high of four multiplies, and by a
     // power known only at run time through a library call. A value with no high word divides as a
     // `u64`; any other, by one Möller–Granlund step when its quotient fits a word, and by two when
@@ -191,6 +212,16 @@ word!(u8, u16, u32, u64, u128 {
         Some(divide_pow10_past_a_word(self, k, power))
     }
 });
+
+/// `value / divisor` and the class of its remainder, for a quotient or a divisor past a word: off
+/// the hot path and out of line, so that LLVM does not divide once for both paths and class the
+/// remainder in both words.
+#[cold]
+#[inline(never)]
+const fn divide_past_a_word(value: u128, divisor: u128) -> (u128, u32) {
+    let (quotient, remainder) = value.div_rem(divisor);
+    (quotient, class(remainder, divisor))
+}
 
 /// `value / power` and the class of its remainder, `power` being `10^k`, for a quotient past a
 /// word: two Möller–Granlund steps to `10^19`, and the plain division past it. Off the hot path and
@@ -497,6 +528,10 @@ const impl Word for U256 {
         }
         if divisor.high == 0 {
             let d = divisor.low;
+            if let Some((low, remainder)) = reciprocal::divide_u256_by_u128(self.high, self.low, d)
+            {
+                return (Self::from_u128(low), Self::from_u128(remainder));
+            }
             let (high, rest) = (self.high / d, self.high % d);
             let (low, remainder) = Self::div_rem_narrow(rest, self.low, d);
             return (Self { high, low }, Self::from_u128(remainder));
@@ -515,6 +550,19 @@ const impl Word for U256 {
             }
         }
         (quotient, remainder)
+    }
+
+    // The remainder by a divisor that fits 128 bits fits them too.
+    #[inline]
+    fn divide(self, divisor: Self) -> (Self, u32) {
+        if divisor.high == 0
+            && let Some((quotient, remainder)) =
+                reciprocal::divide_u256_by_u128(self.high, self.low, divisor.low)
+        {
+            return (Self::from_u128(quotient), class(remainder, divisor.low));
+        }
+        let (quotient, remainder) = self.div_rem(divisor);
+        (quotient, class(remainder, divisor))
     }
 
     #[inline]

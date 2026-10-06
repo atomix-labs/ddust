@@ -7,7 +7,7 @@
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, U256, Word, class};
+use crate::word::{Double, Narrow, U256, Word};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
 /// the widest word, its low bits, which wrapping keeps.
@@ -36,13 +36,6 @@ const fn settle<D: [const] Word>(quotient: D, class: u32, negative: bool, table:
     let index = (u32::from(negative) << 3) | (u32::from(quotient.is_odd()) << 2) | class;
     // A quotient moves only when the divisor is at least 2, so it is at most half the word.
     if (table >> index) & 1 == 1 { quotient.wrapping_add(D::ONE) } else { quotient }
-}
-
-/// `numerator / divisor` and the class of what it leaves.
-#[inline]
-const fn quotient<D: [const] Word>(numerator: D, divisor: D) -> (D, u32) {
-    let (quotient, remainder) = numerator.div_rem(divisor);
-    (quotient, class(remainder, divisor))
 }
 
 /// `numerator / 10^k` and the class of what it leaves, or `None` when the power is past the word.
@@ -138,34 +131,48 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
         None => None,
     };
     let Some(numerator) = numerator else { return None };
-    let (mut q, mut remainder) = numerator.div_rem(divisor);
-    let mut overflowed = false;
-    if rest > 0 {
-        // q · 10^rest + (remainder · 10^rest) / b: the remainder is below b, so its product fits
-        // the widest word; q's may not, and then only its low bits are kept.
-        let Some(power) = D::pow10(rest) else { return None };
-        let Some(carried) = remainder.checked_mul(power) else { return None };
-        let (low, last) = carried.div_rem(divisor);
-        let lifted = match q.checked_mul(power) {
-            Some(lifted) => lifted,
-            None if D::WIDEST => {
-                overflowed = true;
-                q.wrapping_mul(power)
-            },
-            None => return None,
-        };
-        q = match lifted.checked_add(low) {
-            Some(sum) => sum,
-            None if D::WIDEST => {
-                overflowed = true;
-                lifted.wrapping_add(low)
-            },
-            None => return None,
-        };
-        remainder = last;
-    }
-    let magnitude = settle(q, class(remainder, divisor), negative, table);
+    let (q, class, overflowed) = if rest == 0 {
+        let (q, class) = numerator.divide(divisor);
+        (q, class, false)
+    } else {
+        let Some(divided) = divide_past_38(numerator, divisor, rest) else { return None };
+        divided
+    };
+    let magnitude = settle(q, class, negative, table);
     Some(Exact { negative, magnitude, overflowed })
+}
+
+/// `numerator × 10^rest / divisor`, the class of what it leaves, and whether the quotient
+/// overflowed the word: the second step of [`div_up`]'s long division, off its path.
+#[cold]
+#[inline(never)]
+const fn divide_past_38<D: [const] Word>(
+    numerator: D, divisor: D, rest: u8,
+) -> Option<(D, u32, bool)> {
+    // q · 10^rest + (remainder · 10^rest) / divisor: the remainder is below the divisor, so its
+    // product fits the widest word; q's may not, and then only its low bits are kept.
+    let (q, remainder) = numerator.div_rem(divisor);
+    let Some(power) = D::pow10(rest) else { return None };
+    let Some(carried) = remainder.checked_mul(power) else { return None };
+    let (low, class) = carried.divide(divisor);
+    let mut overflowed = false;
+    let lifted = match q.checked_mul(power) {
+        Some(lifted) => lifted,
+        None if D::WIDEST => {
+            overflowed = true;
+            q.wrapping_mul(power)
+        },
+        None => return None,
+    };
+    let q = match lifted.checked_add(low) {
+        Some(sum) => sum,
+        None if D::WIDEST => {
+            overflowed = true;
+            lifted.wrapping_add(low)
+        },
+        None => return None,
+    };
+    Some((q, class, overflowed))
 }
 
 /// `a / (b × 10^k)`, rounded by `table`, for a `b` that is not zero. In the widest word a divisor
@@ -179,7 +186,7 @@ pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
         None => None,
     };
     let (q, class) = match divisor {
-        Some(divisor) => quotient(D::from_narrow(a), divisor),
+        Some(divisor) => D::from_narrow(a).divide(divisor),
         None if D::WIDEST => (D::ZERO, u32::from(a != U::ZERO)),
         None => return None,
     };
@@ -191,7 +198,7 @@ pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
 pub(crate) const fn mul_div<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, c: U, table: u16,
 ) -> Exact<D> {
-    let (q, class) = quotient(D::widening_mul(a, b), D::from_narrow(c));
+    let (q, class) = D::widening_mul(a, b).divide(D::from_narrow(c));
     Exact::new(negative, settle(q, class, negative, table))
 }
 
@@ -202,7 +209,7 @@ pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, step: U, table: u16,
 ) -> Exact<D> {
     let step = D::from_narrow(step);
-    let (q, class) = quotient(D::from_narrow(a), step);
+    let (q, class) = D::from_narrow(a).divide(step);
     let count = settle(q, class, negative, table);
     // count × step ≤ a + step < 2 × 2^bits(U), which the double word holds.
     let magnitude = count.wrapping_mul(step);
@@ -278,8 +285,8 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use super::{Exact, add, class, compare, div_down, div_up, mul_div, mul_down, scale_down};
-    use crate::word::{Double, U256};
+    use super::{Exact, add, compare, div_down, div_up, mul_div, mul_down, scale_down};
+    use crate::word::{Double, U256, class};
 
     /// Truncation's table.
     const TRUNC: u16 = 0x0000;

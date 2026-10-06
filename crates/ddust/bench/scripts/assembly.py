@@ -30,13 +30,15 @@ ROUTINE = re.compile(r"__(u?div|u?mod|udivmod|divmod)[sdt]i[34]$|specialized_div
 # A call or a tail call: aarch64's `bl` and `b`, x86_64's `call` and `jmp`.
 CALL = re.compile(r"^(bl|b|call[q]?|jmp[q]?)$")
 # The cold paths a panic takes, which an operation reaches but never runs, and ddust's own `#[cold]`
-# fallbacks, the plain division past `10^19` or past the word, which a decimal of more than 19
-# decimals or a result past its integer reaches: neither counted in a probe's size nor followed.
+# fallbacks, the plain division past `10^19` or past the word, and a quotient's past 38 digits, which
+# a decimal of more than 19 decimals or a result past its integer reaches: neither counted in a
+# probe's size nor followed.
 COLD = re.compile(
     r"^(core::panicking::|core::option::(unwrap|expect)_failed|core::result::unwrap_failed|"
     r"core::slice::index::|core::str::slice_error_fail|alloc::alloc::handle_alloc_error|"
     r"alloc::raw_vec::handle_error|std::panicking::|rust_begin_unwind|"
-    r"ddust::word::divide_pow10_past_a_word|ddust::word::divide_pow10_by_long_division)"
+    r"ddust::word::divide_pow10_past_a_word|ddust::word::divide_pow10_by_long_division|"
+    r"ddust::word::divide_past_a_word|ddust::kernel::divide_past_38)"
 )
 
 
