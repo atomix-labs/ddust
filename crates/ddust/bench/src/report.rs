@@ -8,7 +8,7 @@ use crate::counters::Event;
 use crate::harness::{Config, Figure, Measurement};
 
 /// The width of the name column.
-const NAME_WIDTH: usize = 52;
+const NAME_WIDTH: usize = 72;
 
 /// Writes the table's header.
 ///

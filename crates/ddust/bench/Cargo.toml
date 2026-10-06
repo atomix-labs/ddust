@@ -35,7 +35,13 @@ rust_decimal                  = { version = "=1.43.0", default-features = false 
 [dev-dependencies]
 rstest = { version = "0.27.0", default-features = false }
 
+[[bench]]
+name    = "ops"
+harness = false
 
+[[bench]]
+name    = "mixed"
+harness = false
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event2 = { version = "0.7.4" }
