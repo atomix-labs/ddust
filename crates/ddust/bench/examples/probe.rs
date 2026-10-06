@@ -1,6 +1,7 @@
 //! One function an operation and contender, out of line, so each kernel's code can be measured
-//! and read: `nm` sizes it, `objdump` prints it, and the assembly gate checks it. A probe is named
-//! by its operation and its contender, as
+//! and read: `nm` sizes it, `objdump` prints it, and the assembly gate checks it.
+//!
+//! A probe is named by its operation and its contender, as
 //! `probe::mul_round::<ddust_bench::contender::ddust::Narrow>`.
 //!
 //! ```text

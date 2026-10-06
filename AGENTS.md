@@ -123,22 +123,23 @@ What a change here keeps, beyond what the checks hold it to.
   it adds to the corpus is kept small with `cargo fuzz cmin`, and a crash it
   finds, shrunk with `cargo fuzz tmin`, becomes a unit test.
 - A change to a kernel, an operator, a conversion, reading or writing runs the
-  benches on an isolated core, `just bench-run <pr> <subject> <host>`, and commits
-  the run under `crates/ddust/bench/results/` when a figure the book cites
-  moves. A run is named for its time in UTC, its pull request, what it measures
-  and its machine (`2026-10-06T09-30Z-pr3-baseline-graviton4`); its passes
-  agree, by 2% in time and cycles and 0.5% in instructions, or it is taken again
-  with five, and the book cites the median of their medians.
+  benches on an isolated core, `just bench-run <pr> <subject> <host>`, and
+  commits the run under `crates/ddust/bench/results/` when a figure the book
+  cites moves. A run is named for its time in UTC, its pull request, what it
+  measures and its machine (`2026-10-06T09-30Z-pr3-baseline-graviton4`); its
+  passes agree, by 2% in time and cycles and 0.5% in instructions, or it is
+  taken again with five, and the book cites the median of their medians.
 - Contenders are compared within one binary and one run, never across builds,
-  since code layout alone moves a figure by 5%. A claim that one form is faster
-  cites the run that shows it.
-- A crate compared is an adapter in `crates/ddust/bench/src/contender/`, on
-  each operation's fastest correct call, and a line in `for_each_contender!` for each
+  since code layout alone moves a figure between builds. A claim that one form
+  is faster cites the run that shows it.
+- A crate compared is an adapter in `crates/ddust/bench/src/contender/`, on each
+  operation's fastest correct call, and a line in `for_each_contender!` for each
   operation it has; the equivalence test holds every result to the oracle, and a
   row that differs says so, `EXACT = false`, with its reason in its docs.
-- A kernel that divides only by constants is gated: `just bench-assembly` refuses a
-  division instruction or routine in it on either architecture, and the gate's
-  list in `crates/ddust/bench/scripts/assembly.py` grows as kernels join it.
+- A kernel that divides only by constants is gated: `just bench-assembly`
+  refuses a division instruction or routine in it on either architecture, and
+  the gate's list in `crates/ddust/bench/scripts/assembly.py` grows as kernels
+  join it.
 - The bench crate's lints are the root's `[workspace.lints]`, copied, which
   `just check-bench-lints` holds equal.
 

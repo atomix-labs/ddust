@@ -206,8 +206,12 @@ def main():
     parser.add_argument("--subject", required=True, type=word, help="what the run measures, one word: baseline")
     parser.add_argument("--host", required=True, type=word, help="the machine, one word: graviton4, zen5, m4")
     parser.add_argument("--passes", default=2, type=at_least_one, help="how many passes: 2, or 5 where 2 disagree")
-    parser.add_argument("--purpose", default="every operation of ddust beside every contender, time and counters")
-    parser.add_argument("--cpu", default=12, type=int, help="the isolated logical CPU a pass runs on, on Linux")
+    parser.add_argument(
+        "--purpose",
+        default="every operation of ddust beside every contender, time and counters",
+        help="what the run is for, in a sentence, for its manifest; by default, every operation",
+    )
+    parser.add_argument("--cpu", default=12, type=int, help="the isolated logical CPU a pass runs on, on Linux; 12 by default")
     parser.add_argument("--filter", action="append", default=[], help="a word a measurement's name must hold")
     arguments = parser.parse_args()
 

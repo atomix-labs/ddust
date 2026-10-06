@@ -102,7 +102,9 @@ pub fn text(steps: i128, decimals: u8) -> String {
 #[must_use]
 pub fn parse(text: &str, decimals: u8) -> Option<i128> {
     let (mantissa, exponent) = match text.find(['e', 'E']) {
-        Some(at) => (text.get(..at)?, text.get(at.checked_add(1)?..)?.parse::<i64>().ok()?),
+        Some(index) => {
+            (text.get(..index)?, text.get(index.checked_add(1)?..)?.parse::<i64>().ok()?)
+        },
         None => (text, 0),
     };
     let (negative, unsigned) = mantissa.strip_prefix('-').map_or_else(
@@ -286,8 +288,8 @@ mod tests {
     #[test]
     fn a_double_converts_exactly_both_ways() {
         assert_eq!(to_f64(10_000_000, 8), 0.1, "0.1 is the nearest double to it");
-        // 0.1 is 0.1000000000000000055511151231257827…, below a tie at 17 decimals and above it at
-        // none.
+        // 0.1 is 0.1000000000000000055511151231257827…: truncated at 18 decimals, its digits end in
+        // 5.
         assert_eq!(
             from_f64(0.1, 18, Mode::Trunc),
             Some(100_000_000_000_000_005),

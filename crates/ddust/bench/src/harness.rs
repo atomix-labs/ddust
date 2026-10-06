@@ -131,8 +131,9 @@ impl Harness {
     }
 
     /// A harness set by the bench's arguments: any word a measurement's name must hold, `--quick`
-    /// for [`Config::QUICK`], and `--save <path>` for the file to write. Cargo's own `--bench` is
-    /// passed over.
+    /// for [`Config::QUICK`], and `--save <path>` for the file to write.
+    ///
+    /// Cargo's own `--bench` is passed over.
     ///
     /// # Errors
     /// When `--save` is the last argument, with no file named after it.

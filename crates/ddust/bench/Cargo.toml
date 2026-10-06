@@ -121,8 +121,8 @@ impl_trait_in_params              = "deny"
 
 # Each pinned to the version a run's manifest names: the contenders, and the counters' interfaces.
 [dependencies]
+# external
 bigdecimal                    = { version = "=0.4.11" }
-ddust                         = { path = ".." }
 decimal-rs                    = { version = "=0.2.0" }
 fastnum                       = { version = "=0.7.5" }
 fin_decimal                   = { version = "=0.4.0" }
@@ -133,15 +133,20 @@ nexus-decimal                 = { version = "=1.2.2" }
 num-bigint                    = { version = "0.4.6" }
 primitive_fixed_point_decimal = { version = "=1.5.0" }
 rust_decimal                  = { version = "=1.43.0", default-features = false }
+# internal
+ddust = { path = ".." }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# external
 perf-event2 = { version = "=0.7.4" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+# external
 darwin-kperf = { version = "=0.1.1", optional = true }
 
 # gungraun at the version of the runner bench.yml installs, which must match it.
 [dev-dependencies]
+# external
 gungraun = { version = "=0.20.0" }
 rstest   = { version = "0.27.0", default-features = false }
 

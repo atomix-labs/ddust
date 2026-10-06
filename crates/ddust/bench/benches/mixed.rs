@@ -1,6 +1,7 @@
 //! What a decimal's code costs the instruction cache: a sum, an order, a rounded product, a rounded
 //! quotient and a value to cents in turn over the same values, as a program mixes them, with the
 //! level 1 instruction cache's misses and the front end's stalls per operation beside the time.
+//!
 //! Every contender with all five runs: those with a rounding to cents, which the rest lack.
 //!
 //! ```text

@@ -1,8 +1,9 @@
 //! ddust's kernels under callgrind, through gungraun: each one's instructions, and its simulated
-//! caches and branches, over 4,096 values of the unpredictable sets. The counts are the same on any
-//! machine for one binary, so CI compares a change's with main's and fails one whose instructions
-//! rise by more than 1%. They weigh a division as an addition, so they are an alarm, not a speed:
-//! the speed is the harness's, on real counters.
+//! caches and branches, over 4,096 values of the unpredictable sets.
+//!
+//! The counts are the same on any machine for one binary, so CI compares a change's with main's
+//! and fails one whose instructions rise by more than 1%. They weigh a division as an addition, so
+//! they are an alarm, not a speed: the speed is the harness's, on real counters.
 //!
 //! ```text
 //! cargo bench --bench callgrind     # with valgrind, and gungraun-runner 0.20.0 installed
@@ -102,8 +103,10 @@ fn over_each<I, R>(operands: &[I], operation: impl FnMut(&I) -> R) -> Vec<R> {
     operands.iter().map(operation).collect()
 }
 
-/// Reads each text, out of line. A closure would do, but one written in a bench function is named
-/// inside it, and callgrind's count, which toggles on that name, would stop where it starts.
+/// Reads each text, out of line.
+///
+/// A closure would do, but one written in a bench function is named inside it, and callgrind's
+/// count, which toggles on that name, would stop where it starts.
 #[inline(never)]
 fn read<C: Parse>(texts: &[String]) -> Vec<Option<C::Value>> {
     texts.iter().map(|text| C::parse(text)).collect()

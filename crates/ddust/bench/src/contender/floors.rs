@@ -1,6 +1,7 @@
-//! The floors: the plain integer or float operation a decimal's is built on, the cost no decimal
-//! goes below. Each is the bare instruction's semantics, not a decimal's, so the oracle does not
-//! check them.
+//! The floors: the plain integer or float operation a decimal's is built on,
+//! the cost no decimal goes below.
+//!
+//! Each is the bare instruction's semantics, not a decimal's, so the oracle does not check them.
 
 #![expect(
     clippy::as_conversions,
