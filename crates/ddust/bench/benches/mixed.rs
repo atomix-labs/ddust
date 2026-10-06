@@ -20,7 +20,7 @@ trait Mix: CheckedAdd + Compare + MulRound + DivRound + RescaleRound {}
 impl<C: CheckedAdd + Compare + MulRound + DivRound + RescaleRound> Mix for C {}
 
 fn main() -> io::Result<()> {
-    let mut harness = Harness::from_args();
+    let mut harness = Harness::from_args()?;
     run(&mut harness)?;
     harness.finish()
 }

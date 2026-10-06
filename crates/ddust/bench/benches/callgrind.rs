@@ -130,7 +130,7 @@ fn written<C: Format>(values: &[C::Value]) -> Vec<usize> {
 
 /// A bench function `$name`: `$operation` of `$contender` over `$setup`'s values, out of line.
 ///
-/// Each bench function hands its predictability back, so gungraun drops them after the count stops:
+/// Each bench function hands its inputs back, so gungraun drops them after the count stops:
 /// dropped inside, freeing 4,096 strings would outweigh the parse it measures. gungraun's attribute
 /// takes no doc comment, so the bench functions carry plain comments.
 macro_rules! kernel {
@@ -138,22 +138,20 @@ macro_rules! kernel {
         #[library_benchmark]
         #[bench::values(setup = $setup::<$contender>)]
         fn $name(
-            (left, right): (
-                Vec<<$contender as Contender>::Value>,
-                Vec<<$contender as Contender>::Value>,
-            ),
-        ) -> usize {
-            black_box(over_pairs(&left, &right, $operation)).len()
+            pairs: (Vec<<$contender as Contender>::Value>, Vec<<$contender as Contender>::Value>),
+        ) -> (Vec<<$contender as Contender>::Value>, Vec<<$contender as Contender>::Value>) {
+            black_box(over_pairs(&pairs.0, &pairs.1, $operation));
+            pairs
         }
     };
     ($name:ident : $contender:ty,each $setup:ident, $operation:expr) => {
         #[library_benchmark]
         #[bench::values(setup = $setup::<$contender>)]
         fn $name(
-            predictability: Vec<<$contender as Contender>::Value>,
+            operands: Vec<<$contender as Contender>::Value>,
         ) -> Vec<<$contender as Contender>::Value> {
-            black_box(over_each(&predictability, $operation));
-            predictability
+            black_box(over_each(&operands, $operation));
+            operands
         }
     };
 }

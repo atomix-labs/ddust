@@ -20,7 +20,7 @@ use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::{Harness, for_each_contender};
 
 fn main() -> io::Result<()> {
-    let mut harness = Harness::from_args();
+    let mut harness = Harness::from_args()?;
     run(&mut harness)?;
     harness.finish()
 }
@@ -115,7 +115,7 @@ fn latency<C: Contender>(
     })
 }
 
-/// Times `operation` over each of the predictability `build` makes, unless the filters pass the
+/// Times `operation` over each of the operands `build` makes, unless the filters pass the
 /// name over, the results kept in a vector it reuses.
 fn each_one<I, R>(
     harness: &mut Harness, name: &str, build: impl FnOnce() -> Vec<I>,

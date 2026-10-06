@@ -133,19 +133,26 @@ impl Harness {
     /// A harness set by the bench's arguments: any word a measurement's name must hold, `--quick`
     /// for [`Config::QUICK`], and `--save <path>` for the file to write. Cargo's own `--bench` is
     /// passed over.
-    #[must_use]
-    pub fn from_args() -> Self {
+    ///
+    /// # Errors
+    /// When `--save` is the last argument, with no file named after it.
+    pub fn from_args() -> io::Result<Self> {
         let mut harness = Self::new(Config::STANDARD);
         let mut arguments = env::args().skip(1);
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
                 "--quick" => harness.config = Config::QUICK,
-                "--save" => harness.save_path = arguments.next().map(PathBuf::from),
+                "--save" => {
+                    let path = arguments
+                        .next()
+                        .ok_or_else(|| io::Error::other("--save names no file to write"))?;
+                    harness.save_path = Some(PathBuf::from(path));
+                },
                 "--bench" => {},
                 word => harness.filters.push(word.to_owned()),
             }
         }
-        harness
+        Ok(harness)
     }
 
     /// Whether a measurement named `name` runs: when it holds one of the filters, or there are
@@ -253,7 +260,7 @@ mod tests {
 
     #[test]
     fn a_figure_is_the_median_and_the_ends() {
-        let figure = Figure::of(&mut [4.0, 1.0, 3.0, 2.0]).expect("four values");
+        let figure = Figure::of(&mut [4.0, 1.0, 3.0, 2.0]).expect("four values have a median");
         assert_eq!(
             (figure.median, figure.low, figure.high),
             (2.5, 1.0, 4.0),
@@ -277,8 +284,9 @@ mod tests {
                     sum = black_box(sum.wrapping_add(value));
                 }
             })
-            .expect("the counters, or time alone");
-        let measurement = harness.measurements.first().expect("one measurement");
+            .expect("a set that cannot count is timed alone, never an error");
+        let measurement =
+            harness.measurements.first().expect("the filters are empty, so the measurement ran");
         assert!(measurement.nanoseconds.median > 0.0, "it took time");
         assert!(measurement.calls >= 1, "and was called");
     }

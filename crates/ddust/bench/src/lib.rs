@@ -1,5 +1,5 @@
 //! ddust's benchmarks: a harness that times an operation and counts the CPU's events while it runs,
-//! the predictability every contender reads, and the exact oracle each result is checked against.
+//! the inputs every contender reads, and the exact oracle each result is checked against.
 //!
 //! divan has no hardware counters, criterion takes one figure a pass, and gungraun counts a
 //! routine once, cold. This harness takes each operation in steady state, and reads time,
@@ -14,12 +14,14 @@
 //!
 //! # Examples
 //! ```
-//! use ddust_bench::{Config, Event, Harness};
+//! use core::hint::black_box;
+//!
+//! use ddust_bench::{Config, Harness};
 //!
 //! let mut harness = Harness::new(Config::QUICK);
 //! let values: Vec<u64> = (0..1024).collect();
 //! harness.measure("sum/example", 1024, || {
-//!     core::hint::black_box(core::hint::black_box(&values).iter().sum::<u64>());
+//!     black_box(black_box(&values).iter().sum::<u64>());
 //! })?;
 //! harness.finish()?;
 //! # Ok::<(), std::io::Error>(())
@@ -36,7 +38,7 @@ mod counter;
 mod harness;
 pub mod input;
 pub mod oracle;
-pub mod report;
+mod report;
 
 pub use counter::Event;
 pub use harness::{Config, Figure, Harness, Measurement};

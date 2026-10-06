@@ -2,9 +2,10 @@
 //! known at compile time.
 //!
 //! Its rounded product, quotient and rounding to cents take a mode, half to even among them. Its
-//! parser rounds a digit past the scale rather than refusing it, which the suite's texts, at the
-//! scale or under, never show. Its `to_f64` divides in floating point, and its `from_f64`
-//! multiplies in floating point and truncates, so neither is correctly rounded.
+//! parser rounds a digit past the scale rather than refusing it, so its row is marked as giving
+//! other results, though on the suite's texts, at the scale or under, it reads every one. Its
+//! `to_f64` divides in floating point, and its `from_f64` multiplies in floating point and
+//! truncates, so neither is correctly rounded.
 
 use fin_decimal::{AmountSign, Decimal, Decimal128, Rounding, str_i64};
 
@@ -87,8 +88,10 @@ macro_rules! fin_decimal {
             }
         }
 
-        /// `FromStr`, which rounds half up a digit past the scale.
+        /// `FromStr`, which rounds a digit past the scale half up, where the rest refuse it.
         impl Parse for $name {
+            const EXACT: bool = false;
+
             fn parse(text: &str) -> Option<Self::Value> {
                 text.parse().ok()
             }

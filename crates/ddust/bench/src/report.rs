@@ -14,7 +14,7 @@ const NAME_WIDTH: usize = 72;
 ///
 /// # Errors
 /// When `out` refuses the line.
-pub fn write_header<W: io::Write>(out: &mut W) -> io::Result<()> {
+pub(crate) fn write_header<W: io::Write>(out: &mut W) -> io::Result<()> {
     writeln!(
         out,
         "{:<NAME_WIDTH$} {:>9} {:>8} {:>8} {:>5} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>5} {:>6}",
@@ -39,7 +39,7 @@ pub fn write_header<W: io::Write>(out: &mut W) -> io::Result<()> {
 ///
 /// # Errors
 /// When `out` refuses the line.
-pub fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Result<()> {
+pub(crate) fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Result<()> {
     let median = |event| measurement.figure(event).map(|figure| figure.median);
     let cell = |value: Option<f64>, decimals: usize| {
         value.map_or_else(|| "n/a".to_owned(), |value| format!("{value:.decimals$}"))
@@ -74,7 +74,7 @@ pub fn write_row<W: io::Write>(out: &mut W, measurement: &Measurement) -> io::Re
 ///
 /// # Errors
 /// Never, writing to a `String`; the result is `fmt`'s.
-pub fn write_toml(
+pub(crate) fn write_toml(
     out: &mut String, backend: &str, config: &Config, measurements: &[Measurement],
 ) -> fmt::Result {
     writeln!(out, "backend = {}", quoted(backend))?;
@@ -138,19 +138,31 @@ mod tests {
     #[test]
     fn a_row_shows_what_was_counted_and_marks_the_rest() {
         let mut row = Vec::new();
-        write_row(&mut row, &measurement()).expect("a Vec takes the row");
-        let row = String::from_utf8(row).expect("ASCII");
-        assert!(row.starts_with("add/narrow/predictable/i64"), "{row}");
-        assert!(row.contains(" 3.000 ") && row.contains(" 2.00 "), "cycles, and IPC: {row}");
-        assert!(row.contains("n/a"), "what no set counted: {row}");
+        write_row(&mut row, &measurement()).expect("a Vec refuses no write");
+        let row = String::from_utf8(row).expect("the row is ASCII: digits, letters and spaces");
+        let cells =
+            ["1.0000", "3.000", "6.00", "2.00", "n/a", "n/a", "n/a", "n/a", "n/a", "n/a", "3.00"];
+        let [ns, cycles, instructions, ipc, branches, misses, l1i, l1d, front, back, clock] = cells;
+        let expected = format!(
+            "{:<72} {ns:>9} {cycles:>8} {instructions:>8} {ipc:>5} {branches:>8} {misses:>8} {l1i:>8} \
+             {l1d:>8} {front:>8} {back:>8} {clock:>5} {:>6}\n",
+            "add/narrow/predictable/i64", "0.0%",
+        );
+        assert_eq!(row, expected, "each figure in its column, n/a for what no set counted");
     }
 
     #[test]
     fn a_saved_run_holds_every_figure() {
         let mut text = String::new();
-        write_toml(&mut text, "none", &Config::QUICK, &[measurement()]).expect("a String takes it");
-        assert!(text.contains("[[measurement]]\nname = \"add/narrow/predictable/i64\""), "{text}");
-        assert!(text.contains("cycles = { median = 3, low = 3, high = 3 }"), "{text}");
+        write_toml(&mut text, "none", &Config::QUICK, &[measurement()])
+            .expect("a String refuses no write");
+        let expected = "backend = \"none\"\nwarm-up-ms = 1\nsample-us = 100\nsamples-per-set = 1\n\n\
+                        [[measurement]]\nname = \"add/narrow/predictable/i64\"\noperations = 1024\n\
+                        calls = 7\nmultiplexed-samples = 0\n\
+                        nanoseconds = { median = 1, low = 1, high = 1 }\n\
+                        cycles = { median = 3, low = 3, high = 3 }\n\
+                        instructions = { median = 6, low = 6, high = 6 }\n";
+        assert_eq!(text, expected, "every figure, in the order written");
     }
 
     #[test]

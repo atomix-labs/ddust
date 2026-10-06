@@ -185,6 +185,10 @@ mod tests {
                 tally.count(&got, &oracle::parse(&text, decimals), format_args!("{text:?}"));
             }
         }
+        // And one digit past the width's decimals, which a row refuses and never rounds.
+        let past = format!("0.{}1", "0".repeat(usize::from(decimals)));
+        let got = C::parse(&past).and_then(|value| C::to_steps(&value));
+        tally.count(&got, &oracle::parse(&past, decimals), format_args!("{past:?}"));
         tally.verdict("parse", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
     }
 
@@ -239,8 +243,10 @@ mod tests {
         for predictability in Predictability::ALL {
             let set = input::prices_and_quantities(predictability);
             for (&x, &y) in set.left.iter().zip(&set.right) {
-                let (price, quantity) =
-                    (C::price(x).expect("a price"), C::quantity(y).expect("a quantity"));
+                let (price, quantity) = (
+                    C::price(x).expect("every row holds a price below 100,000"),
+                    C::quantity(y).expect("every row holds a quantity below 100"),
+                );
                 let got = C::checked_mul(&price, &quantity)
                     .and_then(|product| C::product_steps(&product));
                 tally.count(&got, &oracle::mul_exact(x, y), format_args!("{x} × {y}"));

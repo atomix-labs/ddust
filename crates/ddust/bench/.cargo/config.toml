@@ -3,3 +3,8 @@
 # contender's code under its own name. Cargo joins these flags to the root's CPU floors.
 [target.'cfg(all())']
 rustflags = ["-C", "symbol-mangling-version=v0", "-Z", "merge-functions=disabled"]
+
+# The benches and tests built to abort on a panic, as the profile says and a user's release build
+# of ddust does; stable cargo builds every test and bench target to unwind, whatever the profile.
+[unstable]
+panic-abort-tests = true

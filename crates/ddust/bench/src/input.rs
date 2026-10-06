@@ -1,14 +1,13 @@
 //! The values every contender reads: drawn once from a fixed seed, as steps at the decimals a width
-//! carries, in two sets each operation is timed on.
+//! carries, predictable or not, each operation timed on both.
 //!
 //! - **Predictable**: one sign and one count of digits, 1,024 values, which stay in the level 1
 //!   cache: the best case of a branch on the value.
 //! - **Unpredictable**: random signs and counts of digits, 65,536 values, more than a branch
-//!   predictor learns; a Neoverse V2 learns 2,048 random branches perfectly, and misses half of
-//!   65,536.
+//!   predictor learns, so a branch on the value mispredicts as it would on a program's own.
 //!
-//! Each set's values are in a range every contender holds, and its results too: no row is timed on
-//! an overflow.
+//! The values are in a range every contender holds, and so are their results: no row is timed on an
+//! overflow.
 
 use crate::oracle;
 
@@ -72,7 +71,7 @@ impl Predictability {
         }
     }
 
-    /// How many values the set holds.
+    /// How many values it holds.
     #[must_use]
     pub const fn count(self) -> usize {
         match self {
@@ -306,8 +305,8 @@ mod tests {
                 }
                 let set = factors(width, predictability);
                 for (&a, &b) in set.left.iter().zip(&set.right) {
-                    let product =
-                        oracle::mul_round(a, b, decimals, Mode::HalfEven).expect("an i128");
+                    let product = oracle::mul_round(a, b, decimals, Mode::HalfEven)
+                        .expect("factors below 10^5 make a product an i128 holds");
                     assert!(product.abs() <= limit, "{a} × {b}");
                 }
                 let set = dividends_and_divisors(width, predictability);
@@ -316,8 +315,8 @@ mod tests {
                         b.unsigned_abs() >= 10_u128.pow(u32::from(decimals) - 3),
                         "a divisor of 0.001 or more: {b}"
                     );
-                    let quotient =
-                        oracle::div_round(a, b, decimals, Mode::HalfEven).expect("an i128");
+                    let quotient = oracle::div_round(a, b, decimals, Mode::HalfEven)
+                        .expect("a divisor of 0.001 or more keeps the quotient below 10^9");
                     assert!(quotient.abs() <= limit, "{a} / {b}");
                 }
             }
@@ -335,7 +334,7 @@ mod tests {
     #[test]
     fn a_text_and_a_double_are_of_the_set_values() {
         let texts = texts(Width::Narrow, Predictability::Predictable);
-        let first = texts.first().expect("a value");
+        let first = texts.first().expect("a predictable set holds 1,024 values");
         assert_eq!(
             oracle::parse(first, 8),
             addends(Width::Narrow, Predictability::Predictable).left.first().copied(),

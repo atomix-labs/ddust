@@ -5,8 +5,8 @@ use core::fmt;
 use std::io;
 use std::time::Instant;
 
-use darwin_kperf::Sampler;
 use darwin_kperf::event::Event as Kind;
+use darwin_kperf::{Sampler, SamplerError};
 
 use super::{Event, Sample};
 
@@ -63,7 +63,7 @@ impl Counters {
             }
             return Ok(Sample { elapsed: start.elapsed(), ..Sample::default() });
         };
-        let failed = |error: darwin_kperf::SamplerError| io::Error::other(error.to_string());
+        let failed = |error: SamplerError| io::Error::other(error.to_string());
         let mut thread = sampler.thread(KINDS).map_err(failed)?;
         thread.start().map_err(failed)?;
         let before = thread.sample().map_err(failed)?;

@@ -4,19 +4,20 @@
 use core::fmt;
 use core::time::Duration;
 
-#[cfg(all(target_os = "macos", feature = "kperf"))]
-mod kperf;
-#[cfg(not(any(target_os = "linux", all(target_os = "macos", feature = "kperf"))))]
-mod none;
-#[cfg(target_os = "linux")]
-mod perf;
-
-#[cfg(all(target_os = "macos", feature = "kperf"))]
-pub(crate) use kperf::Counters;
-#[cfg(not(any(target_os = "linux", all(target_os = "macos", feature = "kperf"))))]
-pub(crate) use none::Counters;
-#[cfg(target_os = "linux")]
-pub(crate) use perf::Counters;
+cfg_select! {
+    target_os = "linux" => {
+        mod perf;
+        pub(crate) use perf::Counters;
+    },
+    all(target_os = "macos", feature = "kperf") => {
+        mod kperf;
+        pub(crate) use kperf::Counters;
+    },
+    _ => {
+        mod none;
+        pub(crate) use none::Counters;
+    },
+}
 
 /// An event the CPU counts, named after perf's generic events, which each platform maps to its
 /// CPU's own.

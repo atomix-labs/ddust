@@ -6,7 +6,8 @@
 
 #![expect(
     clippy::arithmetic_side_effects,
-    reason = "a big integer's arithmetic, which neither overflows nor wraps"
+    reason = "a big integer's arithmetic, which neither overflows nor wraps; the machine integers' is \
+              checked"
 )]
 
 use core::cmp::Ordering;
@@ -76,9 +77,9 @@ pub fn div_round(a: i128, b: i128, decimals: u8, mode: Mode) -> Option<i128> {
 #[must_use]
 pub fn rescale_round(a: i128, from: u8, to: u8, mode: Mode) -> Option<i128> {
     match from.cmp(&to) {
-        Ordering::Greater => narrow(divide(&BigInt::from(a), &power(from - to), mode)),
+        Ordering::Greater => narrow(divide(&BigInt::from(a), &power(from.abs_diff(to)), mode)),
         Ordering::Equal => Some(a),
-        Ordering::Less => narrow(BigInt::from(a) * power(to - from)),
+        Ordering::Less => narrow(BigInt::from(a) * power(to.abs_diff(from))),
     }
 }
 
@@ -88,8 +89,8 @@ pub fn rescale_round(a: i128, from: u8, to: u8, mode: Mode) -> Option<i128> {
 pub fn text(steps: i128, decimals: u8) -> String {
     let digits = steps.unsigned_abs().to_string();
     let decimals = usize::from(decimals);
-    let padded = format!("{digits:0>width$}", width = decimals + 1);
-    let (whole, fraction) = padded.split_at(padded.len() - decimals);
+    let padded = format!("{digits:0>width$}", width = decimals.saturating_add(1));
+    let (whole, fraction) = padded.split_at(padded.len().saturating_sub(decimals));
     let fraction = fraction.trim_end_matches('0');
     let sign = if steps < 0 { "-" } else { "" };
     if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") }
@@ -101,7 +102,7 @@ pub fn text(steps: i128, decimals: u8) -> String {
 #[must_use]
 pub fn parse(text: &str, decimals: u8) -> Option<i128> {
     let (mantissa, exponent) = match text.find(['e', 'E']) {
-        Some(at) => (text.get(..at)?, text.get(at + 1..)?.parse::<i64>().ok()?),
+        Some(at) => (text.get(..at)?, text.get(at.checked_add(1)?..)?.parse::<i64>().ok()?),
         None => (text, 0),
     };
     let (negative, unsigned) = mantissa.strip_prefix('-').map_or_else(
@@ -113,15 +114,21 @@ pub fn parse(text: &str, decimals: u8) -> Option<i128> {
     if whole.is_empty() && fraction.is_empty() || !digit(whole) || !digit(fraction) {
         return None;
     }
-    // The digits are a whole number at `fraction.len() - exponent` decimals.
+    // The digits are a whole number at `fraction.len() - exponent` decimals, `shift` from the
+    // target.
     let digits: BigInt = format!("{whole}{fraction}").parse().ok()?;
     let digits = if negative { -digits } else { digits };
-    let scale = i64::try_from(fraction.len()).ok()? - exponent;
-    let target = i64::from(decimals);
-    let steps = if scale <= target {
-        digits * BigInt::from(10).pow(u32::try_from(target - scale).ok()?)
+    let scale = i64::try_from(fraction.len()).ok()?.checked_sub(exponent)?;
+    let shift = i64::from(decimals).checked_sub(scale)?;
+    // Past 80 places either way, a value that is not zero is past an `i128` or has a digit past
+    // `decimals`: so no power that large is built.
+    if shift.unsigned_abs() > 80 {
+        return (digits.sign() == Sign::NoSign).then_some(0);
+    }
+    let steps = if shift >= 0 {
+        digits * BigInt::from(10).pow(u32::try_from(shift).ok()?)
     } else {
-        let divisor = BigInt::from(10).pow(u32::try_from(scale - target).ok()?);
+        let divisor = BigInt::from(10).pow(u32::try_from(shift.unsigned_abs()).ok()?);
         if (&digits % &divisor).sign() != Sign::NoSign {
             return None;
         }
@@ -148,15 +155,18 @@ pub fn from_f64(x: f64, decimals: u8, mode: Mode) -> Option<i128> {
     let biased = i32::try_from((bits >> 52) & 0x7FF).ok()?;
     let fraction = bits & ((1 << 52) - 1);
     // x = significand · 2^exponent, the subnormals without the hidden bit.
-    let (significand, exponent) =
-        if biased == 0 { (fraction, -1074) } else { (fraction | (1 << 52), biased - 1075) };
+    let (significand, exponent) = if biased == 0 {
+        (fraction, -1074)
+    } else {
+        (fraction | (1 << 52), biased.checked_sub(1075)?)
+    };
     let signed =
         if x.is_sign_negative() { -BigInt::from(significand) } else { BigInt::from(significand) };
     let scaled = signed * power(decimals);
     let steps = if exponent >= 0 {
         scaled << usize::try_from(exponent).ok()?
     } else {
-        divide(&scaled, &(BigInt::from(1) << usize::try_from(-exponent).ok()?), mode)
+        divide(&scaled, &(BigInt::from(1) << usize::try_from(exponent.unsigned_abs()).ok()?), mode)
     };
     narrow(steps)
 }
@@ -222,7 +232,7 @@ mod tests {
     #[case::half_even(Mode::HalfEven, [1, 2, 3, -1, -2, -3])]
     fn every_mode_rounds_as_ecma_402_says(#[case] mode: Mode, #[case] expected: [i128; 6]) {
         let rounded = [14, 15, 26, -14, -15, -26]
-            .map(|tenths| rescale_round(tenths, 1, 0, mode).expect("in range"));
+            .map(|tenths| rescale_round(tenths, 1, 0, mode).expect("a tenth to a unit shrinks it"));
         assert_eq!(rounded, expected, "{mode:?}: 1.4, 1.5, 2.6, -1.4, -1.5, -2.6");
     }
 
@@ -264,6 +274,9 @@ mod tests {
     #[case::exponent("1e3", Some(100_000_000_000))]
     #[case::negative_exponent("-3.4E-7", Some(-34))]
     #[case::exponent_too_fine("1e-9", None)]
+    #[case::exponent_far_above("1e9223372036854775807", None)]
+    #[case::exponent_far_below("1e-4000000000", None)]
+    #[case::zero_far_below("0e-4000000000", Some(0))]
     #[case::empty("", None)]
     #[case::lone_point(".", None)]
     fn text_reads_exactly_or_not_at_all(#[case] written: &str, #[case] steps: Option<i128>) {
