@@ -3,12 +3,14 @@ on one isolated CPU, with a manifest of the machine, the toolchain and the conte
 
 Usage: run.py --pr <n> --subject <word> --host <word> [--passes <n>] [--purpose <text>] [--cpu <cpu>]
               [--filter <word>]...
+       run.py --summarize <run directory>
 
 The run is `results/<UTC time>-pr<n>-<subject>-<host>/`: `ops-1.txt`, `ops-2.txt` and so on, the table
 each pass printed; `ops-1.toml` and the rest, every figure; the same for `mixed`; `assembly.txt`, each
-probe's instructions; and `manifest.toml`. A figure whose passes disagree, by more than 2% in time
-or cycles or 0.5% in instructions, is named at the end: such a run is taken again with five passes,
-and the book cites the median of their medians, with their range.
+probe's instructions; `manifest.toml`; and `summary.toml`, each figure's median of the passes'
+medians, with their lowest and highest, which the book cites. A figure whose passes disagree, by
+more than 2% in time or cycles or 0.5% in instructions, is named at the end: a run of fewer than
+five passes is then taken again with five.
 
 On Linux each pass runs under `taskset` on `--cpu`, an isolated logical CPU. macOS pins nothing: run on mains
 power with nothing else open, and as root for the counters, built with `--features kperf`.
@@ -200,7 +202,32 @@ def at_least_one(text):
     return count
 
 
+def summarize(directory, passes):
+    """Writes `summary.toml`: for each measurement and figure, the median of the passes' medians,
+    and the lowest and highest of them."""
+    lines = [f"passes = {passes}"]
+    for bench in BENCHES:
+        runs = [
+            {entry["name"]: entry for entry in tomllib.loads(path.read_text()).get("measurement", [])}
+            for path in (directory / f"{bench}-{number}.toml" for number in range(1, passes + 1))
+        ]
+        for name, entry in runs[0].items():
+            lines += ["", "[[measurement]]", f"name = {toml_string(name)}"]
+            for figure in (key for key, value in entry.items() if isinstance(value, dict)):
+                medians = sorted(run[name][figure]["median"] for run in runs if name in run and figure in run[name])
+                middle = len(medians) // 2
+                median = medians[middle] if len(medians) % 2 else (medians[middle - 1] + medians[middle]) / 2
+                lines.append(f"{figure} = {{ median = {median}, low = {medians[0]}, high = {medians[-1]} }}")
+    (directory / "summary.toml").write_text("\n".join(lines) + "\n")
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--summarize":
+        directory = pathlib.Path(sys.argv[2]).resolve()
+        passes = tomllib.loads((directory / "manifest.toml").read_text())["parameters"]["passes"]
+        summarize(directory, passes)
+        print(f"summary: {directory / 'summary.toml'}")
+        return 0
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--pr", required=True, type=int, help="the pull request the run belongs to")
     parser.add_argument("--subject", required=True, type=word, help="what the run measures, one word: baseline")
@@ -234,13 +261,17 @@ def main():
     (directory / "manifest.toml").write_text(
         manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes)
     )
+    summarize(directory, arguments.passes)
     found = disagreements(directory, arguments.passes)
     print(f"run: {directory.relative_to(HERE)}")
     for disagreement in found:
         print(f"passes disagree: {disagreement}")
+    if found and arguments.passes < 5:
+        print(f"{len(found)} figure(s) disagree: take the run again with --passes 5")
+        return 1
     if found:
-        print(f"{len(found)} figure(s) disagree: take the run again with --passes 5, unless it had five")
-    return 1 if found else 0
+        print(f"{len(found)} figure(s) spread past their agreement across five passes: the summary's range shows each")
+    return 0
 
 
 if __name__ == "__main__":
