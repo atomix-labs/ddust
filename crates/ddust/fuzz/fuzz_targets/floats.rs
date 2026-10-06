@@ -7,9 +7,9 @@ use ddust::round::Rounding;
 use ddust::{D64, Decimal, Dynamic, Fixed};
 use libfuzzer_sys::fuzz_target;
 
-fuzz_target!(|input: (u64, i64, u8)| {
+fuzz_target!(|input: (u64, i128, u8)| {
     let (bits, steps, decimals) = input;
-    let decimals = decimals % 19;
+    let decimals = decimals % 39;
     // A decimal to its nearest double, as core reads its text.
     let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
     let text: f64 = format!("{steps}e-{decimals}").parse().expect("a number");

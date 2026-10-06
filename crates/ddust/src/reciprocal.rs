@@ -1,9 +1,11 @@
-//! Division by a power of ten through its reciprocal.
+//! Division through a reciprocal: by a power of ten, by a power of five, and by a divisor known
+//! only at run time.
 //!
 //! A two-word numerator over a one-word power of ten is one Möller–Granlund step: two multiplies
 //! and a correction, where `u128 / u128` is a library call on aarch64 and a long division in
-//! software. Each power from `10^0` to `10^19` has its reciprocal in [`RECIPROCALS`], which the
-//! compiler computes from its `const fn`; nothing is computed at run time.
+//! software. Each power from `10^0` to `10^19` has its reciprocal in [`RECIPROCALS`], and each
+//! power of five a double's conversion divides by in [`FIVES`], which the compiler computes from
+//! their `const fn`s; nothing about a constant is computed at run time.
 //!
 //! The step's precondition, that the numerator's high word is below the divisor, is the test that
 //! the quotient fits one word: a quotient past it is past the integer the result goes into, and
@@ -144,7 +146,7 @@ const fn reciprocal(k: u8) -> Option<Reciprocal> {
 }
 
 // Division by a value known only at run time: its reciprocal computed with no division, for a
-// divisor used twice or more, and libdivide's `divllu` on aarch64 for a word used once.
+// divisor used twice, and `u128`'s division for a word used once.
 
 /// `⌊(2^19 − 3 · 2^8) / d9⌋` for each value `d9` of a normalized divisor's top nine bits, `256` to
 /// `511`: the first estimate of its reciprocal (Möller and Granlund, algorithm 2).
@@ -316,6 +318,74 @@ pub(crate) const fn divide_u128_by_u64(numerator: u128, divisor: u64) -> Option<
         },
         None => None,
     }
+}
+
+/// `5^d`, shifted until its top bit is set, as a divisor of two words, with its reciprocal and its
+/// width in bits. A power that fits a word is its high word alone, whose reciprocal by algorithm 6
+/// is the word's own.
+#[derive(Clone, Copy, Debug)]
+struct Five {
+    /// The shifted power's high word.
+    high: u64,
+    /// Its low word, zero for a power that fits a word.
+    low: u64,
+    /// Its reciprocal, as [`reciprocal_two_words`] defines it.
+    inverse: u64,
+    /// The power's width in bits, before it was shifted.
+    bits: u32,
+}
+
+/// `5^d` for `d` in `0..=38`, every power a decimal's scale divides a double by.
+#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
+const FIVES: [Five; 39] = {
+    let mut table = [Five { high: 0, low: 0, inverse: 0, bits: 0 }; 39];
+    let mut d = 0;
+    let mut power = 1_u128;
+    while d < table.len() {
+        let shift = power.leading_zeros();
+        let shifted = power << shift;
+        let (high, low) = (high(shifted), low(shifted));
+        let inverse = reciprocal_two_words(high, low);
+        table[d] = Five { high, low, inverse, bits: 128_u32.wrapping_sub(shift) };
+        // At most 5^39 is formed after the last entry, below 2^91.
+        power = power.wrapping_mul(5);
+        d += 1;
+    }
+    table
+};
+
+/// `⌊magnitude · 2^s / 5^d⌋` for the `s` that puts it in `[2^62, 2^64)`, with `s`, and whether the
+/// division left a remainder; or `None` past 38. The magnitude is not zero.
+///
+/// Shifted until its top bit is bit 126, the magnitude over the power shifted until its top bit is
+/// set is that quotient, for `s = 63 + bits(5^d) − bits(magnitude)`: one 2-by-1 step for a power
+/// that fits a word, and one 3-by-2 step, on the magnitude shifted a word further, for one that
+/// does not.
+#[inline]
+#[expect(clippy::indexing_slicing, reason = "checked against the table's length first")]
+pub(crate) const fn quotient_by_pow5(magnitude: u128, d: u8) -> Option<(u64, i32, bool)> {
+    let d = usize::from(d);
+    if d >= FIVES.len() {
+        return None;
+    }
+    let five = FIVES[d];
+    let bits = 128_u32.wrapping_sub(magnitude.leading_zeros());
+    // A magnitude of all 128 bits is shifted right instead, and loses its lowest.
+    let (shifted, lost) = if bits == 128 {
+        (magnitude >> 1, magnitude & 1 == 1)
+    } else {
+        (magnitude << 127_u32.wrapping_sub(bits), false)
+    };
+    let (quotient, remainder) = if five.low == 0 {
+        let (quotient, remainder) =
+            divide_two_by_one(high(shifted), low(shifted), five.high, five.inverse);
+        (quotient, u128_of(remainder))
+    } else {
+        divide_three_by_two(high(shifted), low(shifted), 0, five.high, five.low, five.inverse)
+    };
+    // Both widths are at most 128, so the shift is within ±128.
+    let shift = 63_i32.wrapping_add_unsigned(five.bits).wrapping_sub_unsigned(bits);
+    Some((quotient, shift, remainder != 0 || lost))
 }
 
 #[cfg(test)]
