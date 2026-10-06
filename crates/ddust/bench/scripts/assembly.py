@@ -37,8 +37,8 @@ COLD = re.compile(
     r"^(core::panicking::|core::option::(unwrap|expect)_failed|core::result::unwrap_failed|"
     r"core::slice::index::|core::str::slice_error_fail|alloc::alloc::handle_alloc_error|"
     r"alloc::raw_vec::handle_error|std::panicking::|rust_begin_unwind|"
-    r"ddust::word::divide_pow10_past_a_word|ddust::word::divide_pow10_by_long_division|"
-    r"ddust::word::divide_past_a_word|ddust::kernel::divide_past_38)"
+    r"ddust::word::divide_pow10_by_long_division|ddust::word::divide_past_a_word|"
+    r"ddust::kernel::divide_past_38)"
 )
 
 

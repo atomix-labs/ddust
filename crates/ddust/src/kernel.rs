@@ -38,9 +38,9 @@ const fn settle<D: [const] Word>(quotient: D, class: u32, negative: bool, table:
     if (table >> index) & 1 == 1 { quotient.wrapping_add(D::ONE) } else { quotient }
 }
 
-/// `numerator / 10^k` and the class of what it leaves, or `None` when the power is past the word.
-/// In the widest word a power past it is past every numerator too, and past twice any: the
-/// quotient is zero and the remainder below half.
+/// `numerator / 10^k` and the class of what it leaves, or `None` when the word leaves it to a
+/// wider one, as [`Word::divide_pow10`] says. In the widest word a power past it is past every
+/// numerator too, and past twice any: the quotient is zero and the remainder below half.
 #[inline(always)]
 #[expect(
     clippy::inline_always,
@@ -72,7 +72,7 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
 }
 
 /// `a / 10^k`, rounded by `table`, and whether nothing was rounded away. The quotient of a value
-/// fits its own word, which divides it; only a power past that word takes the double.
+/// fits its own word, which divides it; only what that word leaves to the double takes it.
 #[inline]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
