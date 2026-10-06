@@ -623,10 +623,17 @@ const impl Word for U256 {
         rounded(quotient, remainder, divisor, negative, table)
     }
 
-    // Two Möller–Granlund steps for every quotient that fits 128 bits, where the long division
-    // calls the library three times.
+    // One Möller–Granlund step for a value with no high word whose quotient fits a word, and two
+    // for every other quotient that fits 128 bits, where the long division calls the library three
+    // times.
     #[inline]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
+        if self.high == 0
+            && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
+        {
+            let quotient = rounded(u128::from(quotient), remainder, divisor, negative, table);
+            return Some((Self::from_u128(quotient), remainder == 0));
+        }
         match reciprocal::divide_u256(self.high, self.low, k) {
             Some((quotient, remainder, divisor)) => {
                 let quotient =
