@@ -33,7 +33,8 @@ primitive_fixed_point_decimal = { version = "=1.5.0" }
 rust_decimal                  = { version = "=1.43.0", default-features = false }
 
 [dev-dependencies]
-rstest = { version = "0.27.0", default-features = false }
+gungraun = { version = "0.20.0" }
+rstest   = { version = "0.27.0", default-features = false }
 
 [[bench]]
 name    = "ops"
@@ -41,6 +42,10 @@ harness = false
 
 [[bench]]
 name    = "mixed"
+harness = false
+
+[[bench]]
+name    = "callgrind"
 harness = false
 
 [target.'cfg(target_os = "linux")'.dependencies]
