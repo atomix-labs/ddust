@@ -364,8 +364,8 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
     }
 }
 
-/// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when its
-/// result outgrows that. `None` only when it outgrows even a `U256`. A double that is the `U256`
+/// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when that word
+/// returns `None`. `None` only when the result outgrows even a `U256`. A double that is the `U256`
 /// is not run again: a second call of the same kernel would keep it out of line.
 macro_rules! exact {
     ($i:ty, $kernel:ident($($argument:expr),* $(,)?)) => {
@@ -445,7 +445,7 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
         power = power.wrapping_mul(10);
         left = left.wrapping_sub(1);
     }
-    let low = I::Unsigned::truncate(a.to_u128().wrapping_mul(b.to_u128()).wrapping_mul(power));
+    let low = I::Unsigned::low_bits(a.to_u128().wrapping_mul(b.to_u128()).wrapping_mul(power));
     Outcome { wrapped: I::wrapping_join(negative, low), overflowed: true, negative }
 }
 
@@ -660,9 +660,9 @@ macro_rules! signed {
 
             #[inline]
             fn join(negative: bool, magnitude: $unsigned) -> Option<Self> {
-                // MIN's magnitude is MAX's and one. Up to a word, one comparison and a select,
-                // where a branch on the sign is mispredicted as often as the signs are mixed; past
-                // it the branch, whose two-word select measured slower on Graviton4.
+                // MIN's magnitude is MAX's and one. Up to a word, one comparison and a select, where
+                // a branch on the sign is mispredicted as often as the signs are mixed; past it the
+                // branch, which spares every value of a predicted sign a select of two words.
                 if <$t>::BITS <= 64 {
                     let limit = <$t>::MAX.cast_unsigned().wrapping_add(<$unsigned>::from(negative));
                     return if magnitude <= limit {

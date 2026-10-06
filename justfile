@@ -18,8 +18,8 @@ bench-run pr subject host *options:
     cd crates/ddust/bench && pr="$1" subject="$2" host="$3" && shift 3 && mise exec -- python3 scripts/run.py --pr "$pr" --subject "$subject" --host "$host" "$@"
 
 # Builds the bench's probe, prints each kernel's instructions with those of every function it calls,
-# and holds ddust's kernels to dividing by constants alone. The recipes export `CARGO_BUILD_TARGET`,
-# so cargo builds the probe under the target's own directory.
+# and holds ddust's kernels to dividing by constants alone. `.just/rust-toolchain.just` exports
+# `CARGO_BUILD_TARGET`, so cargo builds the probe under the target's own directory.
 bench-assembly:
     cd crates/ddust/bench && mise exec -- cargo build --locked --profile bench --example probe
     cd crates/ddust/bench && mise exec -- python3 scripts/assembly.py sizes "target/$CARGO_BUILD_TARGET/release/examples/probe"

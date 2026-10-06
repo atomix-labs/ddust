@@ -147,7 +147,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use crate::round::{Ceil, Floor, HalfEven, Trunc};
+    use crate::round::{Ceil, Floor, HalfEven, Rounding, Trunc};
     use crate::{D64, D128, Decimal, Dynamic, Fixed};
 
     proptest! {
@@ -173,6 +173,26 @@ mod tests {
         }
 
         #[test]
+        fn a_double_at_a_fine_scale_converts_from_its_exact_value(x in -1.0_f64..1.0, decimals in 28_u8..=38) {
+            // Past 27 decimals 5^d takes two words, and the product a U256. The double's exact
+            // expansion, cut at the scale: Trunc keeps the digits before the cut, and Expand adds a
+            // step away from zero when any after it is not zero.
+            let exact = format!("{x:.1100}");
+            let (whole, fraction) = exact.split_once('.').expect("a point");
+            let (kept, cut) = fraction.split_at(usize::from(decimals));
+            let truncated: i128 = format!("{whole}{kept}").parse().expect("at most 39 digits");
+            let expanded = match (cut.bytes().any(|digit| digit != b'0'), x < 0.0) {
+                (false, _) => truncated,
+                (true, false) => truncated.checked_add(1).expect("below 10^38"),
+                (true, true) => truncated.checked_sub(1).expect("above -10^38"),
+            };
+            let scale = Dynamic::new(decimals).expect("at most 38");
+            let steps = |mode: Rounding| Decimal::<i128, Dynamic>::from_f64(x, scale, mode).map(Decimal::steps);
+            prop_assert_eq!(steps(Rounding::Trunc), Some(truncated));
+            prop_assert_eq!(steps(Rounding::Expand), Some(expanded));
+        }
+
+        #[test]
         fn a_double_converts_to_its_nearest_decimal(x in -9e11_f64..9e11) {
             // The double's exact value, through its full decimal expansion, truncated at 7 and
             // compared: Trunc must agree with the expansion's first seven decimals.
@@ -191,13 +211,31 @@ mod tests {
             let (power, scale) = (5_i128.pow(u32::from(k)), Dynamic::new(k).expect("at most 38"));
             let below = 9_007_199_254_740_992.0 / f64::from(1_u32 << k);
             let above = 9_007_199_254_740_996.0 / f64::from(1_u32 << k);
-            assert_eq!(Decimal::from_steps(((1 << 53) + 1) * power, scale).to_f64(), below, "{k}");
-            assert_eq!(Decimal::from_steps(((1 << 53) + 3) * power, scale).to_f64(), above, "{k}");
+            assert_eq!(
+                Decimal::from_steps(((1 << 53) + 1) * power, scale).to_f64(),
+                below,
+                "(2^53 + 1) / 2^{k}, down to the even"
+            );
+            assert_eq!(
+                Decimal::from_steps(((1 << 53) + 3) * power, scale).to_f64(),
+                above,
+                "(2^53 + 3) / 2^{k}, up to the even"
+            );
         }
+    }
+
+    #[test]
+    fn a_decimal_at_either_end_of_the_widest_range_converts() {
         let least = D128::<0>::from_steps(i128::MIN, Fixed).to_f64();
         assert_eq!(least, -(2.0_f64.powi(127)), "all 128 bits");
         let text: f64 = "170141183460469231731687303715884105727e-38".parse().expect("a number");
         assert_eq!(D128::<38>::from_steps(i128::MAX, Fixed).to_f64(), text, "the widest power");
+    }
+
+    #[test]
+    fn a_double_past_128_bits_is_refused() {
+        assert_eq!(D128::<2>::from_f64(1e300, Fixed, Trunc), None, "a power of five in one word");
+        assert_eq!(D128::<30>::from_f64(1e300, Fixed, Trunc), None, "and in two");
     }
 
     #[test]

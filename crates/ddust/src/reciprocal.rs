@@ -11,6 +11,8 @@
 //! the quotient fits one word: a quotient past it is past the integer the result goes into, and
 //! takes the plain division, off the hot path.
 
+use crate::word::{Narrow, POW5};
+
 /// A one-word divisor, shifted until its top bit is set, with its reciprocal.
 #[derive(Clone, Copy, Debug)]
 struct Reciprocal {
@@ -28,11 +30,11 @@ impl Reciprocal {
         let shift = divisor.leading_zeros();
         let divisor = divisor << shift;
         // A divisor whose top bit is set puts (2^128 − 1) / divisor in [2^64, 2^65).
-        let quotient = match u128::MAX.checked_div(u128_of(divisor)) {
+        let quotient = match u128::MAX.checked_div(u128::from(divisor)) {
             Some(quotient) => quotient,
             None => 0,
         };
-        Self { divisor, inverse: low(quotient), shift }
+        Self { divisor, inverse: u64::low_bits(quotient), shift }
     }
 }
 
@@ -51,23 +53,9 @@ const RECIPROCALS: [Reciprocal; 20] = {
     table
 };
 
-/// `value` as a `u128`.
-const fn u128_of(value: u64) -> u128 {
-    u128::from(value)
-}
-
-/// The low word of `value`.
-const fn low(value: u128) -> u64 {
-    // The masked value always fits: the conversion is the truncation, spelled exactly.
-    match u64::try_from(value & u128::from(u64::MAX)) {
-        Ok(low) => low,
-        Err(_out_of_range) => 0,
-    }
-}
-
 /// The high word of `value`.
 const fn high(value: u128) -> u64 {
-    low(value >> 64)
+    u64::low_bits(value >> 64)
 }
 
 /// `(u1:u0) / divisor` and the remainder, for a `divisor` whose top bit is set and `u1 < divisor`,
@@ -75,9 +63,10 @@ const fn high(value: u128) -> u64 {
 /// algorithm 4).
 #[inline]
 const fn divide_two_by_one(u1: u64, u0: u64, divisor: u64, inverse: u64) -> (u64, u64) {
-    let estimate =
-        u128_of(inverse).wrapping_mul(u128_of(u1)).wrapping_add((u128_of(u1) << 64) | u128_of(u0));
-    let (q1, q0) = (high(estimate).wrapping_add(1), low(estimate));
+    let estimate = u128::from(inverse)
+        .wrapping_mul(u128::from(u1))
+        .wrapping_add((u128::from(u1) << 64) | u128::from(u0));
+    let (q1, q0) = (high(estimate).wrapping_add(1), u64::low_bits(estimate));
     let remainder = u0.wrapping_sub(q1.wrapping_mul(divisor));
     // Taken about half the time, so a select rather than a branch.
     let over = remainder > q0;
@@ -96,7 +85,7 @@ const fn divide_two_by_one(u1: u64, u0: u64, divisor: u64, inverse: u64) -> (u64
 #[inline]
 pub(crate) const fn divide_u128(numerator: u128, k: u8) -> Option<(u64, u64, u64)> {
     let Some(Reciprocal { divisor, inverse, shift }) = reciprocal(k) else { return None };
-    let (n1, n0) = (high(numerator), low(numerator));
+    let (n1, n0) = (high(numerator), u64::low_bits(numerator));
     // The shifted divisor is below 2^64, and n1 below it before the shift exactly when after it.
     if n1 >= divisor >> shift {
         return None;
@@ -115,26 +104,22 @@ pub(crate) const fn divide_u256(
     let Some(Reciprocal { divisor, inverse, shift }) = reciprocal(k) else { return None };
     // The quotient fits 128 bits exactly when the high half is below the power, which then fits
     // one word.
-    if high_half >= u128_of(divisor >> shift) {
+    if high_half >= u128::from(divisor >> shift) {
         return None;
     }
-    let (n2, n1, n0) = (low(high_half), high(low_half), low(low_half));
+    let (n2, n1, n0) = (u64::low_bits(high_half), high(low_half), u64::low_bits(low_half));
     // The three live words, shifted as one number: each takes the bits the next one shifts out.
     let (u2, _) = shifted(n2, n1, shift);
     let (u1, u0) = shifted(n1, n0, shift);
     let (q1, partial) = divide_two_by_one(u2, u1, divisor, inverse);
     let (q0, remainder) = divide_two_by_one(partial, u0, divisor, inverse);
-    Some(((u128_of(q1) << 64) | u128_of(q0), remainder >> shift, divisor >> shift))
+    Some(((u128::from(q1) << 64) | u128::from(q0), remainder >> shift, divisor >> shift))
 }
 
 /// `(n1:n0) << shift`, its two words, for a `shift` below 64.
 #[inline]
 const fn shifted(n1: u64, n0: u64, shift: u32) -> (u64, u64) {
-    if shift == 0 {
-        (n1, n0)
-    } else {
-        ((n1 << shift) | (n0 >> 64_u32.wrapping_sub(shift)), n0 << shift)
-    }
+    ((n1 << shift) | n0.unbounded_shr(64_u32.wrapping_sub(shift)), n0 << shift)
 }
 
 /// The reciprocal of `10^k`, or `None` past one word.
@@ -181,12 +166,15 @@ const fn reciprocal_word(divisor: u64) -> u64 {
     let v0 = u64::from(FIRST_ESTIMATE[usize_from(d9.wrapping_sub(256) & 0xFF)]);
     let v1 = (v0 << 11).wrapping_sub(v0.wrapping_mul(v0).wrapping_mul(d40) >> 40).wrapping_sub(1);
     let correction =
-        u128_of(v1).wrapping_mul(u128_of((1_u64 << 60).wrapping_sub(v1.wrapping_mul(d40))));
-    let v2 = (v1 << 13).wrapping_add(low(correction >> 47));
-    let e = low(u128_of((v2 >> 1) & 0_u64.wrapping_sub(d0))
-        .wrapping_sub(u128_of(v2).wrapping_mul(u128_of(d63))));
-    let v3 = (v2 << 31).wrapping_add(low(u128_of(v2).wrapping_mul(u128_of(e)) >> 65));
-    let t = u128_of(v3).wrapping_mul(u128_of(divisor)).wrapping_add(u128_of(divisor));
+        u128::from(v1).wrapping_mul(u128::from((1_u64 << 60).wrapping_sub(v1.wrapping_mul(d40))));
+    let v2 = (v1 << 13).wrapping_add(u64::low_bits(correction >> 47));
+    let e = u64::low_bits(
+        u128::from((v2 >> 1) & 0_u64.wrapping_sub(d0))
+            .wrapping_sub(u128::from(v2).wrapping_mul(u128::from(d63))),
+    );
+    let v3 =
+        (v2 << 31).wrapping_add(u64::low_bits(u128::from(v2).wrapping_mul(u128::from(e)) >> 65));
+    let t = u128::from(v3).wrapping_mul(u128::from(divisor)).wrapping_add(u128::from(divisor));
     v3.wrapping_sub(high(t).wrapping_add(divisor))
 }
 
@@ -230,11 +218,13 @@ const fn reciprocal_two_words(d1: u64, d0: u64) -> u64 {
         }
         p = p.wrapping_sub(d1);
     }
-    let t = u128_of(inverse).wrapping_mul(u128_of(d0));
+    let t = u128::from(inverse).wrapping_mul(u128::from(d0));
     p = p.wrapping_add(high(t));
     if p < high(t) {
         inverse = inverse.wrapping_sub(1);
-        if ((u128_of(p) << 64) | u128_of(low(t))) >= ((u128_of(d1) << 64) | u128_of(d0)) {
+        if ((u128::from(p) << 64) | u128::from(u64::low_bits(t)))
+            >= ((u128::from(d1) << 64) | u128::from(d0))
+        {
             inverse = inverse.wrapping_sub(1);
         }
     }
@@ -247,13 +237,14 @@ const fn reciprocal_two_words(d1: u64, d0: u64) -> u64 {
 const fn divide_three_by_two(
     u2: u64, u1: u64, u0: u64, d1: u64, d0: u64, inverse: u64,
 ) -> (u64, u128) {
-    let estimate =
-        u128_of(inverse).wrapping_mul(u128_of(u2)).wrapping_add((u128_of(u2) << 64) | u128_of(u1));
-    let (q1, q0) = (high(estimate), low(estimate));
+    let estimate = u128::from(inverse)
+        .wrapping_mul(u128::from(u2))
+        .wrapping_add((u128::from(u2) << 64) | u128::from(u1));
+    let (q1, q0) = (high(estimate), u64::low_bits(estimate));
     let r1 = u1.wrapping_sub(q1.wrapping_mul(d1));
-    let divisor = (u128_of(d1) << 64) | u128_of(d0);
-    let remainder = ((u128_of(r1) << 64) | u128_of(u0))
-        .wrapping_sub(u128_of(d0).wrapping_mul(u128_of(q1)))
+    let divisor = (u128::from(d1) << 64) | u128::from(d0);
+    let remainder = ((u128::from(r1) << 64) | u128::from(u0))
+        .wrapping_sub(u128::from(d0).wrapping_mul(u128::from(q1)))
         .wrapping_sub(divisor);
     let q1 = q1.wrapping_add(1);
     // Taken about half the time, so a select rather than a branch.
@@ -281,40 +272,43 @@ pub(crate) const fn divide_u256_by_u128(
     if let Ok(word) = u64::try_from(divisor) {
         // high_half < divisor < 2^64: three live words.
         let reciprocal = Reciprocal::of(word);
-        let (q1, partial) = reciprocal.divide(low(high_half), high(low_half));
-        let (q0, remainder) = reciprocal.divide(partial, low(low_half));
-        return Some(((u128_of(q1) << 64) | u128_of(q0), u128_of(remainder)));
+        let (q1, partial) = reciprocal.divide(u64::low_bits(high_half), high(low_half));
+        let (q0, remainder) = reciprocal.divide(partial, u64::low_bits(low_half));
+        return Some(((u128::from(q1) << 64) | u128::from(q0), u128::from(remainder)));
     }
     let shift = divisor.leading_zeros();
     let divisor = divisor << shift;
-    let (n_high, n_low) = if shift == 0 {
-        (high_half, low_half)
-    } else {
-        ((high_half << shift) | (low_half >> 128_u32.wrapping_sub(shift)), low_half << shift)
-    };
-    let (d1, d0) = (high(divisor), low(divisor));
+    let n_high = (high_half << shift) | low_half.unbounded_shr(128_u32.wrapping_sub(shift));
+    let n_low = low_half << shift;
+    let (d1, d0) = (high(divisor), u64::low_bits(divisor));
     let inverse = reciprocal_two_words(d1, d0);
     let (q1, partial) =
-        divide_three_by_two(high(n_high), low(n_high), high(n_low), d1, d0, inverse);
-    let (q0, remainder) =
-        divide_three_by_two(high(partial), low(partial), low(n_low), d1, d0, inverse);
-    Some(((u128_of(q1) << 64) | u128_of(q0), remainder >> shift))
+        divide_three_by_two(high(n_high), u64::low_bits(n_high), high(n_low), d1, d0, inverse);
+    let (q0, remainder) = divide_three_by_two(
+        high(partial),
+        u64::low_bits(partial),
+        u64::low_bits(n_low),
+        d1,
+        d0,
+        inverse,
+    );
+    Some(((u128::from(q1) << 64) | u128::from(q0), remainder >> shift))
 }
 
 /// `numerator / divisor` and the remainder, or `None` unless the numerator's high word is below
-/// the divisor, so the quotient fits one word, and the remainder is what its product leaves of the
-/// numerator's low word. The division is `u128`'s: on `x86_64` one `div`, and on aarch64
-/// compiler-builtins' trifecta, which measured faster there than libdivide's `divllu` or a
-/// reciprocal computed at run time.
+/// the divisor, so the quotient fits one word. The remainder is then what the quotient's product
+/// leaves of the numerator's low word. The division is `u128`'s, a call to compiler-builtins: on
+/// `x86_64` it ends in one `div`, and on aarch64 it takes one hardware division for a quotient of
+/// 32 bits or fewer.
 #[inline]
 pub(crate) const fn divide_u128_by_u64(numerator: u128, divisor: u64) -> Option<(u64, u64)> {
     if high(numerator) >= divisor {
         return None;
     }
-    match numerator.checked_div(u128_of(divisor)) {
+    match numerator.checked_div(u128::from(divisor)) {
         Some(quotient) => {
-            let quotient = low(quotient);
-            Some((quotient, low(numerator).wrapping_sub(quotient.wrapping_mul(divisor))))
+            let quotient = u64::low_bits(quotient);
+            Some((quotient, u64::low_bits(numerator).wrapping_sub(quotient.wrapping_mul(divisor))))
         },
         None => None,
     }
@@ -340,15 +334,12 @@ struct Five {
 const FIVES: [Five; 39] = {
     let mut table = [Five { high: 0, low: 0, inverse: 0, bits: 0 }; 39];
     let mut d = 0;
-    let mut power = 1_u128;
     while d < table.len() {
-        let shift = power.leading_zeros();
-        let shifted = power << shift;
-        let (high, low) = (high(shifted), low(shifted));
+        let shift = POW5[d].leading_zeros();
+        let shifted = POW5[d] << shift;
+        let (high, low) = (high(shifted), u64::low_bits(shifted));
         let inverse = reciprocal_two_words(high, low);
         table[d] = Five { high, low, inverse, bits: 128_u32.wrapping_sub(shift) };
-        // At most 5^39 is formed after the last entry, below 2^91.
-        power = power.wrapping_mul(5);
         d += 1;
     }
     table
@@ -378,10 +369,17 @@ pub(crate) const fn quotient_by_pow5(magnitude: u128, d: u8) -> Option<(u64, i32
     };
     let (quotient, remainder) = if five.low == 0 {
         let (quotient, remainder) =
-            divide_two_by_one(high(shifted), low(shifted), five.high, five.inverse);
-        (quotient, u128_of(remainder))
+            divide_two_by_one(high(shifted), u64::low_bits(shifted), five.high, five.inverse);
+        (quotient, u128::from(remainder))
     } else {
-        divide_three_by_two(high(shifted), low(shifted), 0, five.high, five.low, five.inverse)
+        divide_three_by_two(
+            high(shifted),
+            u64::low_bits(shifted),
+            0,
+            five.high,
+            five.low,
+            five.inverse,
+        )
     };
     // Both widths are at most 128, so the shift is within ±128.
     let shift = 63_i32.wrapping_add_unsigned(five.bits).wrapping_sub_unsigned(bits);
@@ -465,7 +463,9 @@ mod tests {
         }
 
         #[test]
-        fn a_quotient_of_128_bits_divides_as_division_does(q: u128, divisor in 1_u128.., r: u128) {
+        fn a_quotient_of_128_bits_divides_as_division_does(
+            q: u128, divisor in prop_oneof![1_u128..=u128::from(u64::MAX), 1_u128..], r: u128,
+        ) {
             // q × divisor + r, for r below the divisor: the numerator a quotient of q leaves.
             let r = r % divisor;
             let product = U256::widening(q, divisor);
@@ -483,26 +483,18 @@ mod tests {
         }
 
         #[test]
-        fn a_four_word_numerator_divides_as_division_does(a: u128, b: u64, low: u64, k in 0_u8..=19) {
-            // a × b + low, a 192-bit numerator, against the same division in two u128 steps.
+        fn a_three_word_numerator_divides_as_division_does(seed: u64, low_half: u128, k in 0_u8..=19) {
+            // A high half below 10^k, so the quotient fits 128 bits, against long division in base
+            // 2^64 in two u128 steps.
             let d = power(k);
-            let n = U256::widening(a, u128::from(b));
-            let (high, low_half) = n.halves();
-            let low_half = low_half.wrapping_add(u128::from(low));
-            let high = high + u128::from(low_half < u128::from(low));
-            let expected = if high < d {
-                let (q1, r1) = (high / d, high % d);
-                prop_assume!(q1 == 0);
-                // (r1 · 2^128 + low_half) / d by long division in base 2^64.
-                let top = (r1 << 64) | (low_half >> 64);
-                let (qa, ra) = (top / d, top % d);
-                let bottom = (ra << 64) | (low_half & u128::from(u64::MAX));
-                let (qb, rb) = (bottom / d, bottom % d);
-                Some(((qa << 64) | qb, u64::try_from(rb).unwrap_or(0)))
-            } else {
-                None
-            };
+            let high = u128::from(seed) % d;
+            let top = (high << 64) | (low_half >> 64);
+            let (qa, ra) = (top / d, top % d);
+            let bottom = (ra << 64) | (low_half & u128::from(u64::MAX));
+            let (qb, rb) = (bottom / d, bottom % d);
+            let expected = Some(((qa << 64) | qb, u64::try_from(rb).unwrap_or(0)));
             prop_assert_eq!(divide_u256(high, low_half, k).map(|(q, r, _)| (q, r)), expected);
+            prop_assert_eq!(divide_u256(d, low_half, k), None, "a high half at the power");
         }
     }
 }

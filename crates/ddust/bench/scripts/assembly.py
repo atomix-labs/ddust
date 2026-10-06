@@ -2,9 +2,9 @@
 
 Usage: assembly.py sizes <probe> | assembly.py gate <probe>
 
-`sizes` prints each probe of `examples/probe.rs`, named by its operation and contender: its instructions, and those of every function it
-reaches by a call or a tail call but a panic's cold path, which is the code an operation brings into
-the instruction cache. `gate` holds ddust's kernels to the rule that a division divides by a constant:
+`sizes` prints each probe of `examples/probe.rs`, named by its operation and contender: its
+instructions, and those of every function it reaches by a call or a tail call but the cold paths
+`COLD` names, which is the code an operation brings into the instruction cache. `gate` holds ddust's kernels to the rule that a division divides by a constant:
 no division instruction and no division routine in a gated probe or anything it calls, on aarch64 or
 x86_64. Both read `objdump -d` of the probe binary, built with the bench profile.
 """
@@ -29,16 +29,16 @@ DIVISION = re.compile(r"^(udiv|sdiv|div[bwlq]?|idiv[bwlq]?)$")
 ROUTINE = re.compile(r"__(u?div|u?mod|udivmod|divmod)[sdt]i[34]$|specialized_div_rem")
 # A call or a tail call: aarch64's `bl` and `b`, x86_64's `call` and `jmp`.
 CALL = re.compile(r"^(bl|b|call[q]?|jmp[q]?)$")
-# The cold paths a panic takes, which an operation reaches but never runs, and ddust's own `#[cold]`
-# fallbacks, the plain division past `10^19` or past the word, and a quotient's past 38 digits, which
-# a decimal of more than 19 decimals or a result past its integer reaches: neither counted in a
-# probe's size nor followed.
+# The cold paths an operation reaches but runs only off its hot path: a panic's, and ddust's own
+# `#[cold]` fallbacks, which only a decimal of more than 19 decimals or a result past its integer
+# reaches: the long divisions past `10^19` or past a word, and a quotient's past 38 digits. Neither
+# is counted in a probe's size or followed.
 COLD = re.compile(
     r"^(core::panicking::|core::option::(unwrap|expect)_failed|core::result::unwrap_failed|"
     r"core::slice::index::|core::str::slice_error_fail|alloc::alloc::handle_alloc_error|"
     r"alloc::raw_vec::handle_error|std::panicking::|rust_begin_unwind|"
-    r"ddust::word::divide_pow10_by_long_division|ddust::word::divide_past_a_word|"
-    r"ddust::kernel::divide_past_38)"
+    r"ddust::word::divide_pow10_by_long_division|ddust::word::divide_round_by_long_division|"
+    r"ddust::word::divide_round_past_a_word|ddust::kernel::divide_past_38_digits)"
 )
 
 

@@ -1,13 +1,14 @@
 //! The kernels every decimal operation is written on: each exact, on magnitudes, in a word wide
 //! enough for its result, and rounded once by a mode's table.
 //!
-//! A kernel returns `None` when its result outgrows the word it was given; the caller then runs it
-//! again in a [`U256`], the widest word. There, [`mul_up`] alone has no result past it, and the
+//! A kernel returns `None` when its result outgrows the word it was given, or when that word leaves
+//! a division to a wider one, as [`Word::divide_pow10_round`] says; the caller then runs it again
+//! in a [`U256`], the widest word. There, [`mul_up`] alone has no result past it, and the
 //! caller keeps its low bits by wrapping arithmetic; [`div_up`] past it keeps them itself.
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, U256, Word, rounded, rounded_zero};
+use crate::word::{Double, Narrow, POW5, U256, Word, rounded, rounded_zero};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
 /// the widest word, its low bits, which wrapping keeps.
@@ -36,8 +37,8 @@ impl<D> Exact<D> {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: with `#[inline]` LLVM calls it out of line, loses the constant `k`, and a \
-              64-bit product rounds in 133 instructions where it otherwise takes 98"
+    reason = "with `#[inline]` LLVM calls it out of line and loses the constant `k`: a rounded \
+              64-bit product's probe reaches 377 instructions through two calls, and 92 inline"
 )]
 const fn rounded_pow10<D: [const] Word>(
     numerator: D, k: u8, negative: bool, table: u16,
@@ -69,7 +70,7 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
 }
 
 /// `a / 10^k`, rounded by `table`, and whether nothing was rounded away. The quotient of a value
-/// fits its own word, which divides it; only what that word leaves to the double takes it.
+/// fits its own word, which divides it; the double divides only what that word leaves to it.
 #[inline]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
@@ -128,7 +129,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     let (magnitude, overflowed) = if rest == 0 {
         (numerator.divide_round(divisor, negative, table), false)
     } else {
-        let Some(divided) = divide_past_38(numerator, divisor, rest, negative, table) else {
+        let Some(divided) = divide_past_38_digits(numerator, divisor, rest, negative, table) else {
             return None;
         };
         divided
@@ -140,7 +141,7 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
 /// the quotient overflowed the word: the second step of [`div_up`]'s long division, off its path.
 #[cold]
 #[inline(never)]
-const fn divide_past_38<D: [const] Word>(
+const fn divide_past_38_digits<D: [const] Word>(
     numerator: D, divisor: D, rest: u8, negative: bool, table: u16,
 ) -> Option<(D, bool)> {
     // q · 10^rest + (remainder · 10^rest) / divisor: the remainder is below the divisor, so its
@@ -208,18 +209,6 @@ pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
     let magnitude = count.wrapping_mul(step);
     Exact::new(negative && magnitude != D::ZERO, magnitude)
 }
-
-/// `5^k` for `k` in `0..=38`: with a power of two, every power of ten a scale needs.
-#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
-const POW5: [u128; 39] = {
-    let mut table = [1_u128; 39];
-    let mut k = 1;
-    while k < table.len() {
-        table[k] = table[k.wrapping_sub(1)].wrapping_mul(5);
-        k = k.wrapping_add(1);
-    }
-    table
-};
 
 /// The magnitude of `mantissa × 2^exponent × 10^decimals`, rounded by `table` for a value of sign
 /// `negative`: a double's exact value at a scale, rounded once. `None` past 128 bits, which no
@@ -336,6 +325,16 @@ mod tests {
             prop_assert_eq!(truncated, Some(exact / power), "truncated, in a u64");
             let rounded = mul_down::<u32, U256>(false, a, b, k, HALF_EVEN).and_then(|e| narrow(e.magnitude));
             prop_assert_eq!(rounded, Some(half_even(exact, power)), "half to even, in a U256");
+        }
+
+        #[test]
+        fn a_wide_value_down_a_power_agrees_with_the_definition(raw: u128, bits in 1_u32..=128, k in 0_u8..=38) {
+            // Every size of value, so each path is taken: a u64, one step, two steps, and a power
+            // past 10^19 left to the U256.
+            let a = raw >> (128 - bits);
+            let power = 10_u128.pow(u32::from(k));
+            let (q, exact) = scale_down::<u128, U256>(false, a, k, HALF_EVEN).expect("a U256 holds every quotient");
+            prop_assert_eq!((narrow(q.magnitude), exact), (Some(half_even(a, power)), a % power == 0));
         }
 
         #[test]
