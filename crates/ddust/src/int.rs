@@ -660,10 +660,28 @@ macro_rules! signed {
 
             #[inline]
             fn join(negative: bool, magnitude: $unsigned) -> Option<Self> {
-                // MIN's magnitude is MAX's and one: one comparison and a select, where a branch on
-                // the sign is mispredicted as often as the signs are mixed.
-                let limit = <$t>::MAX.cast_unsigned().wrapping_add(<$unsigned>::from(negative));
-                if magnitude <= limit { Some(Self::wrapping_join(negative, magnitude)) } else { None }
+                // MIN's magnitude is MAX's and one. Up to a word, one comparison and a select,
+                // where a branch on the sign is mispredicted as often as the signs are mixed; past
+                // it the branch, whose two-word select measured slower on Graviton4.
+                if <$t>::BITS <= 64 {
+                    let limit = <$t>::MAX.cast_unsigned().wrapping_add(<$unsigned>::from(negative));
+                    return if magnitude <= limit {
+                        Some(Self::wrapping_join(negative, magnitude))
+                    } else {
+                        None
+                    };
+                }
+                if negative {
+                    if magnitude <= <$t>::MIN.unsigned_abs() {
+                        Some(magnitude.cast_signed().wrapping_neg())
+                    } else {
+                        None
+                    }
+                } else if magnitude <= <$t>::MAX.cast_unsigned() {
+                    Some(magnitude.cast_signed())
+                } else {
+                    None
+                }
             }
 
             #[inline]
