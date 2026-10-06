@@ -9,15 +9,7 @@ use crate::errors::{ParseError, ParseErrorKind};
 use crate::int::Int;
 use crate::round::RoundingMode;
 use crate::scale::{Dynamic, MAX_DECIMALS, Scale, StaticScale};
-use crate::word::pow10_u128;
-
-/// Whether a quotient, odd or even, whose division left `class`, moves one step away from zero
-/// for a value of sign `negative` by `table`.
-#[inline]
-fn is_rounded_away(table: u16, negative: bool, odd: bool, class: u32) -> bool {
-    let index = (u32::from(negative) << 3) | (u32::from(odd) << 2) | class;
-    (table >> index) & 1 == 1
-}
+use crate::word::{pow10_u128, rounds_up_by_class};
 
 /// Where a number's parts are in its text: the integer digits, the fraction's, and the exponent.
 struct Parts<'a> {
@@ -123,7 +115,7 @@ fn read_general(
         5 if !sticky => 2,
         _ => 3,
     };
-    let away = is_rounded_away(table, negative, value & 1 == 1, class);
+    let away = rounds_up_by_class(class, value & 1 == 1, negative, table);
     value.checked_add(u128::from(away)).ok_or(ParseErrorKind::PosOverflow)
 }
 

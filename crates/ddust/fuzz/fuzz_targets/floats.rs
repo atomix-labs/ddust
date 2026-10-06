@@ -1,5 +1,5 @@
-//! Any double to a decimal and any decimal to a double, against core's own correctly rounded
-//! conversions through text.
+//! Any decimal to a double, against core's correctly rounded reading of its text, and any double to
+//! a decimal at any scale by any mode, against the double's exact expansion.
 
 #![no_main]
 

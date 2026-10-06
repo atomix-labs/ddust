@@ -49,9 +49,10 @@ pub(crate) const fn rounds_up<D: [const] Word>(
 }
 
 /// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
-/// whose quotient is `odd` and whose remainder's class is `class`: 0 for none, 1 below half, 2 at
-/// half, 3 above. The bit the table holds, for a division whose class is known without a divisor.
-#[cfg(any(target_arch = "aarch64", target_feature = "fma"))]
+/// whose quotient is `odd` and whose remainder's class is `class`: 0 for no remainder, 1 below
+/// half, 2 at half, 3 above.
+///
+/// The bit the table holds, for a division whose class is known without a divisor.
 #[inline]
 pub(crate) const fn rounds_up_by_class(class: u32, odd: bool, negative: bool, table: u16) -> bool {
     (table >> ((u32::from(negative) << 3) | (u32::from(odd) << 2) | class)) & 1 == 1
