@@ -365,11 +365,13 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
 }
 
 /// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when its
-/// result outgrows that. `None` only when it outgrows even a `U256`.
+/// result outgrows that. `None` only when it outgrows even a `U256`. A double that is the `U256`
+/// is not run again: a second call of the same kernel would keep it out of line.
 macro_rules! exact {
     ($i:ty, $kernel:ident($($argument:expr),* $(,)?)) => {
         match kernel::$kernel::<<$i as Magnitude>::Unsigned, <$i as Magnitude>::Double>($($argument),*) {
             Some(exact) => Some(outcome::<$i, <$i as Magnitude>::Double>(exact)),
+            None if <<$i as Magnitude>::Double as Word>::WIDEST => None,
             None => match kernel::$kernel::<<$i as Magnitude>::Unsigned, U256>($($argument),*) {
                 Some(exact) => Some(outcome::<$i, U256>(exact)),
                 None => None,
@@ -403,6 +405,8 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
     let (negative, a) = a.split();
     let (exact, whole) = match kernel::scale_down::<I::Unsigned, I::Double>(negative, a, k, table) {
         Some((exact, whole)) => (outcome::<I, I::Double>(exact), whole),
+        // As in `exact!`.
+        None if <I::Double as Word>::WIDEST => (Outcome::in_range(I::ZERO), a == I::Unsigned::ZERO),
         None => match kernel::scale_down::<I::Unsigned, U256>(negative, a, k, table) {
             Some((exact, whole)) => (outcome::<I, U256>(exact), whole),
             None => (Outcome::in_range(I::ZERO), a == I::Unsigned::ZERO),
