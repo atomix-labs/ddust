@@ -235,6 +235,8 @@ def main():
         directory = pathlib.Path(sys.argv[2]).resolve()
         passes = tomllib.loads((directory / "manifest.toml").read_text())["parameters"]["passes"]
         summarize(directory, passes)
+        if shutil.which("taplo"):
+            subprocess.run(["taplo", "fmt", str(directory / "summary.toml")], check=True, capture_output=True)
         print(f"summary: {directory / 'summary.toml'}")
         return 0
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -271,6 +273,10 @@ def main():
         manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes)
     )
     summarize(directory, arguments.passes)
+    # Formatted as the repository's own TOML is, which `just check` holds every file to.
+    if shutil.which("taplo"):
+        files = [str(path) for path in sorted(directory.glob("*.toml"))]
+        subprocess.run(["taplo", "fmt", *files], cwd=HERE, check=True, capture_output=True)
     found = disagreements(directory, arguments.passes)
     print(f"run: {directory.relative_to(HERE)}")
     for disagreement in found:
