@@ -96,9 +96,18 @@ pub(crate) fn write_toml(
     Ok(())
 }
 
-/// `figure` as an inline table.
+/// `figure` as an inline table, each number to six significant digits.
 fn inline(figure: Figure) -> String {
-    format!("{{ median = {}, low = {}, high = {} }}", figure.median, figure.low, figure.high)
+    let (median, low, high) =
+        (significant(figure.median), significant(figure.low), significant(figure.high));
+    format!("{{ median = {median}, low = {low}, high = {high} }}")
+}
+
+/// `value` to six significant digits, written as the shortest decimal that reads back: finer than
+/// any two passes agree, and a third the length of every digit an `f64` holds.
+fn significant(value: f64) -> String {
+    let rounded: f64 = format!("{value:.5e}").parse().unwrap_or(value);
+    format!("{rounded}")
 }
 
 /// `text` as a TOML basic string.
@@ -118,7 +127,7 @@ fn quoted(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{quoted, write_row, write_toml};
+    use super::{quoted, significant, write_row, write_toml};
     use crate::counter::Event;
     use crate::harness::{Config, Figure, Measurement};
 
@@ -163,6 +172,14 @@ mod tests {
                         cycles = { median = 3, low = 3, high = 3 }\n\
                         instructions = { median = 6, low = 6, high = 6 }\n";
         assert_eq!(text, expected, "every figure, in the order written");
+    }
+
+    #[test]
+    fn a_figure_is_written_to_six_significant_digits() {
+        assert_eq!(significant(0.678_740_986_948_730_8), "0.678741", "below one");
+        assert_eq!(significant(1_234_567.0), "1234570", "above it");
+        assert_eq!(significant(0.000_010_343_430_423_666_91), "0.0000103434", "a rare miss");
+        assert_eq!(significant(0.0), "0", "none");
     }
 
     #[test]

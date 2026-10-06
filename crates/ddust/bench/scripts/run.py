@@ -18,6 +18,7 @@ power with nothing else open, and as root for the counters, built with `--featur
 
 import argparse
 import datetime
+import decimal
 import json
 import os
 import pathlib
@@ -202,6 +203,13 @@ def at_least_one(text):
     return count
 
 
+def significant(value):
+    """`value` to six significant digits, as the shortest decimal that reads back, with no exponent:
+    the form the harness writes each figure in."""
+    text = format(decimal.Decimal(repr(float(f"{value:.5e}"))), "f")
+    return text.removesuffix(".0")
+
+
 def summarize(directory, passes):
     """Writes `summary.toml`: for each measurement and figure, the median of the passes' medians,
     and the lowest and highest of them."""
@@ -217,7 +225,8 @@ def summarize(directory, passes):
                 medians = sorted(run[name][figure]["median"] for run in runs if name in run and figure in run[name])
                 middle = len(medians) // 2
                 median = medians[middle] if len(medians) % 2 else (medians[middle - 1] + medians[middle]) / 2
-                lines.append(f"{figure} = {{ median = {median}, low = {medians[0]}, high = {medians[-1]} }}")
+                low, high = significant(medians[0]), significant(medians[-1])
+                lines.append(f"{figure} = {{ median = {significant(median)}, low = {low}, high = {high} }}")
     (directory / "summary.toml").write_text("\n".join(lines) + "\n")
 
 
