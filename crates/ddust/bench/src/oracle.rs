@@ -113,25 +113,39 @@ pub fn text(steps: i128, decimals: u8) -> String {
     if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") }
 }
 
-/// The steps at `decimals` of `text`, a plain decimal (a sign, digits and an optional point, no
-/// exponent), exactly; `None` for anything else, or for a digit past `decimals`.
+/// The steps at `decimals` of `text`, exactly: a sign, digits with an optional point, and an
+/// optional exponent, as `1.5`, `-0.25` or `3.4E-7`; `None` for anything else, or for a digit past
+/// `decimals`.
 #[must_use]
 pub fn parse(text: &str, decimals: u8) -> Option<i128> {
-    let (negative, unsigned) = text
-        .strip_prefix('-')
-        .map_or_else(|| (false, text.strip_prefix('+').unwrap_or(text)), |rest| (true, rest));
+    let (mantissa, exponent) = match text.find(['e', 'E']) {
+        Some(at) => (text.get(..at)?, text.get(at + 1..)?.parse::<i64>().ok()?),
+        None => (text, 0),
+    };
+    let (negative, unsigned) = mantissa.strip_prefix('-').map_or_else(
+        || (false, mantissa.strip_prefix('+').unwrap_or(mantissa)),
+        |rest| (true, rest),
+    );
     let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
     let digit = |text: &str| text.bytes().all(|byte| byte.is_ascii_digit());
     if whole.is_empty() && fraction.is_empty() || !digit(whole) || !digit(fraction) {
         return None;
     }
-    let fraction = fraction.trim_end_matches('0');
-    if fraction.len() > usize::from(decimals) {
-        return None;
-    }
-    let digits = format!("{whole}{fraction:0<width$}", width = usize::from(decimals));
-    let magnitude: BigInt = digits.parse().ok()?;
-    narrow(if negative { -magnitude } else { magnitude })
+    // The digits are a whole number at `fraction.len() - exponent` decimals.
+    let digits: BigInt = format!("{whole}{fraction}").parse().ok()?;
+    let digits = if negative { -digits } else { digits };
+    let scale = i64::try_from(fraction.len()).ok()? - exponent;
+    let target = i64::from(decimals);
+    let steps = if scale <= target {
+        digits * BigInt::from(10).pow(u32::try_from(target - scale).ok()?)
+    } else {
+        let divisor = BigInt::from(10).pow(u32::try_from(scale - target).ok()?);
+        if (&digits % &divisor).sign() != Sign::NoSign {
+            return None;
+        }
+        digits / divisor
+    };
+    narrow(steps)
 }
 
 /// `steps` at `decimals` as the nearest `f64`, a tie to the even one: core's reading of the exact
@@ -263,7 +277,9 @@ mod tests {
     #[case::plus("+1", Some(100_000_000))]
     #[case::bare_point(".5", Some(50_000_000))]
     #[case::too_fine("0.000000001", None)]
-    #[case::exponent("1e3", None)]
+    #[case::exponent("1e3", Some(100_000_000_000))]
+    #[case::negative_exponent("-3.4E-7", Some(-34))]
+    #[case::exponent_too_fine("1e-9", None)]
     #[case::empty("", None)]
     #[case::lone_point(".", None)]
     fn text_reads_exactly_or_not_at_all(#[case] written: &str, #[case] steps: Option<i128>) {

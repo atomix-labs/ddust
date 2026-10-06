@@ -31,6 +31,7 @@
 //! | ------- | ------------ |
 //! | `kperf` | The CPU's counters on macOS, through darwin-kperf, for a run as root |
 
+pub mod contenders;
 mod counters;
 mod harness;
 pub mod inputs;

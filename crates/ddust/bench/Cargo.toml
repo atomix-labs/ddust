@@ -17,11 +17,25 @@ default = []
 # The CPU's counters on macOS, through Apple's private kperf framework, which reads them as root.
 kperf = ["dep:darwin-kperf"]
 
+# The contenders are pinned to the version a run names.
 [dependencies]
-num-bigint = { version = "0.4.6" }
+bigdecimal                    = { version = "=0.4.11" }
+ddust                         = { path = ".." }
+decimal-rs                    = { version = "=0.2.0" }
+fastnum                       = { version = "=0.7.5" }
+fin_decimal                   = { version = "=0.4.0" }
+fixdec                        = { version = "=0.1.0" }
+fixed                         = { version = "=1.31.0" }
+fixnum                        = { version = "=0.9.5", features = ["i64", "i128"] }
+nexus-decimal                 = { version = "=1.2.2" }
+num-bigint                    = { version = "0.4.6" }
+primitive_fixed_point_decimal = { version = "=1.5.0" }
+rust_decimal                  = { version = "=1.43.0", default-features = false }
 
 [dev-dependencies]
 rstest = { version = "0.27.0", default-features = false }
+
+
 
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event2 = { version = "0.7.4" }
