@@ -51,19 +51,24 @@ def read(path):
         return ""
 
 
-def build(features):
-    """Builds every bench and the probe, and the path of each bench's binary."""
-    command = ["cargo", "bench", "--locked", "--no-run", "--message-format=json", *features]
-    out = subprocess.run(command, cwd=HERE, capture_output=True, text=True, check=True).stdout
-    binaries = {}
-    for line in out.splitlines():
+def executables(command, kind):
+    """Each binary of `kind` that `command` builds, by its target's name, as cargo says it put it:
+    under `just`, `CARGO_BUILD_TARGET` puts it under the target's own directory."""
+    out = subprocess.run([*command, "--message-format=json"], cwd=HERE, capture_output=True, text=True, check=True)
+    found = {}
+    for line in out.stdout.splitlines():
         message = json.loads(line)
         target = message.get("target", {})
-        if message.get("reason") == "compiler-artifact" and "bench" in target.get("kind", []):
-            binaries[target["name"]] = message["executable"]
-    subprocess.run(["cargo", "build", "--locked", "--profile", "bench", "--example", "probe", *features],
-                   cwd=HERE, check=True)
-    return binaries
+        if message.get("reason") == "compiler-artifact" and kind in target.get("kind", []):
+            found[target["name"]] = message["executable"]
+    return found
+
+
+def build(features):
+    """Builds every bench and the probe: the path of each bench's binary, and the probe's."""
+    binaries = executables(["cargo", "bench", "--locked", "--no-run", *features], "bench")
+    examples = executables(["cargo", "build", "--locked", "--profile", "bench", "--example", "probe", *features], "example")
+    return binaries, examples["probe"]
 
 
 def placement(cpu):
@@ -254,7 +259,7 @@ def main():
     arguments = parser.parse_args()
 
     features = ["--features", "kperf"] if platform.system() == "Darwin" else []
-    binaries = build(features)
+    binaries, probe = build(features)
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H-%MZ")
     run_id = f"{now}-pr{arguments.pr}-{arguments.subject}-{arguments.host}"
     directory = HERE / "results" / run_id
@@ -266,8 +271,7 @@ def main():
             with open(directory / f"{bench}-{number}.txt", "w") as table:
                 command = [*prefix, binaries[bench], "--bench", *arguments.filter, "--save", str(save)]
                 subprocess.run(command, cwd=HERE, stdout=table, check=True)
-    probe = HERE / "target" / "release" / "examples" / "probe"
-    sizes = output(sys.executable, str(HERE / "scripts" / "assembly.py"), "sizes", str(probe))
+    sizes = output(sys.executable, str(HERE / "scripts" / "assembly.py"), "sizes", probe)
     (directory / "assembly.txt").write_text(sizes + "\n")
     (directory / "manifest.toml").write_text(
         manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes)
