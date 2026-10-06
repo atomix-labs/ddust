@@ -17,6 +17,12 @@ default = []
 # The CPU's counters on macOS, through Apple's private kperf framework, which reads them as root.
 kperf = ["dep:darwin-kperf"]
 
+[dependencies]
+num-bigint = { version = "0.4.6" }
+
+[dev-dependencies]
+rstest = { version = "0.27.0", default-features = false }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 perf-event2 = { version = "0.7.4" }
 
