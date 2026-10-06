@@ -14,14 +14,11 @@ import subprocess
 import sys
 
 # The probes that divide only by constants, which a division instruction or routine in them breaks.
-# A division by a value known only at run time, a quotient's, is not gated; nor are the 128-bit
-# product and rescale, which divide by 10^k through `__udivti3` until their kernels divide by a
-# reciprocal, and join this list then.
+# A division by a value known only at run time, a quotient's, is not gated.
 GATED = [
     f"probe::{operation}::<ddust_bench::contender::ddust::{width}>"
     for width in ("Narrow", "Wide")
     for operation in ("add", "compare", "mul_round", "rescale_round", "parse", "format", "to_f64", "from_f64")
-    if (width, operation) not in {("Wide", "mul_round"), ("Wide", "rescale_round")}
 ]
 # What a probe's name says of its contender, beyond the crate's own path.
 PREFIX = "ddust_bench::contender::"
@@ -32,12 +29,14 @@ DIVISION = re.compile(r"^(udiv|sdiv|div[bwlq]?|idiv[bwlq]?)$")
 ROUTINE = re.compile(r"__(u?div|u?mod|udivmod|divmod)[sdt]i[34]$|specialized_div_rem")
 # A call or a tail call: aarch64's `bl` and `b`, x86_64's `call` and `jmp`.
 CALL = re.compile(r"^(bl|b|call[q]?|jmp[q]?)$")
-# The cold paths a panic takes, which an operation reaches but never runs: neither counted in its
-# size nor followed.
+# The cold paths a panic takes, which an operation reaches but never runs, and ddust's own `#[cold]`
+# fallbacks, the plain division past `10^19` or past the word, which a decimal of more than 19
+# decimals or a result past its integer reaches: neither counted in a probe's size nor followed.
 COLD = re.compile(
     r"^(core::panicking::|core::option::(unwrap|expect)_failed|core::result::unwrap_failed|"
     r"core::slice::index::|core::str::slice_error_fail|alloc::alloc::handle_alloc_error|"
-    r"alloc::raw_vec::handle_error|std::panicking::|rust_begin_unwind)"
+    r"alloc::raw_vec::handle_error|std::panicking::|rust_begin_unwind|"
+    r"ddust::word::divide_pow10_past_a_word|ddust::word::divide_pow10_by_long_division)"
 )
 
 

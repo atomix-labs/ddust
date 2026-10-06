@@ -79,6 +79,7 @@ mod int;
 mod kernel;
 mod literal;
 mod ops;
+mod reciprocal;
 pub mod round;
 mod rounded;
 pub mod scale;

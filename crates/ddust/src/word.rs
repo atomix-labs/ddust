@@ -1,6 +1,8 @@
 //! The unsigned words the kernels compute in: an integer's magnitude, and a word twice its width
 //! that holds the exact result of an operation on two magnitudes before it is narrowed back.
 
+use crate::reciprocal;
+
 /// `10^k` for `k` in `0..=38`: every power a `u128` holds, and so every power a scale needs.
 #[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
 pub(crate) const POW10: [u128; 39] = {
@@ -13,6 +15,15 @@ pub(crate) const POW10: [u128; 39] = {
     }
     table
 };
+
+/// How a division's remainder compares with half its divisor: 0 when it is zero, 1 below half, 2
+/// at half, 3 above.
+#[inline]
+#[expect(clippy::arithmetic_side_effects, reason = "three bits sum to at most 3")]
+pub(crate) const fn class<D: [const] Word>(remainder: D, divisor: D) -> u32 {
+    let rest = divisor.wrapping_sub(remainder);
+    u32::from(remainder != D::ZERO) + u32::from(remainder >= rest) + u32::from(remainder > rest)
+}
 
 /// `10^k` as a `u128`, or `None` past `10^38`.
 #[inline]
@@ -45,6 +56,20 @@ pub(crate) const trait Word: Copy + [const] Ord {
     fn wrapping_mul(self, other: Self) -> Self;
     /// The quotient and the remainder, for a divisor that is not zero.
     fn div_rem(self, divisor: Self) -> (Self, Self);
+
+    /// `self / 10^k` and the [`class`] of its remainder, or `None` when `10^k` is past the
+    /// word. A word whose compiler has no cheap division by a constant divides by the power's
+    /// reciprocal, and classes the remainder in the narrowest word that holds it.
+    #[inline]
+    fn divide_pow10(self, k: u8) -> Option<(Self, u32)> {
+        match Self::pow10(k) {
+            Some(power) => {
+                let (quotient, remainder) = self.div_rem(power);
+                Some((quotient, class(remainder, power)))
+            },
+            None => None,
+        }
+    }
     /// Whether the value is odd.
     fn is_odd(self) -> bool;
 }
@@ -69,10 +94,12 @@ pub(crate) const trait Double<U: [const] Narrow>: [const] Word {
     fn widening_mul(a: U, b: U) -> Self;
 }
 
-/// The words for each primitive, forwarded to its own methods.
+/// The words for each primitive, forwarded to its own methods, with any more a word has.
 macro_rules! word {
-    ($($t:ty),*) => {$(
+    ($($t:ty $({ $($more:item)* })?),*) => {$(
         const impl Word for $t {
+            $($($more)*)?
+
             const ZERO: Self = 0;
             const ONE: Self = 1;
 
@@ -142,7 +169,41 @@ macro_rules! word {
     )*};
 }
 
-word!(u8, u16, u32, u64, u128);
+word!(u8, u16, u32, u64, u128 {
+    // LLVM divides a `u128` by a constant through a multiply-high of four multiplies, and by a
+    // power known only at run time through a library call. A value with no high word divides as a
+    // `u64`; any other, by one Möller–Granlund step when its quotient fits a word, and by two when
+    // it does not.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "measured, as `kernel::quotient_pow10`: out of line it loses the constant `k`"
+    )]
+    fn divide_pow10(self, k: u8) -> Option<(Self, u32)> {
+        let Some(power) = pow10_u128(k) else { return None };
+        if let (Ok(value), Ok(divisor)) = (u64::try_from(self), u64::try_from(power)) {
+            let (quotient, remainder) = value.div_rem(divisor);
+            return Some((u128::from(quotient), class(remainder, divisor)));
+        }
+        if let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self, k) {
+            return Some((u128::from(quotient), class(remainder, divisor)));
+        }
+        Some(divide_pow10_past_a_word(self, k, power))
+    }
+});
+
+/// `value / power` and the class of its remainder, `power` being `10^k`, for a quotient past a
+/// word: two Möller–Granlund steps to `10^19`, and the plain division past it. Off the hot path and
+/// out of line, so the path of a quotient that fits a word stays small enough to inline.
+#[cold]
+#[inline(never)]
+const fn divide_pow10_past_a_word(value: u128, k: u8, power: u128) -> (u128, u32) {
+    if let Some((quotient, remainder, divisor)) = reciprocal::divide_u256(0, value, k) {
+        return (quotient, class(remainder, divisor));
+    }
+    let (quotient, remainder) = value.div_rem(power);
+    (quotient, class(remainder, power))
+}
 
 /// Each primitive's double: the next primitive, for every magnitude but a `u128`'s.
 macro_rules! double {
@@ -237,6 +298,12 @@ impl U256 {
         }
         let remainder = ((top << 64) | next).wrapping_sub(quotient.wrapping_mul(divisor));
         (quotient, remainder)
+    }
+
+    /// Its high and its low 128 bits.
+    #[cfg(test)]
+    pub(crate) const fn halves(self) -> (u128, u128) {
+        (self.high, self.low)
     }
 
     /// The product of two `u128`s.
@@ -454,6 +521,30 @@ const impl Word for U256 {
     fn is_odd(self) -> bool {
         self.low & 1 == 1
     }
+
+    // Two Möller–Granlund steps for every quotient that fits 128 bits, where the long division
+    // calls the library three times.
+    #[inline]
+    fn divide_pow10(self, k: u8) -> Option<(Self, u32)> {
+        match reciprocal::divide_u256(self.high, self.low, k) {
+            Some((quotient, remainder, divisor)) => {
+                Some((Self::from_u128(quotient), class(remainder, divisor)))
+            },
+            None => match Self::pow10(k) {
+                Some(power) => Some(divide_pow10_by_long_division(self, power)),
+                None => None,
+            },
+        }
+    }
+}
+
+/// `value / power` and the class of its remainder by long division, for a power past `10^19` or a
+/// quotient past 128 bits: off the hot path and out of line, as `divide_pow10_past_a_word`.
+#[cold]
+#[inline(never)]
+const fn divide_pow10_by_long_division(value: U256, power: U256) -> (U256, u32) {
+    let (quotient, remainder) = value.div_rem(power);
+    (quotient, class(remainder, power))
 }
 
 const impl<U: [const] Narrow> Double<U> for U256 {

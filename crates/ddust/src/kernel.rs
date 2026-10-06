@@ -7,7 +7,7 @@
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, U256, Word};
+use crate::word::{Double, Narrow, U256, Word, class};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
 /// the widest word, its low bits, which wrapping keeps.
@@ -29,15 +29,6 @@ impl<D> Exact<D> {
     }
 }
 
-/// How a division's remainder compares with half its divisor: 0 when it is zero, 1 below half, 2
-/// at half, 3 above.
-#[inline]
-#[expect(clippy::arithmetic_side_effects, reason = "three bits sum to at most 3")]
-const fn class<D: [const] Word>(remainder: D, divisor: D) -> u32 {
-    let rest = divisor.wrapping_sub(remainder);
-    u32::from(remainder != D::ZERO) + u32::from(remainder >= rest) + u32::from(remainder > rest)
-}
-
 /// `quotient`, one step further from zero when `table` says so for a result of sign `negative`
 /// whose division left `class`: every rounding in the crate is this.
 #[inline]
@@ -57,10 +48,15 @@ const fn quotient<D: [const] Word>(numerator: D, divisor: D) -> (D, u32) {
 /// `numerator / 10^k` and the class of what it leaves, or `None` when the power is past the word.
 /// In the widest word a power past it is past every numerator too, and past twice any: the
 /// quotient is zero and the remainder below half.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: with `#[inline]` LLVM calls it out of line, loses the constant `k`, and a \
+              64-bit product rounds in 133 instructions where it otherwise takes 98"
+)]
 const fn quotient_pow10<D: [const] Word>(numerator: D, k: u8) -> Option<(D, u32)> {
-    match D::pow10(k) {
-        Some(power) => Some(quotient(numerator, power)),
+    match numerator.divide_pow10(k) {
+        Some(divided) => Some(divided),
         None if D::WIDEST => Some((D::ZERO, u32::from(numerator != D::ZERO))),
         None => None,
     }
@@ -82,11 +78,16 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
     }
 }
 
-/// `a / 10^k`, rounded by `table`, and whether nothing was rounded away.
+/// `a / 10^k`, rounded by `table`, and whether nothing was rounded away. The quotient of a value
+/// fits its own word, which divides it; only a power past that word takes the double.
 #[inline]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
 ) -> Option<(Exact<D>, bool)> {
+    if let Some((q, class)) = quotient_pow10(a, k) {
+        let q = D::from_narrow(settle(q, class, negative, table));
+        return Some((Exact::new(negative, q), class == 0));
+    }
     match quotient_pow10(D::from_narrow(a), k) {
         Some((q, class)) => {
             Some((Exact::new(negative, settle(q, class, negative, table)), class == 0))
