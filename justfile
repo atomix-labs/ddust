@@ -10,6 +10,13 @@ check-bench-lints:
         sys.exit("crates/ddust/bench/Cargo.toml: its [lints] differ from the root's [workspace.lints]; copy them again")
     print("bench lints: the root's")
 
+# Builds the bench's probe, prints each kernel's instructions with those of every function it calls,
+# and holds ddust's kernels to dividing by constants alone.
+bench-code:
+    cd crates/ddust/bench && mise exec -- cargo build --locked --profile bench --example probe
+    cd crates/ddust/bench && mise exec -- python3 scripts/code.py sizes target/release/examples/probe
+    cd crates/ddust/bench && mise exec -- python3 scripts/code.py gate target/release/examples/probe
+
 # >>> devset: just >>>
 # Each active profile's recipes.
 import? '.just/agents.just'

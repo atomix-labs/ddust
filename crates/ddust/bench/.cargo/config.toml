@@ -1,0 +1,5 @@
+# Symbols that name their type parameters, `probe::add::<ddust_bench::contenders::ddust::Narrow>`,
+# and no merging of functions whose code is the same, so `nm`, `objdump` and `perf` find every
+# contender's code under its own name. Cargo joins these flags to the root's CPU floors.
+[target.'cfg(all())']
+rustflags = ["-C", "symbol-mangling-version=v0", "-Z", "merge-functions=disabled"]
