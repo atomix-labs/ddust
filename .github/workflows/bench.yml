@@ -1,0 +1,91 @@
+# The bench crate, a workspace of its own that `just check` does not build: its lints and tests, and
+# a smoke run of the harness, on Linux and macOS; each ddust kernel's instructions under callgrind,
+# against main's, on x86_64 and arm64 Linux; and the assembly gate, which refuses a division where a
+# kernel divides by a constant. Shared runners lend no reliable clock and, on x86_64, no counters, so
+# CI's figures are instructions: an alarm, not a speed. The figures a run commits come from the
+# owner's machines.
+name: bench
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # cargo installs the toolchain rust-toolchain.toml names, on every runner.
+  RUSTUP_AUTO_INSTALL: "1"
+
+defaults:
+  run:
+    working-directory: crates/ddust/bench
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo clippy --locked --all-targets --all-features
+      # Every contender against the oracle, in release, where overflow wraps as a user's build does.
+      - run: cargo test --locked --release
+      # One short sample of every 64-bit operation on the predictable set, through the harness's
+      # counters where the runner lends them, and its time alone where it does not.
+      - run: cargo bench --locked --bench ops -- --quick /narrow/predictable/
+
+  callgrind:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install --yes valgrind
+      # The runner gungraun's library calls, at the library's version.
+      - run: cargo install gungraun-runner --version 0.20.0 --locked
+      # main's counts, from its newest run, for gungraun to compare against. Only main saves them, so
+      # a pull request's second push compares with main again, never with its own first.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: crates/ddust/bench/target/gungraun
+          key: callgrind-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: callgrind-${{ runner.os }}-${{ runner.arch }}-
+      # A kernel whose instructions rise more than 1% over main's fails the job.
+      - run: cargo bench --locked --bench callgrind
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: crates/ddust/bench/target/gungraun
+          key: callgrind-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+
+  assembly:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo build --locked --profile bench --example probe
+      - run: python3 scripts/assembly.py sizes target/release/examples/probe
+      - run: python3 scripts/assembly.py gate target/release/examples/probe
