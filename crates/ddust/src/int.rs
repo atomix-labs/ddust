@@ -349,7 +349,11 @@ const trait Magnitude: Copy {
 }
 
 /// An exact result, as what it came to for `I`.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
     exact: Exact<D>,
 ) -> Outcome<I> {
@@ -382,7 +386,11 @@ macro_rules! exact {
 
 /// What a kernel that never outgrows a [`U256`] came to; were it ever to, it reports the result
 /// past the range rather than a wrong value.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn settled<I: [const] Magnitude + [const] Int>(
     outcome: Option<Outcome<I>>, negative: bool,
 ) -> Outcome<I> {
@@ -400,7 +408,11 @@ const fn scale_up<I: [const] Magnitude + [const] Int>(a: I, k: u8) -> Outcome<I>
 }
 
 /// `a / 10^k`, rounded, and whether it was exact, for any integer.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16) -> (I, bool) {
     let (negative, a) = a.split();
     let (exact, whole) = match kernel::scale_down::<I::Unsigned, I::Double>(negative, a, k, table) {
@@ -416,7 +428,11 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
 }
 
 /// `a × b / 10^k`, rounded, for any integer.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
     let negative = negative_a != negative_b;
@@ -450,7 +466,11 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
 }
 
 /// `a × 10^k / b`, rounded, for any integer and a `b` that is not zero.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
     let negative = negative_a != negative_b;
@@ -458,7 +478,11 @@ const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u1
 }
 
 /// `a / (b × 10^k)`, rounded, for any integer and a `b` that is not zero.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 const fn div_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
     let negative = negative_a != negative_b;
@@ -620,17 +644,17 @@ macro_rules! int {
 
             #[inline]
             fn scale_up(self, k: u8) -> Outcome<Self> { scale_up(self, k) }
-            #[inline]
+            #[inline(always)]
             fn scale_down(self, k: u8, table: u16) -> (Self, bool) { scale_down(self, k, table) }
-            #[inline]
+            #[inline(always)]
             fn mul_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self> { mul_down(self, rhs, k, table) }
             #[inline]
             fn mul_up(self, rhs: Self, k: u8) -> Outcome<Self> { mul_up(self, rhs, k) }
-            #[inline]
+            #[inline(always)]
             fn div_up(self, k: u8, rhs: Self, table: u16) -> Outcome<Self> { div_up(self, k, rhs, table) }
-            #[inline]
+            #[inline(always)]
             fn div_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self> { div_down(self, rhs, k, table) }
-            #[inline]
+            #[inline(always)]
             fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self> { mul_div(self, b, c, table) }
             #[inline]
             fn multiple(self, step: Self, table: u16) -> Outcome<Self> { multiple(self, step, table) }

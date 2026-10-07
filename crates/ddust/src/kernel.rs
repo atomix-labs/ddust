@@ -71,7 +71,11 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
 
 /// `a / 10^k`, rounded by `table`, and whether nothing was rounded away. The quotient of a value
 /// fits its own word, which divides it; the double divides only what that word leaves to it.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
 ) -> Option<(Exact<D>, bool)> {
@@ -85,7 +89,11 @@ pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
 }
 
 /// `a × b / 10^k`, rounded by `table`.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 pub(crate) const fn mul_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
 ) -> Option<Exact<D>> {
@@ -116,6 +124,11 @@ pub(crate) const fn mul_up<U: [const] Narrow, D: [const] Double<U>>(
 /// `a × 10^k / b`, rounded by `table`, for a `b` that is not zero. Past 38 digits the power is
 /// applied in two steps of long division, so the numerator never outgrows the widest word; a
 /// quotient past even that keeps its low bits, which wrapping arithmetic computes exactly.
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, b: U, table: u16,
 ) -> Option<Exact<D>> {
@@ -173,7 +186,11 @@ const fn divide_past_38_digits<D: [const] Word>(
 
 /// `a / (b × 10^k)`, rounded by `table`, for a `b` that is not zero. In the widest word a divisor
 /// past it is past twice any `a`, whose quotient is then zero and its remainder below half.
-#[inline]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+)]
 pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
 ) -> Option<Exact<D>> {

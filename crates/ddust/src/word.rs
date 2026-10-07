@@ -259,7 +259,11 @@ macro_rules! word {
 word!(u8, u16, u32, u64, u128 {
     // A quotient that fits a word, by a divisor that fits one, is a 128-by-64-bit division, whose
     // remainder fits a word too.
-    #[inline]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
         if let Ok(word) = u64::try_from(divisor)
             && let Some((quotient, remainder)) = reciprocal::divide_u128_by_u64(self, word)
@@ -633,7 +637,11 @@ const impl Word for U256 {
     }
 
     // The remainder by a divisor that fits 128 bits fits them too.
-    #[inline]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
         if divisor.high == 0
             && let Some((quotient, remainder)) =
@@ -647,7 +655,11 @@ const impl Word for U256 {
     // One Möller–Granlund step for a value with no high word whose quotient fits a word, and two
     // for every other quotient that fits 128 bits, where the long division calls the library three
     // times.
-    #[inline]
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
         if self.high == 0
             && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
