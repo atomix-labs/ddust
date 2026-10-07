@@ -647,6 +647,13 @@ const impl Word for U256 {
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
     )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
+        // A numerator of one word divides in it, by the library's 128-bit division, which divides
+        // by a one-word divisor in hardware, where computing the divisor's reciprocal first, for
+        // two steps on it, takes longer than the division it would spare.
+        if self.high == 0 && divisor.high == 0 {
+            let (quotient, remainder) = self.low.div_rem(divisor.low);
+            return rounded(Self::from_u128(quotient), remainder, divisor.low, negative, table);
+        }
         if divisor.high == 0
             && let Some((quotient, remainder)) =
                 reciprocal::divide_u256_by_u128(self.high, self.low, divisor.low)
