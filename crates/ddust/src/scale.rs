@@ -118,7 +118,7 @@ impl<const D: u8> StaticScale for Fixed<D> {
 /// ```
 #[derive(Debug, Clone, Copy, Default, Hash)]
 #[derive_const(PartialEq, Eq, PartialOrd, Ord)]
-// Its bytes, written; never read back from any byte, which may be past 38.
+// Its byte is written, and never read back, since a byte may be past 38 decimals.
 #[cfg_attr(feature = "bytemuck", derive(NoUninit, Zeroable))]
 #[cfg_attr(feature = "defmt", derive(Format))]
 #[cfg_attr(feature = "zerocopy-08", derive(Immutable, IntoBytes, KnownLayout, Unaligned))]

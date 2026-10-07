@@ -42,7 +42,7 @@ impl Arbitrary<'_> for Dynamic {
 /// Any of the nine modes.
 impl Arbitrary<'_> for Rounding {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-        u.choose(Self::ALL).copied()
+        u.choose(Self::MODES).copied()
     }
 
     fn size_hint(_depth: usize) -> (usize, Option<usize>) {
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn each_byte_draws_the_mode_at_its_place() {
-        for (byte, &mode) in (0_u8..).zip(Rounding::ALL) {
+        for (byte, &mode) in (0_u8..).zip(Rounding::MODES) {
             let drawn = Rounding::arbitrary(&mut Unstructured::new(&[byte])).expect("one byte");
             assert_eq!(drawn, mode, "the mode at place {byte}");
         }

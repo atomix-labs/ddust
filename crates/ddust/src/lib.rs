@@ -66,9 +66,9 @@
 //! | `defmt` | defmt's `Format`, to log a decimal from a device as its text, written without `core::fmt` |
 //! | `num-traits-02` | num-traits 0.2's `Zero`, `ConstZero`, `Bounded`, `Checked*`, `Saturating*` and `Wrapping*` traits, `FromPrimitive` and `ToPrimitive` |
 //! | `proptest` | proptest's `Arbitrary`, for property tests: any steps at any scale, and any rounding mode |
-//! | `rand-09` | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand::UniformDecimal` |
+//! | `rand-09` | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand_09::UniformDecimal` |
 //! | `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read with SSSE3 where the CPU has it |
-//! | `serde` | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose |
+//! | `serde` | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose the form at a field |
 //! | `zerocopy-08` | zerocopy 0.8's `FromBytes`, `KnownLayout` and `Immutable`, to read a decimal of a static scale from its steps' bytes, and `IntoBytes` and `Unaligned` on `Fixed` and `Dynamic`, to write a scale's byte |
 //!
 //! Text is read with NEON on every aarch64 target but the soft-float ones, and with SSSE3 on an
@@ -102,7 +102,7 @@ mod kernel;
 mod literal;
 mod ops;
 #[cfg(feature = "rand-09")]
-pub mod rand;
+pub mod rand_09;
 mod reciprocal;
 pub mod round;
 mod rounded;

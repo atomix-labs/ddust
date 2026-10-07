@@ -1,4 +1,4 @@
-//! How a decimal crosses to a file, a message or a peer.
+//! serde's `Serialize` and `Deserialize`, and the modules that choose a decimal's form at a field.
 //!
 //! A decimal serializes as its text where a person reads the format, as JSON, TOML or YAML, and as
 //! its steps where none does, as bincode or postcard. A decimal of a static scale writes its
@@ -7,10 +7,10 @@
 //! a whole number is read as one, and a float is refused, since it has lost the digits a decimal
 //! keeps. A [`Dynamic`] scale on its own is its decimals.
 //!
-//! A peer that writes a decimal of a static scale another way names it at the field, with one of
-//! the modules here, each with an `option` twin for an `Option` field, `null` or a value, and
-//! missing too beside `#[serde(default)]`: [`text`] for the text in every format, [`steps`] for the
-//! steps in every format, and [`float`] for a double, rounded to the scale.
+//! A field whose peer writes a decimal of a static scale in another form names the form with one of
+//! the modules here: [`text`] for the text in every format, [`steps`] for the steps in every
+//! format, and [`float`] for a double, rounded to the scale. Each has an `option` twin for an
+//! `Option` field, `null` or a value, and missing too beside `#[serde(default)]`.
 //!
 //! # Examples
 //! ```
@@ -118,7 +118,7 @@ fn read<'de, T: FromStr<Err = ParseError>, D: Deserializer<'de>>(
 /// # Ok::<(), serde_json::Error>(())
 /// ```
 impl<I: Int + Serialize, S: StaticScale> Serialize for Decimal<I, S> {
-    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+    fn serialize<W: Serializer>(&self, serializer: W) -> Result<W::Ok, W::Error> {
         if serializer.is_human_readable() {
             serializer.collect_str(self)
         } else {
@@ -131,8 +131,8 @@ impl<I: Int + Serialize, S: StaticScale> Serialize for Decimal<I, S> {
     }
 }
 
-/// The text or a whole number where a person reads the format, the steps where none does; a float
-/// is refused.
+/// The text or a whole number where a person reads the format, the steps where none
+/// does; a float is refused.
 ///
 /// # Examples
 /// ```
@@ -164,7 +164,7 @@ impl<'de, I: Int + Deserialize<'de>, S: StaticScale> Deserialize<'de> for Decima
 /// # Ok::<(), serde_json::Error>(())
 /// ```
 impl<I: Int + Serialize> Serialize for Decimal<I, Dynamic> {
-    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+    fn serialize<W: Serializer>(&self, serializer: W) -> Result<W::Ok, W::Error> {
         if serializer.is_human_readable() {
             serializer.collect_str(&format_args!("{self:#}"))
         } else {
@@ -211,7 +211,7 @@ fn scale<E: Error>(decimals: u8) -> Result<Dynamic, E> {
 /// # Ok::<(), serde_json::Error>(())
 /// ```
 impl Serialize for Dynamic {
-    fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+    fn serialize<W: Serializer>(&self, serializer: W) -> Result<W::Ok, W::Error> {
         serializer.serialize_u8(self.decimals())
     }
 }
@@ -233,11 +233,11 @@ impl<'de> Deserialize<'de> for Dynamic {
 }
 
 /// A `#[serde(with = …)]` module's `option` twin, through a newtype that writes and reads as the
-/// module does: `write` and `read` are the bounds on the integer each needs.
+/// module does, with the bounds on the integer that writing and reading each need.
 macro_rules! option_module {
-    (write [$($write:tt)*], read [$($read:tt)*]) => {
-        /// The same, for an `Option` field: `null` or a value, and missing too beside
-        /// `#[serde(default)]`.
+    (write [$($write_bound:tt)*], read [$($read_bound:tt)*]) => {
+        /// The same, for an `Option` field: `null` or a value,
+        /// and missing too beside `#[serde(default)]`.
         pub mod option {
             use serde_core::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -247,13 +247,13 @@ macro_rules! option_module {
             /// A decimal, in the shape `Option` writes and reads.
             struct Field<I, S>(Decimal<I, S>);
 
-            impl<I: Int $($write)*, S: StaticScale> Serialize for Field<I, S> {
-                fn serialize<Ser: Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+            impl<I: Int $($write_bound)*, S: StaticScale> Serialize for Field<I, S> {
+                fn serialize<W: Serializer>(&self, serializer: W) -> Result<W::Ok, W::Error> {
                     write(&self.0, serializer)
                 }
             }
 
-            impl<'de, I: Int $($read)*, S: StaticScale> Deserialize<'de> for Field<I, S> {
+            impl<'de, I: Int $($read_bound)*, S: StaticScale> Deserialize<'de> for Field<I, S> {
                 fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
                     read(deserializer).map(Self)
                 }
@@ -263,9 +263,9 @@ macro_rules! option_module {
             ///
             /// # Errors
             /// Whatever the serializer reports.
-            pub fn serialize<I: Int $($write)*, S: StaticScale, Ser: Serializer>(
-                value: &Option<Decimal<I, S>>, serializer: Ser,
-            ) -> Result<Ser::Ok, Ser::Error> {
+            pub fn serialize<I: Int $($write_bound)*, S: StaticScale, W: Serializer>(
+                value: &Option<Decimal<I, S>>, serializer: W,
+            ) -> Result<W::Ok, W::Error> {
                 value.map(Field).serialize(serializer)
             }
 
@@ -273,7 +273,7 @@ macro_rules! option_module {
             ///
             /// # Errors
             /// As the module's own `deserialize`.
-            pub fn deserialize<'de, I: Int $($read)*, S: StaticScale, D: Deserializer<'de>>(
+            pub fn deserialize<'de, I: Int $($read_bound)*, S: StaticScale, D: Deserializer<'de>>(
                 deserializer: D,
             ) -> Result<Option<Decimal<I, S>>, D::Error> {
                 Ok(Option::<Field<I, S>>::deserialize(deserializer)?.map(|field| field.0))
@@ -313,9 +313,9 @@ pub mod text {
     ///
     /// # Errors
     /// Whatever the serializer reports.
-    pub fn serialize<I: Int, S: StaticScale, Ser: Serializer>(
-        value: &Decimal<I, S>, serializer: Ser,
-    ) -> Result<Ser::Ok, Ser::Error> {
+    pub fn serialize<I: Int, S: StaticScale, W: Serializer>(
+        value: &Decimal<I, S>, serializer: W,
+    ) -> Result<W::Ok, W::Error> {
         serializer.collect_str(value)
     }
 
@@ -367,9 +367,9 @@ pub mod steps {
     ///
     /// # Errors
     /// Whatever the serializer reports.
-    pub fn serialize<I: Int + Serialize, S: StaticScale, Ser: Serializer>(
-        value: &Decimal<I, S>, serializer: Ser,
-    ) -> Result<Ser::Ok, Ser::Error> {
+    pub fn serialize<I: Int + Serialize, S: StaticScale, W: Serializer>(
+        value: &Decimal<I, S>, serializer: W,
+    ) -> Result<W::Ok, W::Error> {
         value.steps().serialize(serializer)
     }
 
@@ -454,9 +454,9 @@ pub mod float {
     ///
     /// # Errors
     /// Whatever the serializer reports.
-    pub fn serialize<I: Int, S: StaticScale, Ser: Serializer>(
-        value: &Decimal<I, S>, serializer: Ser,
-    ) -> Result<Ser::Ok, Ser::Error> {
+    pub fn serialize<I: Int, S: StaticScale, W: Serializer>(
+        value: &Decimal<I, S>, serializer: W,
+    ) -> Result<W::Ok, W::Error> {
         serializer.serialize_f64(value.to_f64())
     }
 
@@ -518,10 +518,10 @@ mod tests {
         float_option: None,
     };
 
-    /// `FORMS`'s tokens, from the struct's name to its end, with `default` written as `first`.
-    fn forms(first: &[Token]) -> Vec<Token> {
+    /// `FORMS`'s tokens, from the struct's name to its end, with the `default` field as given.
+    fn forms(default: &[Token]) -> Vec<Token> {
         let mut tokens = vec![Token::Struct { name: "Forms", len: 7 }, Token::Str("default")];
-        tokens.extend_from_slice(first);
+        tokens.extend_from_slice(default);
         tokens.extend_from_slice(&[
             Token::Str("text"),
             Token::Str("12.5"),
@@ -600,12 +600,16 @@ mod tests {
     }
 
     #[test]
-    fn what_a_decimal_does_not_hold_is_refused() {
-        let readable = "a decimal as a string, as \"60000.5\", or a whole number";
+    fn a_float_is_refused_where_a_person_reads_the_format() {
+        let expecting = "a decimal as a string, as \"60000.5\", or a whole number";
         assert_de_tokens_error::<serde_test::Readable<D64<2>>>(
             &[Token::F64(12.5)],
-            &format!("invalid type: floating point `12.5`, expected {readable}"),
+            &format!("invalid type: floating point `12.5`, expected {expecting}"),
         );
+    }
+
+    #[test]
+    fn what_a_decimal_does_not_hold_is_refused() {
         assert_de_tokens_error::<serde_test::Readable<D64<2>>>(
             &[Token::Str("0.125")],
             "parse error: the number has more fraction digits than the decimal's scale",

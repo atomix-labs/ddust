@@ -1,5 +1,5 @@
-//! A run-time scale's byte may be past 38 decimals, so neither it nor a decimal of it reads from
-//! bytes.
+//! A run-time scale's byte may be past 38 decimals, so neither it nor a decimal
+//! of it reads from bytes.
 
 use bytemuck::pod_read_unaligned;
 use ddust::{Decimal, Dynamic};

@@ -47,7 +47,7 @@ impl Arbitrary for Rounding {
     type Strategy = Select<Self>;
 
     fn arbitrary_with((): ()) -> Select<Self> {
-        select(Self::ALL)
+        select(Self::MODES)
     }
 }
 
@@ -78,7 +78,7 @@ mod tests {
         for _ in 0..200 {
             let mode = strategy.new_tree(&mut runner).expect("a mode").current();
             let place =
-                Rounding::ALL.iter().position(|&each| each == mode).expect("one of the nine");
+                Rounding::MODES.iter().position(|&each| each == mode).expect("one of the nine");
             *seen.get_mut(place).expect("nine places") = true;
         }
         assert!(seen.iter().all(|&drawn| drawn), "each of the nine modes, in 200 draws");

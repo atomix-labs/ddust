@@ -1,11 +1,12 @@
-//! num-traits' traits whose contracts a decimal meets. `One`, `Num` and the traits built on them
-//! need a `*` whose product keeps its factors' scale, which a decimal's does not: its scale is the
-//! sum of theirs.
+//! num-traits' traits whose contracts a decimal meets.
+//!
+//! `One`, `Num` and the traits built on them need a `*` whose product keeps its factors' scale,
+//! which a decimal's does not: its scale is the sum of theirs.
 
 use num_traits::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, ConstZero,
-    FromPrimitive, SaturatingAdd, SaturatingMul, SaturatingSub, ToPrimitive, WrappingAdd,
-    WrappingMul, WrappingNeg, WrappingSub, Zero,
+    FromPrimitive, SaturatingAdd, SaturatingSub, ToPrimitive, WrappingAdd, WrappingNeg,
+    WrappingSub, Zero,
 };
 
 use crate::round::{HalfEven, Trunc};
@@ -79,17 +80,28 @@ forward!([I: Int, S: Scale] Decimal<I, S>:
     CheckedSub::checked_sub -> Option<Self>,
     CheckedDiv::checked_div -> Option<Self>,
     CheckedRem::checked_rem -> Option<Self>,
+);
+
+// These traits never panic, so only for the scales whose values always meet: a static scale's,
+// and `Dynamic`'s, which line up. Another crate's run-time scale may refuse to mix, and panic.
+forward!([I: Int, S: StaticScale] Decimal<I, S>:
+    SaturatingAdd::saturating_add -> Self,
+    SaturatingSub::saturating_sub -> Self,
+    WrappingAdd::wrapping_add -> Self,
+    WrappingSub::wrapping_sub -> Self,
+);
+forward!([I: Int] Decimal<I, Dynamic>:
     SaturatingAdd::saturating_add -> Self,
     SaturatingSub::saturating_sub -> Self,
     WrappingAdd::wrapping_add -> Self,
     WrappingSub::wrapping_sub -> Self,
 );
 
-// Only a run-time scale's product is of its factors' type, as these traits' `Mul` bound needs.
+// Only a run-time scale's product is of its factors' type, as `CheckedMul`'s `Mul` bound needs.
+// `SaturatingMul` and `WrappingMul` are left out: a product past 38 decimals has no scale to
+// saturate or wrap to, and their contracts never panic.
 forward!([I: Int] Decimal<I, Dynamic>:
     CheckedMul::checked_mul -> Option<Self>,
-    SaturatingMul::saturating_mul -> Self,
-    WrappingMul::wrapping_mul -> Self,
 );
 
 /// As [`Decimal::checked_neg`].
@@ -116,9 +128,10 @@ fn convert<J: Int, I: Int>(n: J) -> Option<I> {
 }
 
 /// A whole number exactly, and a float at the nearest step, a tie to the even one, where an
-/// integer truncates: a float is rarely exact at a decimal scale, and its nearest step is the
-/// decimal it was written from while the steps stay below 2^52. `None` past the range, and for a
-/// float that is not finite.
+/// integer truncates; `None` past the range, and for a float that is not finite.
+///
+/// A float is rarely exact at a decimal scale, and its nearest step is the decimal it was written
+/// from while the steps stay below 2^52.
 ///
 /// # Examples
 /// ```
@@ -241,6 +254,8 @@ mod tests {
             ("1.5".parse().expect("a decimal"), "0.25".parse().expect("a decimal"));
         let product = CheckedMul::checked_mul(&a, &b).expect("in range");
         assert_eq!(product.to_string(), "0.375", "exact, at three decimals");
+        let fine: Decimal<i64, Dynamic> = "0.00000000000000000001".parse().expect("20 decimals");
+        assert_eq!(CheckedMul::checked_mul(&fine, &fine), None, "40 decimals, past any scale");
     }
 
     #[test]
