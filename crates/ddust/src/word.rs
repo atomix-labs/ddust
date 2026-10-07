@@ -698,6 +698,26 @@ const impl Word for U256 {
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
     )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
+        // A mode that reads no parity rounds by a bias added first, as the narrow word's does: the
+        // steps' quotient is the rounded one, exact when the remainder is the bias.
+        if let Some(power) = pow10_u128(k)
+            && let Some(bias) = parity_free_bias(table, negative, power)
+            && let Some(biased) = self.checked_add(Self::from_u128(bias))
+        {
+            if biased.high == 0
+                && let Some((quotient, remainder, _)) = reciprocal::divide_u128(biased.low, k)
+            {
+                return Some((
+                    Self::from_u128(u128::from(quotient)),
+                    u128::from(remainder) == bias,
+                ));
+            }
+            if let Some((quotient, remainder, _)) =
+                reciprocal::divide_u256(biased.high, biased.low, k)
+            {
+                return Some((Self::from_u128(quotient), u128::from(remainder) == bias));
+            }
+        }
         if self.high == 0
             && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
         {
