@@ -364,12 +364,14 @@ const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
     }
 }
 
-/// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when its
-/// result outgrows that. `None` only when it outgrows even a `U256`.
+/// What a kernel came to for `I`: run in `I`'s double word, and again in a [`U256`] when that word
+/// returns `None`. `None` only when the result outgrows even a `U256`. A double that is the `U256`
+/// is not run again: a second call of the same kernel would keep it out of line.
 macro_rules! exact {
     ($i:ty, $kernel:ident($($argument:expr),* $(,)?)) => {
         match kernel::$kernel::<<$i as Magnitude>::Unsigned, <$i as Magnitude>::Double>($($argument),*) {
             Some(exact) => Some(outcome::<$i, <$i as Magnitude>::Double>(exact)),
+            None if <<$i as Magnitude>::Double as Word>::WIDEST => None,
             None => match kernel::$kernel::<<$i as Magnitude>::Unsigned, U256>($($argument),*) {
                 Some(exact) => Some(outcome::<$i, U256>(exact)),
                 None => None,
@@ -403,6 +405,8 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
     let (negative, a) = a.split();
     let (exact, whole) = match kernel::scale_down::<I::Unsigned, I::Double>(negative, a, k, table) {
         Some((exact, whole)) => (outcome::<I, I::Double>(exact), whole),
+        // As in `exact!`.
+        None if <I::Double as Word>::WIDEST => (Outcome::in_range(I::ZERO), a == I::Unsigned::ZERO),
         None => match kernel::scale_down::<I::Unsigned, U256>(negative, a, k, table) {
             Some((exact, whole)) => (outcome::<I, U256>(exact), whole),
             None => (Outcome::in_range(I::ZERO), a == I::Unsigned::ZERO),
@@ -441,7 +445,7 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
         power = power.wrapping_mul(10);
         left = left.wrapping_sub(1);
     }
-    let low = I::Unsigned::truncate(a.to_u128().wrapping_mul(b.to_u128()).wrapping_mul(power));
+    let low = I::Unsigned::low_bits(a.to_u128().wrapping_mul(b.to_u128()).wrapping_mul(power));
     Outcome { wrapped: I::wrapping_join(negative, low), overflowed: true, negative }
 }
 
@@ -656,6 +660,17 @@ macro_rules! signed {
 
             #[inline]
             fn join(negative: bool, magnitude: $unsigned) -> Option<Self> {
+                // MIN's magnitude is MAX's and one. Up to a word, one comparison and a select, where
+                // a branch on the sign is mispredicted as often as the signs are mixed; past it the
+                // branch, which spares every value of a predicted sign a select of two words.
+                if <$t>::BITS <= 64 {
+                    let limit = <$t>::MAX.cast_unsigned().wrapping_add(<$unsigned>::from(negative));
+                    return if magnitude <= limit {
+                        Some(Self::wrapping_join(negative, magnitude))
+                    } else {
+                        None
+                    };
+                }
                 if negative {
                     if magnitude <= <$t>::MIN.unsigned_abs() {
                         Some(magnitude.cast_signed().wrapping_neg())

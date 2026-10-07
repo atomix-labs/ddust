@@ -65,6 +65,8 @@
 #![feature(const_unsigned_bigint_helpers)]
 // Overflow decided by the profile's `overflow-checks`, as the integers' own operators decide it.
 #![feature(cfg_overflow_checks)]
+// `mul_add` and `floor` in a `const fn`, for `from_f64`'s exact residual where an FMA is hardware.
+#![feature(core_float_math)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(test)]
@@ -79,6 +81,7 @@ mod int;
 mod kernel;
 mod literal;
 mod ops;
+mod reciprocal;
 pub mod round;
 mod rounded;
 pub mod scale;

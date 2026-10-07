@@ -1,13 +1,14 @@
 //! `f64`, correctly rounded both ways: a decimal to its nearest double, and a double's exact value
 //! at a scale, rounded once by a mode.
 
-use core::str;
+use core::f64::math::{floor, mul_add};
 
 use crate::decimal::Decimal;
 use crate::int::Int;
-use crate::kernel;
 use crate::round::RoundingMode;
 use crate::scale::Scale;
+use crate::word::rounds_up_by_class;
+use crate::{kernel, reciprocal};
 
 /// `10^k` for `k` in `0..=22`: every power of ten an `f64` holds exactly.
 #[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
@@ -25,45 +26,104 @@ const POW10_F64: [f64; 23] = {
 /// The largest magnitude an `f64` holds every integer up to: `2^53`.
 const EXACT_IN_F64: u128 = 1 << 53;
 
-/// The nearest `f64` to `magnitude × 10^-decimals`, by core's correctly rounded reading of its
-/// digits: the general path, where the steps or the power are past what a double holds exactly.
-#[expect(
-    clippy::arithmetic_side_effects,
-    reason = "counts below the buffers' lengths, and division by ten"
-)]
-fn nearest_f64(magnitude: u128, decimals: u8) -> f64 {
-    // At most 39 digits, then `e-` and the two digits of the decimals.
-    let mut text = [0_u8; 48];
-    let mut digits = [0_u8; 39];
-    let (mut left, mut count) = (magnitude, 0);
-    loop {
-        let (rest, digit) = (left / 10, left % 10);
-        if let Some(slot) = digits.get_mut(count) {
-            *slot = b'0'.wrapping_add(u8::try_from(digit).unwrap_or_default());
-        }
-        count += 1;
-        left = rest;
-        if left == 0 {
-            break;
-        }
+/// `2^52`, the biased exponent `1023 + 52` with no fraction: from it, every double is whole.
+const LEAST_ALWAYS_WHOLE: f64 = f64::from_bits(1075 << 52);
+
+/// `x × 10^decimals` rounded by `table` for a result of sign `negative`, for a finite `x` that is
+/// not negative, from the product's double `p` and its residual `e = x·10^d − p`, which an FMA
+/// computes exactly; or `None` past 22 decimals or from `2^52`, which [`scaled_from_bits`] takes.
+///
+/// Below `2^52` every whole number and every half is a double, and `p` is the double nearest
+/// `p + e`, so none lies strictly between them: `p`'s fraction is the value's, but where it is zero
+/// or a half, where `e`'s sign says which side of it the value is on. Below half a step the
+/// fraction is never either, so a residual that underflows is never read. The class is computed
+/// with selects, so that no branch depends on the value. Where an FMA is not hardware, `mul_add`
+/// is a library call, and only the tests make it.
+const fn scaled_from_residual(x: f64, decimals: u8, negative: bool, table: u16) -> Option<u128> {
+    let d = usize::from(decimals);
+    if d >= POW10_F64.len() {
+        return None;
     }
-    let mut len = 0;
-    for &digit in digits.get(..count).unwrap_or_default().iter().rev() {
-        if let Some(slot) = text.get_mut(len) {
-            *slot = digit;
-        }
-        len += 1;
+    #[expect(clippy::indexing_slicing, reason = "checked against the table's length first")]
+    let power = POW10_F64[d];
+    let p = x * power;
+    // An infinity too: `x` and the power are finite, so `p` is not a NaN.
+    if p >= LEAST_ALWAYS_WHOLE {
+        return None;
     }
-    for byte in [b'e', b'-', b'0'.wrapping_add(decimals / 10), b'0'.wrapping_add(decimals % 10)] {
-        if let Some(slot) = text.get_mut(len) {
-            *slot = byte;
-        }
-        len += 1;
-    }
-    text.get(..len)
-        .and_then(|text| str::from_utf8(text).ok())
-        .and_then(|text| text.parse().ok())
-        .unwrap_or(f64::NAN)
+    let e = mul_add(x, power, -p);
+    let whole = floor(p);
+    let fraction = p - whole;
+    let (above, below) = (u32::from(e > 0.0), u32::from(e < 0.0));
+    #[expect(clippy::float_cmp, reason = "a fraction against zero and a half, both exact")]
+    let (at_zero, at_half) = (fraction == 0.0, fraction == 0.5);
+    // At a whole number, just above it is below half a step, and just below it, a step down, is
+    // above half; at a half, the residual's side is the class's.
+    let class = if at_zero {
+        above | below.wrapping_mul(3)
+    } else if at_half {
+        2_u32.wrapping_add(above).wrapping_sub(below)
+    } else {
+        1 | (u32::from(fraction > 0.5) << 1)
+    };
+    #[expect(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a whole double from 0 to below 2^52 converts exactly"
+    )]
+    let quotient = (whole as u64).wrapping_sub(u64::from(at_zero) & u64::from(below));
+    let up = rounds_up_by_class(class, quotient & 1 == 1, negative, table);
+    Some(u128::from(quotient.wrapping_add(u64::from(up))))
+}
+
+/// `x × 10^decimals`, for a finite `x`, rounded by `table` for `x`'s sign, from the double's exact
+/// binary value `m · 2^e`, with `m` its 53 bits and `e` its exponent less 52; `None` past 128 bits.
+const fn scaled_from_bits(x: f64, decimals: u8, table: u16) -> Option<u128> {
+    let bits = x.to_bits();
+    let biased = match i32::try_from((bits >> 52) & 0x7FF) {
+        Ok(biased) => biased,
+        Err(_out_of_range) => 0,
+    };
+    let fraction = bits & ((1 << 52) - 1);
+    // A subnormal has no implicit leading one; every other double has.
+    let (mantissa, exponent) = if biased == 0 {
+        (fraction, -1074_i32)
+    } else {
+        (fraction | (1 << 52), biased.wrapping_sub(1075))
+    };
+    kernel::binary_at_scale(x.is_sign_negative(), mantissa, exponent, decimals, table)
+}
+
+/// The nearest `f64` to `magnitude × 10^-decimals`, ties to even, for a magnitude that is not
+/// zero: the general path, where the steps or the power are past what a double holds exactly.
+///
+/// `10^d` is `5^d · 2^d`, so the value is `⌊magnitude · 2^s / 5^d⌋ · 2^-(s + d)` and a fraction,
+/// for the `s` that gives the quotient 63 or 64 bits: rounded to 53 by the bits below them and the
+/// remainder, it is the double. A decimal of at most 38 decimals is past neither end of a double,
+/// so it is never subnormal nor infinite.
+const fn nearest_f64(magnitude: u128, decimals: u8) -> f64 {
+    let Some((quotient, shift, inexact)) = reciprocal::quotient_by_pow5(magnitude, decimals) else {
+        return f64::NAN;
+    };
+    // 10 or 11 bits below the 53 kept.
+    let dropped = 11_u32.wrapping_sub(quotient.leading_zeros());
+    let kept = quotient >> dropped;
+    let half = (quotient >> dropped.wrapping_sub(1)) & 1;
+    // What is left once the kept bits and the half below them are shifted out.
+    let below = quotient << 65_u32.wrapping_sub(dropped) != 0 || inexact;
+    let up = half & u64::from(below || kept & 1 == 1);
+    // The double kept · 2^e has the biased exponent e + 1075; the implicit bit of `kept` adds one
+    // to it, and a carry out of rounding up one more, exactly as the double's next exponent does.
+    let exponent = 1074_i32
+        .wrapping_add_unsigned(dropped)
+        .wrapping_sub(shift)
+        .wrapping_sub(i32::from(decimals));
+    let biased = match u64::try_from(exponent) {
+        Ok(biased) => biased,
+        Err(_below_zero) => 0,
+    };
+    f64::from_bits((biased << 52).wrapping_add(kept).wrapping_add(up))
 }
 
 impl<I: Int, S: Scale> Decimal<I, S> {
@@ -94,6 +154,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
                 let magnitude = magnitude as f64;
                 magnitude / power
             },
+            _ if magnitude == 0 => 0.0,
             _ => nearest_f64(magnitude, decimals),
         };
         if negative { -value } else { value }
@@ -126,25 +187,19 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         if !x.is_finite() {
             return None;
         }
-        let bits = x.to_bits();
-        let negative = bits >> 63 == 1;
-        let biased = match i32::try_from((bits >> 52) & 0x7FF) {
-            Ok(biased) => biased,
-            Err(_out_of_range) => 0,
-        };
-        let fraction = bits & ((1 << 52) - 1);
-        // A subnormal has no implicit leading one; every other double has.
-        let (mantissa, exponent) = if biased == 0 {
-            (fraction, -1074_i32)
+        let negative = x.is_sign_negative();
+        let (decimals, table) = (scale.decimals(), mode.table());
+        // Where an FMA is hardware, and up to a word: a 128-bit decimal goes to the exact product.
+        let magnitude = if cfg!(any(target_arch = "aarch64", target_feature = "fma"))
+            && size_of::<I>() <= size_of::<u64>()
+            && let Some(magnitude) = scaled_from_residual(x.abs(), decimals, negative, table)
+        {
+            magnitude
+        } else if let Some(magnitude) = scaled_from_bits(x, decimals, table) {
+            magnitude
         } else {
-            (fraction | (1 << 52), biased.wrapping_sub(1075))
-        };
-        let Some(magnitude) =
-            kernel::binary_at_scale(negative, mantissa, exponent, scale.decimals(), mode.table())
-        else {
             return None;
         };
-        let Some(magnitude) = magnitude.to_u128() else { return None };
         match I::from_magnitude(negative, magnitude) {
             Some(steps) => Some(Self::from_steps(steps, scale)),
             None => None,
@@ -159,7 +214,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use crate::round::{Ceil, Floor, HalfEven, Trunc};
+    use crate::round::{Ceil, Floor, HalfEven, Rounding, Trunc};
     use crate::{D64, D128, Decimal, Dynamic, Fixed};
 
     proptest! {
@@ -178,6 +233,33 @@ mod tests {
         }
 
         #[test]
+        fn a_decimal_at_any_scale_converts_as_its_text_does(steps: i128, decimals in 0_u8..=38) {
+            let value = Decimal::from_steps(steps, Dynamic::new(decimals).expect("at most 38"));
+            let text: f64 = format!("{steps}e-{decimals}").parse().expect("a number");
+            prop_assert_eq!(value.to_f64().to_bits(), text.to_bits(), "correctly rounded");
+        }
+
+        #[test]
+        fn a_double_at_a_fine_scale_converts_from_its_exact_value(x in -1.0_f64..1.0, decimals in 28_u8..=38) {
+            // Past 27 decimals 5^d takes two words, and the product a U256. The double's exact
+            // expansion, cut at the scale: Trunc keeps the digits before the cut, and Expand adds a
+            // step away from zero when any after it is not zero.
+            let exact = format!("{x:.1100}");
+            let (whole, fraction) = exact.split_once('.').expect("a point");
+            let (kept, cut) = fraction.split_at(usize::from(decimals));
+            let truncated: i128 = format!("{whole}{kept}").parse().expect("at most 39 digits");
+            let expanded = match (cut.bytes().any(|digit| digit != b'0'), x < 0.0) {
+                (false, _) => truncated,
+                (true, false) => truncated.checked_add(1).expect("below 10^38"),
+                (true, true) => truncated.checked_sub(1).expect("above -10^38"),
+            };
+            let scale = Dynamic::new(decimals).expect("at most 38");
+            let steps = |mode: Rounding| Decimal::<i128, Dynamic>::from_f64(x, scale, mode).map(Decimal::steps);
+            prop_assert_eq!(steps(Rounding::Trunc), Some(truncated));
+            prop_assert_eq!(steps(Rounding::Expand), Some(expanded));
+        }
+
+        #[test]
         fn a_double_converts_to_its_nearest_decimal(x in -9e11_f64..9e11) {
             // The double's exact value, through its full decimal expansion, truncated at 7 and
             // compared: Trunc must agree with the expansion's first seven decimals.
@@ -185,6 +267,112 @@ mod tests {
             let (whole, fraction) = exact.split_once('.').expect("a point");
             let truncated: D64<7> = format!("{whole}.{}", fraction.get(..7).expect("sixty digits")).parse().expect("a decimal");
             prop_assert_eq!(D64::<7>::from_f64(x, Fixed, Trunc), Some(truncated));
+        }
+    }
+
+    #[test]
+    fn a_tie_between_doubles_goes_to_the_even() {
+        // (2^53 + 1) · 5^k at k decimals is (2^53 + 1) / 2^k, halfway between two doubles, and goes
+        // down to the even; (2^53 + 3) / 2^k goes up to it. Past 27 the power takes two words.
+        for k in 0_u8..=31 {
+            let (power, scale) = (5_i128.pow(u32::from(k)), Dynamic::new(k).expect("at most 38"));
+            let below = 9_007_199_254_740_992.0 / f64::from(1_u32 << k);
+            let above = 9_007_199_254_740_996.0 / f64::from(1_u32 << k);
+            assert_eq!(
+                Decimal::from_steps(((1 << 53) + 1) * power, scale).to_f64(),
+                below,
+                "(2^53 + 1) / 2^{k}, down to the even"
+            );
+            assert_eq!(
+                Decimal::from_steps(((1 << 53) + 3) * power, scale).to_f64(),
+                above,
+                "(2^53 + 3) / 2^{k}, up to the even"
+            );
+        }
+    }
+
+    #[test]
+    fn a_decimal_at_either_end_of_the_widest_range_converts() {
+        let least = D128::<0>::from_steps(i128::MIN, Fixed).to_f64();
+        assert_eq!(least, -(2.0_f64.powi(127)), "all 128 bits");
+        let text: f64 = "170141183460469231731687303715884105727e-38".parse().expect("a number");
+        assert_eq!(D128::<38>::from_steps(i128::MAX, Fixed).to_f64(), text, "the widest power");
+    }
+
+    #[test]
+    fn a_double_past_128_bits_is_refused() {
+        assert_eq!(D128::<2>::from_f64(1e300, Fixed, Trunc), None, "a power of five in one word");
+        assert_eq!(D128::<30>::from_f64(1e300, Fixed, Trunc), None, "and in two");
+    }
+
+    /// The residual, against the exact value: where an FMA is not hardware, through the library's.
+    mod residual {
+        use proptest::prelude::*;
+
+        use super::super::{POW10_F64, scaled_from_bits, scaled_from_residual};
+        use crate::round::{HalfEven, Rounding, RoundingMode};
+        use crate::{D64, Fixed};
+
+        /// Every mode, as a value.
+        const MODES: [Rounding; 9] = [
+            Rounding::Floor,
+            Rounding::Ceil,
+            Rounding::Trunc,
+            Rounding::Expand,
+            Rounding::HalfFloor,
+            Rounding::HalfCeil,
+            Rounding::HalfTrunc,
+            Rounding::HalfExpand,
+            Rounding::HalfEven,
+        ];
+
+        #[test]
+        fn the_residual_answers_up_to_22_decimals_and_below_2_to_the_52() {
+            let table = HalfEven.table();
+            let last = scaled_from_residual(4_503_599_627_370_495.5, 0, false, table);
+            assert_eq!(last, Some(4_503_599_627_370_496), "the last half below 2^52, to even");
+            assert_eq!(
+                scaled_from_residual(4_503_599_627_370_496.0, 0, false, table),
+                None,
+                "not 2^52"
+            );
+            assert_eq!(
+                scaled_from_residual(1e-22, 22, false, table),
+                Some(1),
+                "the last exact power"
+            );
+            assert_eq!(scaled_from_residual(1e-23, 23, false, table), None, "and none past it");
+            let past = D64::<23>::from_f64(1e-23, Fixed, HalfEven).map(D64::steps);
+            assert_eq!(past, Some(1), "which the exact product takes");
+        }
+
+        proptest! {
+            #[test]
+            fn the_residual_rounds_as_the_exact_value_does(
+                raw: u64, small: u32, biased in 933_u64..=1063, decimals in 0_u8..=22, family in 0_u8..3,
+                negative: bool,
+            ) {
+                let x = match family {
+                    // Any double from 2^-90 to 2^40.
+                    0 => f64::from_bits((biased << 52) | (raw & ((1 << 52) - 1))),
+                    // A tie: an odd number of halves of 10^-d, below 2^52 once scaled, so x · 10^d is
+                    // a half the product's double holds exactly.
+                    1 => {
+                        let bound = (1_u64 << 53).checked_div(5_u64.pow(u32::from(decimals))).expect("a power of five is not zero");
+                        let odd = u32::try_from(u64::from(small).checked_rem(bound).expect("a bound of 3 or more")).unwrap_or(u32::MAX) | 1;
+                        f64::from(odd) * 0.5_f64.powi(i32::from(decimals)) * 0.5
+                    },
+                    // Near a whole number of steps: n / 10^d, the nearest double.
+                    _ => f64::from(small) / POW10_F64[usize::from(decimals)],
+                };
+                let x = if negative { -x } else { x };
+                for mode in MODES {
+                    let table = mode.table();
+                    if let Some(got) = scaled_from_residual(x.abs(), decimals, negative, table) {
+                        prop_assert_eq!(Some(got), scaled_from_bits(x, decimals, table), "{:?} at {}", mode, decimals);
+                    }
+                }
+            }
         }
     }
 

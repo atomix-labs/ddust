@@ -1,6 +1,8 @@
 //! The unsigned words the kernels compute in: an integer's magnitude, and a word twice its width
 //! that holds the exact result of an operation on two magnitudes before it is narrowed back.
 
+use crate::reciprocal;
+
 /// `10^k` for `k` in `0..=38`: every power a `u128` holds, and so every power a scale needs.
 #[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
 pub(crate) const POW10: [u128; 39] = {
@@ -13,6 +15,82 @@ pub(crate) const POW10: [u128; 39] = {
     }
     table
 };
+
+/// `5^k` for `k` in `0..=38`: with a power of two, every power of ten a scale needs.
+#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
+pub(crate) const POW5: [u128; 39] = {
+    let mut table = [1_u128; 39];
+    let mut k = 1;
+    while k < table.len() {
+        table[k] = table[k.wrapping_sub(1)].wrapping_mul(5);
+        k = k.wrapping_add(1);
+    }
+    table
+};
+
+/// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
+/// whose quotient is `odd` and whose division left `remainder` of `divisor`.
+///
+/// A table's four bits for one sign and parity rise with the remainder's class, so each four is a
+/// threshold the remainder must pass: `0b1110` any remainder, `0b1100` half or more, `0b1000` more
+/// than half, and `0b0000` none. One comparison with it is the bit the table holds for the class,
+/// with no class computed; and with the table a constant, each of the four thresholds is too.
+#[inline]
+pub(crate) const fn rounds_up<D: [const] Word>(
+    remainder: D, divisor: D, odd: bool, negative: bool, table: u16,
+) -> bool {
+    let threshold = match (negative, odd) {
+        (false, false) => threshold(table, divisor),
+        (false, true) => threshold(table >> 4, divisor),
+        (true, false) => threshold(table >> 8, divisor),
+        (true, true) => threshold(table >> 12, divisor),
+    };
+    remainder > threshold
+}
+
+/// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
+/// whose quotient is `odd` and whose remainder's class is `class`: 0 for no remainder, 1 below
+/// half, 2 at half, 3 above.
+///
+/// The bit the table holds, for a division whose class is known without a divisor.
+#[inline]
+pub(crate) const fn rounds_up_by_class(class: u32, odd: bool, negative: bool, table: u16) -> bool {
+    (table >> ((u32::from(negative) << 3) | (u32::from(odd) << 2) | class)) & 1 == 1
+}
+
+/// The remainder a quotient must pass to move, by the four lowest of `bits`.
+#[inline]
+const fn threshold<D: [const] Word>(bits: u16, divisor: D) -> D {
+    match bits & 0xF {
+        0b1110 => D::ZERO,
+        // Half or more: past ⌈d/2⌉ − 1, which is ⌊(d − 1)/2⌋ for an odd divisor and an even one.
+        0b1100 => divisor.wrapping_sub(D::ONE).halved(),
+        0b1000 => divisor.halved(),
+        // None: every remainder is below the divisor.
+        _ => divisor,
+    }
+}
+
+/// `quotient`, one step further from zero when [`rounds_up`] says so for the division that left
+/// `remainder` of `divisor`: every rounding in the crate is this. A quotient moves only when the
+/// divisor is at least 2, so it is at most half its word, and moving never wraps.
+#[inline]
+pub(crate) const fn rounded<Q: [const] Word, R: [const] Word>(
+    quotient: Q, remainder: R, divisor: R, negative: bool, table: u16,
+) -> Q {
+    // A step of zero or one, always added: a branch around the addition, for a quotient in two
+    // words, is mispredicted as often as remainders at random round up.
+    let up = rounds_up(remainder, divisor, quotient.is_odd(), negative, table);
+    quotient.wrapping_add(if up { Q::ONE } else { Q::ZERO })
+}
+
+/// A zero quotient, or one when `table` moves it, for a result of sign `negative` whose divisor is
+/// past twice the dividend, and so whose remainder, `nonzero` or not, is below half.
+#[inline]
+pub(crate) const fn rounded_zero<D: [const] Word>(nonzero: bool, negative: bool, table: u16) -> D {
+    // A remainder of one, of a divisor it is below half of: past only the threshold of `0b1110`.
+    rounded(D::ZERO, u8::from(nonzero), u8::MAX, negative, table)
+}
 
 /// `10^k` as a `u128`, or `None` past `10^38`.
 #[inline]
@@ -45,8 +123,36 @@ pub(crate) const trait Word: Copy + [const] Ord {
     fn wrapping_mul(self, other: Self) -> Self;
     /// The quotient and the remainder, for a divisor that is not zero.
     fn div_rem(self, divisor: Self) -> (Self, Self);
+    /// Half the value, rounded down.
+    fn halved(self) -> Self;
     /// Whether the value is odd.
     fn is_odd(self) -> bool;
+
+    /// The quotient by a divisor that is not zero, [`rounded`] by `table` for a result of sign
+    /// `negative`. A word past 64 bits rounds by the remainder in the narrowest word that holds
+    /// it.
+    #[inline]
+    fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
+        let (quotient, remainder) = self.div_rem(divisor);
+        rounded(quotient, remainder, divisor, negative, table)
+    }
+
+    /// `self / 10^k`, [`rounded`] by `table` for a result of sign `negative`, and whether nothing
+    /// was rounded away; or `None` when `10^k` is past the word, or a word below the widest leaves
+    /// the quotient to the double. A word whose compiler has no cheap division by a constant
+    /// divides by the power's reciprocal, and rounds by the remainder in the narrowest word that
+    /// holds it.
+    #[inline]
+    fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
+        match Self::pow10(k) {
+            Some(power) => {
+                let (quotient, remainder) = self.div_rem(power);
+                let exact = remainder == Self::ZERO;
+                Some((rounded(quotient, remainder, power, negative, table), exact))
+            },
+            None => None,
+        }
+    }
 }
 
 /// A primitive word, which every magnitude is: it converts to and from a `u128`.
@@ -54,7 +160,7 @@ pub(crate) const trait Narrow: [const] Word {
     /// The value as a `u128`.
     fn to_u128(self) -> u128;
     /// The low bits of a `u128`.
-    fn truncate(wide: u128) -> Self;
+    fn low_bits(wide: u128) -> Self;
 }
 
 /// The word twice as wide as `U`, which holds the product of any two `U`s.
@@ -69,10 +175,13 @@ pub(crate) const trait Double<U: [const] Narrow>: [const] Word {
     fn widening_mul(a: U, b: U) -> Self;
 }
 
-/// The words for each primitive, forwarded to its own methods.
+/// The words for each primitive, forwarded to its own methods, with the items of a block a word is
+/// given.
 macro_rules! word {
-    ($($t:ty),*) => {$(
+    ($($t:ty $({ $($more:item)* })?),*) => {$(
         const impl Word for $t {
+            $($($more)*)?
+
             const ZERO: Self = 0;
             const ONE: Self = 1;
 
@@ -119,6 +228,11 @@ macro_rules! word {
             }
 
             #[inline]
+            fn halved(self) -> Self {
+                self >> 1
+            }
+
+            #[inline]
             fn is_odd(self) -> bool {
                 self & 1 == 1
             }
@@ -131,7 +245,7 @@ macro_rules! word {
             }
 
             #[inline]
-            fn truncate(wide: u128) -> Self {
+            fn low_bits(wide: u128) -> Self {
                 // The masked value always fits: the conversion is the truncation, spelled exactly.
                 match <$t>::try_from(wide & u128::from(<$t>::MAX)) {
                     Ok(low) => low,
@@ -142,7 +256,55 @@ macro_rules! word {
     )*};
 }
 
-word!(u8, u16, u32, u64, u128);
+word!(u8, u16, u32, u64, u128 {
+    // A quotient that fits a word, by a divisor that fits one, is a 128-by-64-bit division, whose
+    // remainder fits a word too.
+    #[inline]
+    fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
+        if let Ok(word) = u64::try_from(divisor)
+            && let Some((quotient, remainder)) = reciprocal::divide_u128_by_u64(self, word)
+        {
+            return rounded(u128::from(quotient), remainder, word, negative, table);
+        }
+        divide_round_past_a_word(self, divisor, negative, table)
+    }
+
+    // LLVM divides a `u128` by a constant through a multiply-high of four multiplies, and by a
+    // power known only at run time through a library call. A value with no high word divides as a
+    // `u64`; any other, by one Möller–Granlund step when its quotient fits a word, and by two when
+    // it does not, inline: a call on the path, even one never taken, makes every caller save its
+    // registers. A power past `10^19` is left to the double.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "as `kernel::rounded_pow10`'s: out of line it loses the constant `k`"
+    )]
+    fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
+        let Some(power) = pow10_u128(k) else { return None };
+        let (quotient, remainder, divisor) =
+            if let (Ok(value), Ok(divisor)) = (u64::try_from(self), u64::try_from(power)) {
+                let (quotient, remainder) = value.div_rem(divisor);
+                (u128::from(quotient), remainder, divisor)
+            } else if let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self, k) {
+                (u128::from(quotient), remainder, divisor)
+            } else if let Some(divided) = reciprocal::divide_u256(0, self, k) {
+                divided
+            } else {
+                return None;
+            };
+        Some((rounded(quotient, remainder, divisor, negative, table), remainder == 0))
+    }
+});
+
+/// `value / divisor`, rounded by `table` for a result of sign `negative`, for a quotient or a
+/// divisor past a word: off the hot path and out of line, so that LLVM does not divide once for
+/// both paths and round by the remainder in both words.
+#[cold]
+#[inline(never)]
+const fn divide_round_past_a_word(value: u128, divisor: u128, negative: bool, table: u16) -> u128 {
+    let (quotient, remainder) = value.div_rem(divisor);
+    rounded(quotient, remainder, divisor, negative, table)
+}
 
 /// Each primitive's double: the next primitive, for every magnitude but a `u128`'s.
 macro_rules! double {
@@ -239,6 +401,12 @@ impl U256 {
         (quotient, remainder)
     }
 
+    /// Its high and its low 128 bits.
+    #[cfg(test)]
+    pub(crate) const fn halves(self) -> (u128, u128) {
+        (self.high, self.low)
+    }
+
     /// The product of two `u128`s.
     #[inline]
     pub(crate) const fn widening(a: u128, b: u128) -> Self {
@@ -282,20 +450,17 @@ impl U256 {
         })
     }
 
-    /// The value shifted `shift` bits right, and how the bits shifted out compare with half of
-    /// `2^shift`: 0 when they are zero, 1 below half, 2 at half, 3 above.
-    pub(crate) const fn shr_classed(self, shift: u32) -> (Self, u32) {
+    /// The value shifted `shift` bits right, rounded by `table` for a result of sign `negative`
+    /// as a division by `2^shift`, for a value below `2^255`: past 255 bits, all of it shifts out,
+    /// below half.
+    pub(crate) const fn shr_round(self, shift: u32, negative: bool, table: u16) -> Self {
         if shift == 0 {
-            return (self, 0);
+            return self;
         }
-        if shift > 256 {
-            // 2^(shift - 1) is past every value: all of it shifts out, below half.
-            return (Self::ZERO, u32::from(self.high != 0 || self.low != 0));
+        if shift >= 256 {
+            return rounded_zero(self != Self::ZERO, negative, table);
         }
-        let half = Self::ONE.checked_shl(shift.wrapping_sub(1));
-        let (quotient, rest) = if shift >= 256 {
-            (Self::ZERO, self)
-        } else if shift >= 128 {
+        let (quotient, rest) = if shift >= 128 {
             let low_bits = shift.wrapping_sub(128);
             let mask = if low_bits == 0 { 0 } else { u128::MAX >> 128_u32.wrapping_sub(low_bits) };
             (
@@ -312,13 +477,16 @@ impl U256 {
                 Self { high: 0, low: self.low & mask },
             )
         };
-        let class = match half {
-            Some(half) => u32::from(rest != Self::ZERO)
-                .wrapping_add(u32::from(rest >= half))
-                .wrapping_add(u32::from(rest > half)),
-            None => u32::from(rest != Self::ZERO),
-        };
-        (quotient, class)
+        match Self::ONE.checked_shl(shift) {
+            Some(divisor) => rounded(quotient, rest, divisor, negative, table),
+            None => quotient,
+        }
+    }
+
+    /// The value shifted one bit right.
+    #[inline]
+    const fn shifted_right(self) -> Self {
+        Self { high: self.high >> 1, low: (self.low >> 1) | (self.high << 127) }
     }
 
     /// The value shifted one bit left, and the bit shifted out.
@@ -430,6 +598,10 @@ const impl Word for U256 {
         }
         if divisor.high == 0 {
             let d = divisor.low;
+            if let Some((low, remainder)) = reciprocal::divide_u256_by_u128(self.high, self.low, d)
+            {
+                return (Self::from_u128(low), Self::from_u128(remainder));
+            }
             let (high, rest) = (self.high / d, self.high % d);
             let (low, remainder) = Self::div_rem_narrow(rest, self.low, d);
             return (Self { high, low }, Self::from_u128(remainder));
@@ -451,9 +623,74 @@ const impl Word for U256 {
     }
 
     #[inline]
+    fn halved(self) -> Self {
+        self.shifted_right()
+    }
+
+    #[inline]
     fn is_odd(self) -> bool {
         self.low & 1 == 1
     }
+
+    // The remainder by a divisor that fits 128 bits fits them too.
+    #[inline]
+    fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
+        if divisor.high == 0
+            && let Some((quotient, remainder)) =
+                reciprocal::divide_u256_by_u128(self.high, self.low, divisor.low)
+        {
+            return rounded(Self::from_u128(quotient), remainder, divisor.low, negative, table);
+        }
+        divide_round_by_long_division(self, divisor, negative, table)
+    }
+
+    // One Möller–Granlund step for a value with no high word whose quotient fits a word, and two
+    // for every other quotient that fits 128 bits, where the long division calls the library three
+    // times.
+    #[inline]
+    fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
+        if self.high == 0
+            && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
+        {
+            let quotient = rounded(u128::from(quotient), remainder, divisor, negative, table);
+            return Some((Self::from_u128(quotient), remainder == 0));
+        }
+        match reciprocal::divide_u256(self.high, self.low, k) {
+            Some((quotient, remainder, divisor)) => {
+                let quotient =
+                    rounded(Self::from_u128(quotient), remainder, divisor, negative, table);
+                Some((quotient, remainder == 0))
+            },
+            None => match Self::pow10(k) {
+                Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),
+                None => None,
+            },
+        }
+    }
+}
+
+/// `value / divisor`, rounded by `table` for a result of sign `negative`, for a quotient or a
+/// divisor past 128 bits: off the hot path and out of line, as [`divide_round_past_a_word`].
+#[cold]
+#[inline(never)]
+const fn divide_round_by_long_division(
+    value: U256, divisor: U256, negative: bool, table: u16,
+) -> U256 {
+    let (quotient, remainder) = value.div_rem(divisor);
+    rounded(quotient, remainder, divisor, negative, table)
+}
+
+/// `value / power`, rounded by `table` for a result of sign `negative`, and whether nothing was
+/// rounded away, for a power past `10^19` or a quotient past 128 bits: by the run-time reciprocal
+/// for a power of 128 bits or fewer, and by long division past them, off the hot path and out of
+/// line.
+#[cold]
+#[inline(never)]
+const fn divide_pow10_by_long_division(
+    value: U256, power: U256, negative: bool, table: u16,
+) -> (U256, bool) {
+    let (quotient, remainder) = value.div_rem(power);
+    (rounded(quotient, remainder, power, negative, table), remainder == U256::ZERO)
 }
 
 const impl<U: [const] Narrow> Double<U> for U256 {
@@ -467,13 +704,13 @@ const impl<U: [const] Narrow> Double<U> for U256 {
         if self.high != 0 {
             return None;
         }
-        let narrow = U::truncate(self.low);
+        let narrow = U::low_bits(self.low);
         if narrow.to_u128() == self.low { Some(narrow) } else { None }
     }
 
     #[inline]
     fn wrapping_narrow(self) -> U {
-        U::truncate(self.low)
+        U::low_bits(self.low)
     }
 
     #[inline]
@@ -487,8 +724,10 @@ const impl<U: [const] Narrow> Double<U> for U256 {
 #[expect(clippy::arithmetic_side_effects, reason = "the reference model's own arithmetic")]
 mod tests {
     use proptest::prelude::*;
+    use rstest::rstest;
 
-    use super::{Double, U256, Word};
+    use super::{Double, U256, Word, rounded_zero, rounds_up};
+    use crate::round::{Rounding, RoundingMode};
 
     /// A 256-bit word from its two halves.
     const fn wide(high: u128, low: u128) -> U256 {
@@ -537,6 +776,62 @@ mod tests {
             let through: U256 = Double::<u64>::widening_mul(a, b);
             prop_assert_eq!(Double::<u64>::narrow(through), u64::try_from(product).ok());
             prop_assert_eq!(Double::<u64>::wrapping_narrow(through), Double::<u64>::wrapping_narrow(product));
+        }
+    }
+
+    #[rstest]
+    fn a_threshold_is_the_table_bit_for_every_remainder(
+        #[values(
+            Rounding::Floor,
+            Rounding::Ceil,
+            Rounding::Trunc,
+            Rounding::Expand,
+            Rounding::HalfFloor,
+            Rounding::HalfCeil,
+            Rounding::HalfTrunc,
+            Rounding::HalfExpand,
+            Rounding::HalfEven
+        )]
+        mode: Rounding,
+    ) {
+        let table = mode.table();
+        for divisor in 1_u32..=40 {
+            for remainder in 0..divisor {
+                // The class by its definition: zero, below half, at half, above.
+                let class = u32::from(remainder != 0)
+                    + u32::from(2 * remainder >= divisor)
+                    + u32::from(2 * remainder > divisor);
+                for index in 0..4_u32 {
+                    let (negative, odd) = (index & 2 != 0, index & 1 != 0);
+                    let bit = (table >> ((index << 2) | class)) & 1 == 1;
+                    let got = rounds_up(remainder, divisor, odd, negative, table);
+                    assert_eq!(got, bit, "{mode:?}: {remainder} of {divisor}, case {index}");
+                }
+            }
+        }
+    }
+
+    #[rstest]
+    fn a_zero_quotient_moves_only_where_any_remainder_rounds_up(
+        #[values(
+            Rounding::Floor,
+            Rounding::Ceil,
+            Rounding::Trunc,
+            Rounding::Expand,
+            Rounding::HalfFloor,
+            Rounding::HalfCeil,
+            Rounding::HalfTrunc,
+            Rounding::HalfExpand,
+            Rounding::HalfEven
+        )]
+        mode: Rounding,
+    ) {
+        let table = mode.table();
+        for negative in [false, true] {
+            assert_eq!(rounded_zero::<u64>(false, negative, table), 0, "{mode:?}: nothing left");
+            let bit = (table >> (u32::from(negative) << 3 | 1)) & 1;
+            let got = rounded_zero::<u64>(true, negative, table);
+            assert_eq!(got, u64::from(bit), "{mode:?}: below half");
         }
     }
 

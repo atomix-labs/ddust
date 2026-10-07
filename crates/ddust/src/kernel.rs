@@ -1,13 +1,14 @@
 //! The kernels every decimal operation is written on: each exact, on magnitudes, in a word wide
 //! enough for its result, and rounded once by a mode's table.
 //!
-//! A kernel returns `None` when its result outgrows the word it was given; the caller then runs it
-//! again in a [`U256`], the widest word. There, [`mul_up`] alone has no result past it, and the
+//! A kernel returns `None` when its result outgrows the word it was given, or when that word leaves
+//! a division to a wider one, as [`Word::divide_pow10_round`] says; the caller then runs it again
+//! in a [`U256`], the widest word. There, [`mul_up`] alone has no result past it, and the
 //! caller keeps its low bits by wrapping arithmetic; [`div_up`] past it keeps them itself.
 
 use core::cmp::Ordering;
 
-use crate::word::{Double, Narrow, U256, Word};
+use crate::word::{Double, Narrow, POW5, U256, Word, rounded, rounded_zero};
 
 /// An exact result: its sign, and its magnitude in a word wide enough to hold it, or, past even
 /// the widest word, its low bits, which wrapping keeps.
@@ -29,39 +30,25 @@ impl<D> Exact<D> {
     }
 }
 
-/// How a division's remainder compares with half its divisor: 0 when it is zero, 1 below half, 2
-/// at half, 3 above.
-#[inline]
-#[expect(clippy::arithmetic_side_effects, reason = "three bits sum to at most 3")]
-const fn class<D: [const] Word>(remainder: D, divisor: D) -> u32 {
-    let rest = divisor.wrapping_sub(remainder);
-    u32::from(remainder != D::ZERO) + u32::from(remainder >= rest) + u32::from(remainder > rest)
-}
-
-/// `quotient`, one step further from zero when `table` says so for a result of sign `negative`
-/// whose division left `class`: every rounding in the crate is this.
-#[inline]
-const fn settle<D: [const] Word>(quotient: D, class: u32, negative: bool, table: u16) -> D {
-    let index = (u32::from(negative) << 3) | (u32::from(quotient.is_odd()) << 2) | class;
-    // A quotient moves only when the divisor is at least 2, so it is at most half the word.
-    if (table >> index) & 1 == 1 { quotient.wrapping_add(D::ONE) } else { quotient }
-}
-
-/// `numerator / divisor` and the class of what it leaves.
-#[inline]
-const fn quotient<D: [const] Word>(numerator: D, divisor: D) -> (D, u32) {
-    let (quotient, remainder) = numerator.div_rem(divisor);
-    (quotient, class(remainder, divisor))
-}
-
-/// `numerator / 10^k` and the class of what it leaves, or `None` when the power is past the word.
-/// In the widest word a power past it is past every numerator too, and past twice any: the
-/// quotient is zero and the remainder below half.
-#[inline]
-const fn quotient_pow10<D: [const] Word>(numerator: D, k: u8) -> Option<(D, u32)> {
-    match D::pow10(k) {
-        Some(power) => Some(quotient(numerator, power)),
-        None if D::WIDEST => Some((D::ZERO, u32::from(numerator != D::ZERO))),
+/// `numerator / 10^k`, rounded by `table` for a result of sign `negative`, and whether nothing was
+/// rounded away; or `None` when the word leaves it to a wider one, as
+/// [`Word::divide_pow10_round`] says. In the widest word a power past it is past every numerator
+/// too, and past twice any: the quotient is zero and the remainder below half.
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "with `#[inline]` LLVM calls it out of line and loses the constant `k`: a rounded \
+              64-bit product's probe reaches 377 instructions through two calls, and 92 inline"
+)]
+const fn rounded_pow10<D: [const] Word>(
+    numerator: D, k: u8, negative: bool, table: u16,
+) -> Option<(D, bool)> {
+    match numerator.divide_pow10_round(k, negative, table) {
+        Some(divided) => Some(divided),
+        None if D::WIDEST => {
+            let nonzero = numerator != D::ZERO;
+            Some((rounded_zero(nonzero, negative, table), !nonzero))
+        },
         None => None,
     }
 }
@@ -82,15 +69,17 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
     }
 }
 
-/// `a / 10^k`, rounded by `table`, and whether nothing was rounded away.
+/// `a / 10^k`, rounded by `table`, and whether nothing was rounded away. The quotient of a value
+/// fits its own word, which divides it; the double divides only what that word leaves to it.
 #[inline]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
 ) -> Option<(Exact<D>, bool)> {
-    match quotient_pow10(D::from_narrow(a), k) {
-        Some((q, class)) => {
-            Some((Exact::new(negative, settle(q, class, negative, table)), class == 0))
-        },
+    if let Some((q, exact)) = rounded_pow10(a, k, negative, table) {
+        return Some((Exact::new(negative, D::from_narrow(q)), exact));
+    }
+    match rounded_pow10(D::from_narrow(a), k, negative, table) {
+        Some((q, exact)) => Some((Exact::new(negative, q), exact)),
         None => None,
     }
 }
@@ -100,8 +89,8 @@ pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
 pub(crate) const fn mul_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
 ) -> Option<Exact<D>> {
-    match quotient_pow10(D::widening_mul(a, b), k) {
-        Some((q, class)) => Some(Exact::new(negative, settle(q, class, negative, table))),
+    match rounded_pow10(D::widening_mul(a, b), k, negative, table) {
+        Some((q, _exact)) => Some(Exact::new(negative, q)),
         None => None,
     }
 }
@@ -137,34 +126,49 @@ pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
         None => None,
     };
     let Some(numerator) = numerator else { return None };
-    let (mut q, mut remainder) = numerator.div_rem(divisor);
-    let mut overflowed = false;
-    if rest > 0 {
-        // q · 10^rest + (remainder · 10^rest) / b: the remainder is below b, so its product fits
-        // the widest word; q's may not, and then only its low bits are kept.
-        let Some(power) = D::pow10(rest) else { return None };
-        let Some(carried) = remainder.checked_mul(power) else { return None };
-        let (low, last) = carried.div_rem(divisor);
-        let lifted = match q.checked_mul(power) {
-            Some(lifted) => lifted,
-            None if D::WIDEST => {
-                overflowed = true;
-                q.wrapping_mul(power)
-            },
-            None => return None,
+    let (magnitude, overflowed) = if rest == 0 {
+        (numerator.divide_round(divisor, negative, table), false)
+    } else {
+        let Some(divided) = divide_past_38_digits(numerator, divisor, rest, negative, table) else {
+            return None;
         };
-        q = match lifted.checked_add(low) {
-            Some(sum) => sum,
-            None if D::WIDEST => {
-                overflowed = true;
-                lifted.wrapping_add(low)
-            },
-            None => return None,
-        };
-        remainder = last;
-    }
-    let magnitude = settle(q, class(remainder, divisor), negative, table);
+        divided
+    };
     Some(Exact { negative, magnitude, overflowed })
+}
+
+/// `numerator × 10^rest / divisor`, rounded by `table` for a result of sign `negative`, and whether
+/// the quotient overflowed the word: the second step of [`div_up`]'s long division, off its path.
+#[cold]
+#[inline(never)]
+const fn divide_past_38_digits<D: [const] Word>(
+    numerator: D, divisor: D, rest: u8, negative: bool, table: u16,
+) -> Option<(D, bool)> {
+    // q · 10^rest + (remainder · 10^rest) / divisor: the remainder is below the divisor, so its
+    // product fits the widest word; q's may not, and then only its low bits are kept. q · 10^rest
+    // is even, so the low quotient's parity is the whole one's, and it rounds alone.
+    let (q, remainder) = numerator.div_rem(divisor);
+    let Some(power) = D::pow10(rest) else { return None };
+    let Some(carried) = remainder.checked_mul(power) else { return None };
+    let low = carried.divide_round(divisor, negative, table);
+    let mut overflowed = false;
+    let lifted = match q.checked_mul(power) {
+        Some(lifted) => lifted,
+        None if D::WIDEST => {
+            overflowed = true;
+            q.wrapping_mul(power)
+        },
+        None => return None,
+    };
+    let q = match lifted.checked_add(low) {
+        Some(sum) => sum,
+        None if D::WIDEST => {
+            overflowed = true;
+            lifted.wrapping_add(low)
+        },
+        None => return None,
+    };
+    Some((q, overflowed))
 }
 
 /// `a / (b × 10^k)`, rounded by `table`, for a `b` that is not zero. In the widest word a divisor
@@ -177,12 +181,12 @@ pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
         Some(power) => D::from_narrow(b).checked_mul(power),
         None => None,
     };
-    let (q, class) = match divisor {
-        Some(divisor) => quotient(D::from_narrow(a), divisor),
-        None if D::WIDEST => (D::ZERO, u32::from(a != U::ZERO)),
+    let q = match divisor {
+        Some(divisor) => D::from_narrow(a).divide_round(divisor, negative, table),
+        None if D::WIDEST => rounded_zero(a != U::ZERO, negative, table),
         None => return None,
     };
-    Some(Exact::new(negative, settle(q, class, negative, table)))
+    Some(Exact::new(negative, q))
 }
 
 /// `a × b / c`, rounded by `table`, for a `c` that is not zero: never past the word.
@@ -190,8 +194,7 @@ pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
 pub(crate) const fn mul_div<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, c: U, table: u16,
 ) -> Exact<D> {
-    let (q, class) = quotient(D::widening_mul(a, b), D::from_narrow(c));
-    Exact::new(negative, settle(q, class, negative, table))
+    Exact::new(negative, D::widening_mul(a, b).divide_round(D::from_narrow(c), negative, table))
 }
 
 /// The multiple of `step` that `a / step`, rounded by `table`, comes to, for a `step` that is not
@@ -201,40 +204,58 @@ pub(crate) const fn multiple<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, step: U, table: u16,
 ) -> Exact<D> {
     let step = D::from_narrow(step);
-    let (q, class) = quotient(D::from_narrow(a), step);
-    let count = settle(q, class, negative, table);
+    let count = D::from_narrow(a).divide_round(step, negative, table);
     // count × step ≤ a + step < 2 × 2^bits(U), which the double word holds.
     let magnitude = count.wrapping_mul(step);
     Exact::new(negative && magnitude != D::ZERO, magnitude)
 }
 
-/// `5^k` for `k` in `0..=38`: with a power of two, every power of ten a scale needs.
-#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
-const POW5: [u128; 39] = {
-    let mut table = [1_u128; 39];
-    let mut k = 1;
-    while k < table.len() {
-        table[k] = table[k.wrapping_sub(1)].wrapping_mul(5);
-        k = k.wrapping_add(1);
-    }
-    table
-};
-
 /// The magnitude of `mantissa × 2^exponent × 10^decimals`, rounded by `table` for a value of sign
-/// `negative`: a double's exact value at a scale, rounded once. `None` past 256 bits, which no
+/// `negative`: a double's exact value at a scale, rounded once. `None` past 128 bits, which no
 /// integer holds.
 #[expect(clippy::indexing_slicing, reason = "decimals are at most 38, the table's last index")]
 pub(crate) const fn binary_at_scale(
     negative: bool, mantissa: u64, exponent: i32, decimals: u8, table: u16,
-) -> Option<U256> {
+) -> Option<u128> {
     // mantissa · 2^e · 10^d is mantissa · 5^d · 2^(e + d): one product, then one shift.
-    let product = U256::widening(u128::from(mantissa), POW5[usize::from(decimals)]);
+    let power = POW5[usize::from(decimals)];
     let shift = exponent.wrapping_add(i32::from(decimals));
+    let Ok(five) = u64::try_from(power) else {
+        // Past 27 decimals: a product of up to 142 bits.
+        let product = U256::widening(u128::from(mantissa), power);
+        let magnitude = if shift >= 0 {
+            let Some(magnitude) = product.checked_shl(shift.cast_unsigned()) else { return None };
+            magnitude
+        } else {
+            product.shr_round(shift.unsigned_abs(), negative, table)
+        };
+        return magnitude.to_u128();
+    };
+    // 53 bits by at most 63: a product below 2^117.
+    let product = u128::from(mantissa).wrapping_mul(u128::from(five));
     if shift >= 0 {
-        return product.checked_shl(shift.cast_unsigned());
+        let shift = shift.cast_unsigned();
+        return if product == 0 {
+            Some(0)
+        } else if shift <= product.leading_zeros() {
+            product.checked_shl(shift)
+        } else {
+            None
+        };
     }
-    let (quotient, class) = product.shr_classed(shift.unsigned_abs());
-    Some(settle(quotient, class, negative, table))
+    Some(shr_round(product, shift.unsigned_abs(), negative, table))
+}
+
+/// `value >> shift`, rounded by `table` for a result of sign `negative` as a division by
+/// `2^shift`, for a `shift` that is not zero and a value below `2^127`: past 127 bits all of it
+/// shifts out, below half.
+#[inline]
+const fn shr_round(value: u128, shift: u32, negative: bool, table: u16) -> u128 {
+    if shift >= 128 {
+        return rounded_zero(value != 0, negative, table);
+    }
+    let rest = value & (u128::MAX >> 128_u32.wrapping_sub(shift));
+    rounded(value >> shift, rest, 1 << shift, negative, table)
 }
 
 /// The exact sum of two results.
@@ -277,7 +298,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use super::{Exact, add, class, compare, div_down, div_up, mul_div, mul_down, scale_down};
+    use super::{Exact, add, compare, div_down, div_up, mul_div, mul_down, scale_down};
     use crate::word::{Double, U256};
 
     /// Truncation's table.
@@ -296,12 +317,6 @@ mod tests {
         q + u128::from(r * 2 > d || (r * 2 == d && q % 2 == 1))
     }
 
-    #[test]
-    fn a_remainder_is_classed_against_half_its_divisor() {
-        assert_eq!([0, 4, 5, 6].map(|r| class(r, 10_u32)), [0, 1, 2, 3], "zero, below, at, above");
-        assert_eq!([0, 1, 2].map(|r| class(r, 3_u32)), [0, 1, 3], "an odd divisor has no half");
-    }
-
     proptest! {
         #[test]
         fn a_product_down_a_power_agrees_with_the_definition(a: u32, b: u32, k in 0_u8..20) {
@@ -310,6 +325,16 @@ mod tests {
             prop_assert_eq!(truncated, Some(exact / power), "truncated, in a u64");
             let rounded = mul_down::<u32, U256>(false, a, b, k, HALF_EVEN).and_then(|e| narrow(e.magnitude));
             prop_assert_eq!(rounded, Some(half_even(exact, power)), "half to even, in a U256");
+        }
+
+        #[test]
+        fn a_wide_value_down_a_power_agrees_with_the_definition(raw: u128, bits in 1_u32..=128, k in 0_u8..=38) {
+            // Every size of value, so each path is taken: a u64, one step, two steps, and a power
+            // past 10^19 left to the U256.
+            let a = raw >> (128 - bits);
+            let power = 10_u128.pow(u32::from(k));
+            let (q, exact) = scale_down::<u128, U256>(false, a, k, HALF_EVEN).expect("a U256 holds every quotient");
+            prop_assert_eq!((narrow(q.magnitude), exact), (Some(half_even(a, power)), a % power == 0));
         }
 
         #[test]
