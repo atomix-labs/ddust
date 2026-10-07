@@ -3,5 +3,6 @@
 
 mod format;
 mod parse;
+mod swar;
 
 pub use self::format::MAX_ASCII_LEN;

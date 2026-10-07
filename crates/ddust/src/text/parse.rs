@@ -4,6 +4,7 @@
 use core::ops::Range;
 use core::str::FromStr;
 
+use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits, read_plain};
 use crate::decimal::Decimal;
 use crate::errors::{ParseError, ParseErrorKind};
 use crate::int::Int;
@@ -119,41 +120,16 @@ fn read_general(
     value.checked_add(u128::from(away)).ok_or(ParseErrorKind::PosOverflow)
 }
 
-/// The common shape, `[digits][.digits]` with at most 19 significant digits, read in one
-/// 64-bit pass: the fraction's trailing zeros are dropped first, so no step divides. `None` sends
-/// any other shape, an error included, to the exact general loop.
-#[inline]
-#[expect(clippy::arithmetic_side_effects, reason = "at most 19 digits: every step stays in a u64")]
-fn read_simple(digits: &[u8], decimals: u8) -> Option<u64> {
-    let (integer, fraction) = match digits.iter().position(|&byte| byte == b'.') {
-        Some(dot) => (digits.get(..dot)?, digits.get(dot + 1..)?),
-        None => (digits, &[][..]),
-    };
-    if integer.is_empty() && fraction.is_empty() {
-        return None;
-    }
-    // Any byte but `0` ends the trimming, a stray one included, which the digit test then refuses.
-    let significant = fraction.iter().rposition(|&byte| byte != b'0').map_or(0, |last| last + 1);
-    let fraction = fraction.get(..significant)?;
-    if integer.len() + fraction.len() > 19 || usize::from(decimals) < fraction.len() {
-        return None;
-    }
-    let mut value = 0_u64;
-    for &byte in integer.iter().chain(fraction) {
-        let digit = byte.wrapping_sub(b'0');
-        if digit > 9 {
-            return None;
-        }
-        value = value * 10 + u64::from(digit);
-    }
-    value.checked_mul(
-        u64::try_from(pow10_u128(decimals - u8::try_from(fraction.len()).ok()?)?).ok()?,
-    )
-}
-
 /// Reads `text` at `decimals`: its sign and its magnitude at those decimals, exactly,
 /// or, given a table, rounded by it.
-#[inline]
+///
+/// The plain shape is read inline, where a static scale's decimals are a constant and its
+/// groups fold; any other text, the general reader's, out of line.
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "measured: out of line, a static scale's decimals are no constant to the reader"
+)]
 fn read_or_round(
     text: &[u8], decimals: u8, table: Option<u16>,
 ) -> Result<(bool, u128), ParseErrorKind> {
@@ -163,9 +139,18 @@ fn read_or_round(
         [b'+', rest @ ..] => (false, rest),
         _ => (false, text),
     };
-    if let Some(magnitude) = read_simple(digits, decimals) {
-        return Ok((negative, u128::from(magnitude)));
-    }
+    read_plain(digits, decimals).map_or_else(
+        || read_signed(negative, digits, decimals, table),
+        |magnitude| Ok((negative, magnitude)),
+    )
+}
+
+/// Reads the `digits` of a number of sign `negative` at `decimals` by the general reader,
+/// whatever their shape: out of line, off the plain shape's path.
+#[inline(never)]
+fn read_signed(
+    negative: bool, digits: &[u8], decimals: u8, table: Option<u16>,
+) -> Result<(bool, u128), ParseErrorKind> {
     let round = table.map(|table| (negative, table));
     match read_general(digits, decimals, round) {
         Err(ParseErrorKind::PosOverflow) if negative => Err(ParseErrorKind::NegOverflow),
@@ -178,15 +163,6 @@ fn read_or_round(
 pub(crate) fn read(text: &[u8], decimals: u8) -> Result<(bool, u128), ParseErrorKind> {
     read_or_round(text, decimals, None)
 }
-
-/// ASCII `'0'` in every byte.
-const ZEROS: u64 = 0x3030_3030_3030_3030;
-/// `0x01` in every byte.
-const ONES: u64 = 0x0101_0101_0101_0101;
-/// `0x80` in every byte.
-const HIGHS: u64 = 0x8080_8080_8080_8080;
-/// ASCII `'.'` in every byte.
-const DOTS: u64 = 0x2E2E_2E2E_2E2E_2E2E;
 
 /// Bytes `0..n` set, for `n` in `0..=9`.
 const LOW: [u64; 10] = [
@@ -201,21 +177,6 @@ const LOW: [u64; 10] = [
     u64::MAX,
     u64::MAX,
 ];
-
-/// Whether all eight bytes are ASCII digits.
-#[inline]
-const fn all_digits(word: u64) -> bool {
-    (word.wrapping_add(0x4646_4646_4646_4646) | word.wrapping_sub(ZEROS)) & HIGHS == 0
-}
-
-/// The value of eight ASCII digits, the first in the lowest byte: three multiplies (Lemire,
-/// *Quickly parsing eight digits*, 2018).
-#[inline]
-const fn eight_digits(word: u64) -> u64 {
-    let word = (word & 0x0F0F_0F0F_0F0F_0F0F).wrapping_mul(2561).wrapping_shr(8);
-    let word = (word & 0x00FF_00FF_00FF_00FF).wrapping_mul(6_553_601).wrapping_shr(16);
-    (word & 0x0000_FFFF_0000_FFFF).wrapping_mul(42_949_672_960_001).wrapping_shr(32)
-}
 
 /// The eight bytes of `window` from `position`, little-endian.
 #[inline]
@@ -528,7 +489,7 @@ mod tests {
     use proptest::prelude::*;
     use rstest::rstest;
 
-    use super::{read, read_rounded};
+    use super::{read, read_general, read_plain, read_rounded};
     use crate::round::{Ceil, Floor, HalfEven, Rounding, RoundingMode};
     use crate::{D64, D128, Decimal, Dynamic, Fixed, ParseError, ParseErrorKind, UD64, UD128};
 
@@ -675,6 +636,22 @@ mod tests {
     }
 
     proptest! {
+        #[test]
+        fn the_plain_reader_agrees_with_the_general_one(
+            text in "[0-9.eE+x-]{0,24}|[0-9]{0,24}\\.?[0-9]{0,24}", decimals in 0_u8..=38,
+        ) {
+            // Wherever the eight-at-a-time reader answers, it answers as the byte loop does; and on
+            // the plain shape it refuses only what the byte loop refuses or rounds.
+            let bytes = text.as_bytes();
+            let general = read_general(bytes, decimals, None);
+            let points: usize = bytes.iter().map(|&byte| usize::from(byte == b'.')).sum();
+            let plain = bytes.iter().all(|&byte| byte.is_ascii_digit() || byte == b'.') && points <= 1;
+            match read_plain(bytes, decimals) {
+                Some(magnitude) => prop_assert_eq!(general, Ok(magnitude), "{}", text),
+                None => prop_assert!(general.is_err() || !plain || bytes.len() > 38, "{} read as {:?}", text, general),
+            }
+        }
+
         #[test]
         fn every_value_reads_back_what_it_writes(steps: i64) {
             let price = Price::from_steps(steps, Fixed);

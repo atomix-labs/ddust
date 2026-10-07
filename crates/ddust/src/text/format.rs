@@ -3,6 +3,7 @@
 use core::fmt::Write as _;
 use core::{fmt, str};
 
+use super::swar::ZEROS;
 use crate::decimal::Decimal;
 use crate::int::Int;
 use crate::scale::Scale;
@@ -15,8 +16,6 @@ pub const MAX_ASCII_LEN: usize = 41;
 /// The room the eight-byte writer stores into: the text, and up to seven bytes past it.
 const EIGHT_BYTE_ROOM: usize = 48;
 
-/// ASCII `'0'` in every byte.
-const ZEROS: u64 = 0x3030_3030_3030_3030;
 /// `10^8`: the digits [`digits8`] writes at a time.
 const CHUNK: u64 = 100_000_000;
 
