@@ -71,6 +71,26 @@ const fn threshold<D: [const] Word>(bits: u16, divisor: D) -> D {
     }
 }
 
+/// What adding to a dividend before dividing rounds it by `table` for a result of sign
+/// `negative`, where the mode reads no parity: a quotient moves when its remainder passes the
+/// threshold `t`, so `⌊(n + d − 1 − t) / d⌋` is the rounded quotient. `None` for a mode that reads
+/// the quotient's parity, as half to even does, which rounds by the remainder instead.
+#[inline]
+pub(crate) const fn parity_free_bias<D: [const] Word>(
+    table: u16, negative: bool, divisor: D,
+) -> Option<D> {
+    let nibbles = table >> (u32::from(negative) << 3);
+    if (nibbles ^ (nibbles >> 4)) & 0xF != 0 {
+        return None;
+    }
+    let threshold = threshold(nibbles, divisor);
+    Some(if threshold == divisor {
+        D::ZERO
+    } else {
+        divisor.wrapping_sub(D::ONE).wrapping_sub(threshold)
+    })
+}
+
 /// `quotient`, one step further from zero when [`rounds_up`] says so for the division that left
 /// `remainder` of `divisor`: every rounding in the crate is this. A quotient moves only when the
 /// divisor is at least 2, so it is at most half its word, and moving never wraps.
@@ -289,6 +309,12 @@ word!(u8, u16, u32, u64, u128 {
             if let (Ok(value), Ok(divisor)) = (u64::try_from(self), u64::try_from(power)) {
                 let (quotient, remainder) = value.div_rem(divisor);
                 (u128::from(quotient), remainder, divisor)
+            } else if let Some(bias) = parity_free_bias(table, negative, power)
+                && let Some((quotient, remainder, _)) =
+                    reciprocal::divide_u128_by_short_power(self.wrapping_add(bias), k)
+            {
+                // Rounded by the bias already; exact when the remainder is the bias itself.
+                return Some((u128::from(quotient), u128::from(remainder) == bias));
             } else if let Some((quotient, remainder, divisor)) =
                 reciprocal::divide_u128_by_short_power(self, k)
             {
