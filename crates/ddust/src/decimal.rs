@@ -1,5 +1,10 @@
 //! [`Decimal`]: a whole number of steps, and the scale that says what a step is.
 
+#[cfg(feature = "bytemuck")]
+use bytemuck::AnyBitPattern;
+#[cfg(feature = "zerocopy-08")]
+use zerocopy::{FromBytes, Immutable, KnownLayout};
+
 use crate::errors::{ConvertError, ConvertErrorKind};
 use crate::int::Int;
 use crate::round::{RoundingMode, Trunc};
@@ -36,6 +41,8 @@ use crate::scale::{Fixed, Scale, StaticScale};
 /// assert_eq!((total + cash).to_string(), "20.02", "the sum, exact");
 /// ```
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "bytemuck", derive(AnyBitPattern))]
+#[cfg_attr(feature = "zerocopy-08", derive(FromBytes, Immutable, KnownLayout))]
 #[repr(C)]
 pub struct Decimal<I, S> {
     /// How many steps.
@@ -92,6 +99,13 @@ const fn shift_round<I: [const] Int, R: [const] RoundingMode>(
     Ok(value.scale_down(from.wrapping_sub(to), mode.table()).0)
 }
 
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// The decimal of `steps` steps at `scale`: its raw representation, for storage and for types
     /// built on it; [`new`](Self::new), [`dec!`](crate::dec!) and parsing are what a program reads

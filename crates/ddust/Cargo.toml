@@ -18,14 +18,38 @@ rustdoc-args = ["--cfg", "docsrs"]
 targets      = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 
 [features]
-default          = []
+default = []
+
+arbitrary        = ["dep:arbitrary"]
+bytemuck         = ["dep:bytemuck"]
+defmt            = ["dep:defmt"]
+num-traits-02    = ["dep:num-traits"]
+proptest         = ["dep:proptest"]
+rand-09          = ["dep:rand"]
 runtime-dispatch = []
+serde            = ["dep:serde_core"]
+zerocopy-08      = ["dep:zerocopy"]
 
 [lints]
 workspace = true
 
+[dependencies]
+# external
+arbitrary  = { workspace = true, optional = true }
+bytemuck   = { workspace = true, optional = true }
+defmt      = { workspace = true, optional = true }
+num-traits = { workspace = true, optional = true }
+proptest   = { workspace = true, optional = true, features = ["alloc", "no_std"] }
+rand       = { workspace = true, optional = true }
+serde_core = { workspace = true, optional = true }
+zerocopy   = { workspace = true, optional = true }
+
 [dev-dependencies]
 # external
-proptest = { workspace = true }
-rstest   = { workspace = true }
-trybuild = { workspace = true }
+proptest   = { workspace = true, features = ["std"] }
+rand       = { workspace = true, features = ["thread_rng"] }
+rstest     = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+serde_test = { workspace = true }
+trybuild   = { workspace = true }

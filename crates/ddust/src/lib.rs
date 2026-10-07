@@ -61,7 +61,15 @@
 //!
 //! | Feature | What it adds |
 //! | ------- | ------------ |
+//! | `arbitrary` | arbitrary's `Arbitrary`, for fuzzing: any steps at any scale, and any rounding mode; needs `std` |
+//! | `bytemuck` | bytemuck's `AnyBitPattern`, to read a decimal of a static scale from its steps' bytes |
+//! | `defmt` | defmt's `Format`, to log a decimal from a device as its text, written without `core::fmt` |
+//! | `num-traits-02` | num-traits 0.2's `Zero`, `Bounded`, `Checked*`, `Saturating*` and `Wrapping*` traits, `FromPrimitive` and `ToPrimitive` |
+//! | `proptest` | proptest's `Arbitrary`, for property tests: any steps at any scale, and any rounding mode |
+//! | `rand-09` | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand::UniformDecimal` |
 //! | `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read with SSSE3 where the CPU has it |
+//! | `serde` | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose |
+//! | `zerocopy-08` | zerocopy 0.8's `FromBytes`, `KnownLayout` and `Immutable`, to read a decimal of a static scale from its steps' bytes |
 //!
 //! Text is read with NEON on every aarch64 target but the soft-float ones, and with SSSE3 on an
 //! `x86_64` build for a CPU that has it, `-C target-cpu=x86-64-v2` or newer, with no check at run
@@ -89,13 +97,18 @@ mod decimal;
 mod errors;
 mod float;
 mod int;
+mod interop;
 mod kernel;
 mod literal;
 mod ops;
+#[cfg(feature = "rand-09")]
+pub mod rand;
 mod reciprocal;
 pub mod round;
 mod rounded;
 pub mod scale;
+#[cfg(feature = "serde")]
+pub mod serde;
 mod text;
 mod word;
 

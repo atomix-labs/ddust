@@ -57,6 +57,13 @@ enum Sign {
     Minus,
 }
 
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// How this value and `rhs` meet.
     #[inline]
@@ -752,6 +759,13 @@ const fn remainder_by_zero() -> ! {
 /// The exact product of two decimals: the steps multiplied as the integer's `*` does, the scales
 /// summed. A product at the sum of two static scales is a [`Sum`](crate::scale::Sum) scale, which
 /// converts into the `Fixed` of those decimals, its steps unchanged.
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// The exact product, or `None` past the range or for a run-time product past 38 decimals.
     ///
@@ -859,6 +873,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     }
 }
 
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Signed, S: Scale> Decimal<I, S> {
     /// Whether the value is below zero.
     ///

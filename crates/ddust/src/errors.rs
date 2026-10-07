@@ -3,6 +3,9 @@
 use core::error::Error;
 use core::fmt;
 
+#[cfg(feature = "defmt")]
+use defmt::Format;
+
 /// Why text is not a decimal: [`kind`](Self::kind) says which way it failed, as std's
 /// `ParseIntError` does.
 ///
@@ -14,6 +17,7 @@ use core::fmt;
 /// assert_eq!(refused.kind(), ParseErrorKind::TooManyDecimals, "two decimals, never rounded");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(Format))]
 pub struct ParseError {
     /// Which way the text failed.
     kind: ParseErrorKind,
@@ -54,6 +58,7 @@ impl Error for ParseError {}
 
 /// Which way text failed to be a decimal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(Format))]
 #[non_exhaustive]
 pub enum ParseErrorKind {
     /// The text is empty.
@@ -95,6 +100,7 @@ impl fmt::Display for ParseErrorKind {
 /// assert_eq!(refused.kind(), ConvertErrorKind::TooManyDecimals, "two decimals, never rounded");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(Format))]
 pub struct ConvertError {
     /// Which way the value failed to convert.
     kind: ConvertErrorKind,
@@ -147,6 +153,7 @@ impl Error for ConvertError {}
 
 /// Which way a value failed to convert.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(Format))]
 #[non_exhaustive]
 pub enum ConvertErrorKind {
     /// The value is above the target's range.

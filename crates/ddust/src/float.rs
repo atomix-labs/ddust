@@ -126,6 +126,13 @@ const fn nearest_f64(magnitude: u128, decimals: u8) -> f64 {
     f64::from_bits((biased << 52).wrapping_add(kept).wrapping_add(up))
 }
 
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// The nearest `f64`, ties to even: exact whenever the value is, and correctly rounded
     /// otherwise, as a decimal read from text is.
