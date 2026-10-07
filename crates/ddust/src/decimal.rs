@@ -30,6 +30,16 @@ use crate::scale::{Fixed, Scale, StaticScale};
 /// - **Scales never mix by accident.** Two static scales are two types, and adding them does not
 ///   compile; two run-time scales line up exactly at the finer one, as SQL's `DECIMAL` does.
 ///
+/// # Layout
+///
+/// `Decimal` is `repr(C)`, its steps first. A decimal of a [`Fixed`] scale, which takes no room,
+/// is therefore its integer: the same size, alignment and bytes, the size and alignment checked
+/// when the crate compiles. It is read from and written as bytes through zerocopy's and bytemuck's
+/// traits, and held in shared memory or a file as its integer. Across a C boundary it is its steps,
+/// since C has no equal of its scale's type: pass [`steps`](Self::steps), and read back with
+/// [`from_steps`](Self::from_steps). A decimal of a [`Dynamic`](crate::Dynamic) scale holds a byte
+/// of scale after its steps, and padding, and is never read from or written as bytes.
+///
 /// # Examples
 /// ```
 /// use ddust::round::{Ceil, HalfExpand};
@@ -51,8 +61,8 @@ pub struct Decimal<I, S> {
     scale: S,
 }
 
-// A decimal of a `Fixed` scale is its integer's bytes, which `IntoBytes` and `Pod` in `interop`
-// rely on.
+// A decimal of a `Fixed` scale is its integer's size and alignment, as `repr(C)` makes it for every
+// scale: what the docs promise, and what `IntoBytes` and `Pod` in `interop` rely on.
 const _: () = {
     macro_rules! same_layout {
         ($($integer:ty),*) => {$(

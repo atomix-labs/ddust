@@ -80,6 +80,83 @@ const fn divide_two_by_one(u1: u64, u0: u64, divisor: u64, inverse: u64) -> (u64
     }
 }
 
+/// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `k` is from 1 to 9, so `10^k` is
+/// below 2^32, and the quotient fits one word.
+///
+/// Two 64-by-32-bit divisions, nexus-decimal's split, each of 32 bits of the low word after the
+/// remainder before it, and each by one multiply-high with [`SHORT_POWERS`]' multiplier and no
+/// correction, so that a power known only at run time costs a table load where a hardware
+/// division would wait twice.
+#[inline]
+pub(crate) const fn divide_u128_by_short_power(numerator: u128, k: u8) -> Option<(u64, u64, u64)> {
+    let Some(ShortPower { divisor, multiplier, shift }) = short_power(k) else { return None };
+    let (n1, n0) = (high(numerator), u64::low_bits(numerator));
+    // The quotient fits a word exactly when the high word is below the divisor; then each step's
+    // numerator, a remainder below 2^30 and 32 bits, is below 2^62, where the multiplier is exact.
+    if n1 >= divisor {
+        return None;
+    }
+    let (q1, r1) = short_step((n1 << 32) | (n0 >> 32), divisor, multiplier, shift);
+    let (q0, r0) = short_step((r1 << 32) | (n0 & 0xFFFF_FFFF), divisor, multiplier, shift);
+    Some(((q1 << 32) | q0, r0, divisor))
+}
+
+/// `n / divisor` and the remainder, for an `n` below 2^62, by [`SHORT_POWERS`]' `multiplier` and
+/// `shift` for the divisor.
+#[inline]
+const fn short_step(n: u64, divisor: u64, multiplier: u64, shift: u32) -> (u64, u64) {
+    let quotient = high(u128::from(n).wrapping_mul(u128::from(multiplier))) >> shift;
+    (quotient, n.wrapping_sub(quotient.wrapping_mul(divisor)))
+}
+
+/// A power of ten below 2^32, with the multiplier `⌈2^(64+s) / d⌉` and the shift `s = ⌊log2 d⌋`
+/// that divide by it: the high word of a numerator below 2^63 times the multiplier, shifted, is
+/// its quotient, since the multiplier's excess, below `d`, times the numerator is below
+/// `2^(64+s)`.
+#[derive(Clone, Copy)]
+struct ShortPower {
+    /// The power.
+    divisor: u64,
+    /// `⌈2^(64+s) / divisor⌉`, below 2^64 since `2^s ≤ divisor`.
+    multiplier: u64,
+    /// `⌊log2 divisor⌋`.
+    shift: u32,
+}
+
+impl ShortPower {
+    /// The power `divisor`'s multiplier and shift.
+    const fn new(divisor: u64) -> Self {
+        let shift = 63_u32.wrapping_sub(divisor.leading_zeros());
+        let wide = u128::from(divisor);
+        let multiplier = (1_u128 << 64_u32.wrapping_add(shift)).div_ceil(wide);
+        Self { divisor, multiplier: u64::low_bits(multiplier), shift }
+    }
+}
+
+/// `10^k` for `k` in `0..=9`, every power below 2^32, each with what divides by it; the first, 1,
+/// has no multiplier a word holds, and is never read.
+#[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
+const SHORT_POWERS: [ShortPower; 10] = {
+    let mut table = [ShortPower { divisor: 0, multiplier: 0, shift: 0 }; 10];
+    let mut k = 0;
+    let mut power = 1_u64;
+    while k < table.len() {
+        table[k] = ShortPower::new(power);
+        power = power.wrapping_mul(10);
+        k += 1;
+    }
+    table
+};
+
+/// [`SHORT_POWERS`]' entry for `k`, from 1 to 9; `None` for 0, whose multiplier, 2^64, no word
+/// holds, and past 9.
+#[inline]
+#[expect(clippy::indexing_slicing, reason = "checked against the table's length first")]
+const fn short_power(k: u8) -> Option<ShortPower> {
+    let k = usize::from(k);
+    if k > 0 && k < SHORT_POWERS.len() { Some(SHORT_POWERS[k]) } else { None }
+}
+
 /// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `k` is at most 19 and the
 /// quotient fits one word.
 #[inline]
@@ -391,12 +468,31 @@ pub(crate) const fn quotient_by_pow5(magnitude: u128, d: u8) -> Option<(u64, i32
 mod tests {
     use proptest::prelude::*;
 
-    use super::{RECIPROCALS, divide_u128, divide_u256};
+    use super::{RECIPROCALS, divide_u128, divide_u128_by_short_power, divide_u256};
     use crate::word::U256;
 
     /// `10^k`.
     fn power(k: u8) -> u128 {
         10_u128.pow(u32::from(k))
+    }
+
+    #[test]
+    fn a_short_power_refuses_what_its_steps_cannot_divide() {
+        assert_eq!(divide_u128_by_short_power(power(9) << 64, 9), None, "a quotient past a word");
+        assert_eq!(divide_u128_by_short_power(1, 10), None, "10^10 is past 2^32");
+        assert_eq!(divide_u128_by_short_power(1, 0), None, "1's multiplier is past a word");
+    }
+
+    #[test]
+    fn the_largest_numerator_whose_quotient_fits_a_word_divides_in_two_steps() {
+        let largest = ((power(9) - 1) << 64) | u128::from(u64::MAX);
+        let expected =
+            (u64::try_from(largest / power(9)).ok(), u64::try_from(largest % power(9)).ok());
+        assert_eq!(
+            divide_u128_by_short_power(largest, 9).map(|(q, r, _)| (Some(q), Some(r))),
+            Some(expected),
+            "its quotient and remainder are `u128` division's"
+        );
     }
 
     #[test]
@@ -453,6 +549,15 @@ mod tests {
             let shifted = divisor << divisor.leading_zeros();
             let inverse = u128::MAX / u128::from(shifted) - (1 << 64);
             prop_assert_eq!(u128::from(super::reciprocal_word(shifted)), inverse);
+        }
+
+        #[test]
+        fn a_short_power_divides_in_two_steps_as_division_does(high: u64, low: u64, k in 1_u8..=9) {
+            let d = power(k);
+            // A high word below the divisor, so the quotient fits a word: the steps' domain.
+            let n = (u128::from(high % u64::try_from(d).unwrap_or(1)) << 64) | u128::from(low);
+            let expected = (u64::try_from(n / d).unwrap_or(0), u64::try_from(n % d).unwrap_or(0));
+            prop_assert_eq!(divide_u128_by_short_power(n, k), Some((expected.0, expected.1, u64::try_from(d).unwrap_or(0))));
         }
 
         #[test]

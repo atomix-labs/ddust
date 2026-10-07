@@ -298,11 +298,12 @@ pub fn format_by_display<T: fmt::Display>(value: &T, buffer: &mut Buffer) {
 ///
 /// It is the one list of who does what, for the benches, the probe and the equivalence test alike,
 /// in the order a table lists them: the 64-bit width, then the 128-bit, each with its floors first,
-/// then ddust, then the other crates by name.
+/// then ddust, then the other crates by name; the rounded operations then add ddust in the modes
+/// the others round by, truncating and half up.
 ///
 /// `$function` is one token tree handed to every call, as the function to run for the contender.
 ///
-/// The operations: `add`, `compare` and `mul_round`, which every row has; `div_round` and `format`,
+/// The operations: `add`, `compare` and `mul_round`, which every crate has; `div_round` and `format`,
 /// which the binary `fixed` lacks; `rescale_round`, which `fixnum` lacks too; `parse`, which the
 /// integer floors lack; the conversions `to_f64` and `from_f64`, which the `f64` floor does not
 /// need; and `mul_exact`, the price-times-quantity product, a row of its own types.
@@ -323,8 +324,19 @@ macro_rules! for_each_contender {
     };
     (mul_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(add, $apply, $function);
+        $crate::for_each_contender!(@modes $apply $function);
     };
     (div_round, $apply:ident, $function:tt) => {
+        $crate::for_each_contender!(format, $apply, $function);
+        $crate::for_each_contender!(@modes $apply $function);
+    };
+    // ddust in the modes the other contenders round by, for the rounded rows.
+    (@modes $apply:ident $function:tt) => {
+        $crate::for_each_contender!(@each $apply $function [
+            ddust::NarrowTrunc ddust::NarrowHalfExpand ddust::WideTrunc ddust::WideHalfExpand
+        ]);
+    };
+    (format, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [
             floors::I64 floors::F64Narrow ddust::Narrow bigdecimal::Narrow decimal_rs::Narrow
             fastnum::Narrow fin_decimal::Narrow fixdec::Narrow fixnum::Narrow
@@ -333,9 +345,6 @@ macro_rules! for_each_contender {
             fastnum::Wide fin_decimal::Wide fixnum::Wide nexus_decimal::Wide
             primitive_fixed_point_decimal::Wide rust_decimal::Wide
         ]);
-    };
-    (format, $apply:ident, $function:tt) => {
-        $crate::for_each_contender!(div_round, $apply, $function);
     };
     (rescale_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [
@@ -346,6 +355,7 @@ macro_rules! for_each_contender {
             fastnum::Wide fin_decimal::Wide nexus_decimal::Wide
             primitive_fixed_point_decimal::Wide rust_decimal::Wide
         ]);
+        $crate::for_each_contender!(@modes $apply $function);
     };
     (parse, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [
