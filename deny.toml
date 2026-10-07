@@ -10,6 +10,12 @@ unmaintained = "all"
 multiple-versions    = "deny"
 wildcards            = "deny"
 allow-wildcard-paths = true
+# The ecosystem's move to syn 3 and bitflags 2 is under way: each older version stays until the
+# crate named moves.
+skip = [
+    { crate = "syn@2", reason = "zerocopy-derive 0.8 and defmt-macros 1.1 build on syn 2, bytemuck_derive 1.12 on syn 3" },
+    { crate = "bitflags@1", reason = "defmt 1.1 depends on bitflags 1, proptest on bitflags 2" },
+]
 
 # Crates with a better choice, each naming it: the house policy, `strict`.
 deny = [
