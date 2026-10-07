@@ -6,6 +6,13 @@ use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 
+#[cfg(feature = "bytemuck")]
+use bytemuck::{AnyBitPattern, NoUninit, Zeroable};
+#[cfg(feature = "defmt")]
+use defmt::Format;
+#[cfg(feature = "zerocopy-08")]
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
+
 /// The most decimals a scale has: 38, since `10^38` is the largest power of ten a 128-bit integer
 /// holds.
 pub const MAX_DECIMALS: u8 = 38;
@@ -65,6 +72,12 @@ pub trait StaticScale: Scale {
 /// ```
 #[derive(Clone, Copy, Default, Hash)]
 #[derive_const(PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "bytemuck", derive(AnyBitPattern))]
+#[cfg_attr(
+    feature = "zerocopy-08",
+    derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
+)]
+#[repr(C)]
 pub struct Fixed<const D: u8>;
 
 /// `Fixed<D>`, with its decimals.
@@ -105,6 +118,11 @@ impl<const D: u8> StaticScale for Fixed<D> {
 /// ```
 #[derive(Debug, Clone, Copy, Default, Hash)]
 #[derive_const(PartialEq, Eq, PartialOrd, Ord)]
+// Its byte is written, and never read back, since a byte may be past 38 decimals.
+#[cfg_attr(feature = "bytemuck", derive(NoUninit, Zeroable))]
+#[cfg_attr(feature = "defmt", derive(Format))]
+#[cfg_attr(feature = "zerocopy-08", derive(Immutable, IntoBytes, KnownLayout, Unaligned))]
+#[repr(C)]
 pub struct Dynamic {
     /// How many decimals a step is.
     decimals: u8,

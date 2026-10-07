@@ -1,0 +1,5 @@
+error[E0599]: no method named `as_bytes` found for struct `Decimal<I, S>` in the current scope
+ --> tests/compile_fail_bytes/a_run_time_scale_decimal_is_never_written_as_bytes_by_zerocopy.rs:9:24
+  |
+9 |     let _bytes = price.as_bytes();
+  |                        ^^^^^^^^ method not found in `Decimal<i64, Dynamic>`

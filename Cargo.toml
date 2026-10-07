@@ -13,9 +13,19 @@ homepage     = "https://atomix-labs.github.io/ddust/"
 
 [workspace.dependencies]
 # external
-proptest = { version = "1.11.0" }
-rstest   = { version = "0.27.0", default-features = false }
-trybuild = { version = "1.0.121" }
+arbitrary  = { version = "1.5.0" }
+bytemuck   = { version = "1.25.2", default-features = false, features = ["derive"] }
+defmt      = { version = "1.1.1" }
+num-traits = { version = "0.2.19", default-features = false }
+proptest   = { version = "1.11.0", default-features = false }
+rand       = { version = "0.9.5", default-features = false }
+rstest     = { version = "0.27.0", default-features = false }
+serde      = { version = "1.0.229", features = ["derive"] }
+serde_core = { version = "1.0.229", default-features = false }
+serde_json = { version = "1.0.151" }
+serde_test = { version = "1.0.177" }
+trybuild   = { version = "1.0.121" }
+zerocopy   = { version = "0.8.61", default-features = false, features = ["derive"] }
 
 [workspace.lints]
 

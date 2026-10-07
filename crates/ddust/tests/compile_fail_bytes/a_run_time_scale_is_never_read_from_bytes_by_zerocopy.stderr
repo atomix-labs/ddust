@@ -1,0 +1,71 @@
+error[E0599]: no associated function or constant named `read_from_bytes` found for struct `Dynamic` in the current scope
+ --> tests/compile_fail_bytes/a_run_time_scale_is_never_read_from_bytes_by_zerocopy.rs:8:27
+  |
+8 |     let _scale = Dynamic::read_from_bytes(&[4]);
+  |                           ^^^^^^^^^^^^^^^ associated function or constant not found in `Dynamic`
+  |
+note: if you're trying to build a new `Dynamic`, consider using `Dynamic::new` which returns `Option<Dynamic>`
+ --> src/scale.rs
+  |
+  |     pub const fn new(decimals: u8) -> Option<Self> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is a method `as_bytes` with a similar name, but with different arguments
+ --> $CARGO/zerocopy-$VERSION/src/lib.rs
+  |
+  | /     fn as_bytes(&self) -> &[u8]
+  | |     where
+  | |         Self: Immutable,
+  | |________________________^
+
+error[E0599]: the associated function or constant `read_from_bytes` exists for struct `Decimal<i64, Dynamic>`, but its trait bounds were not satisfied
+ --> tests/compile_fail_bytes/a_run_time_scale_is_never_read_from_bytes_by_zerocopy.rs:9:43
+  |
+9 |     let _price = Decimal::<i64, Dynamic>::read_from_bytes(&[0; 16]);
+  |                                           ^^^^^^^^^^^^^^^ associated function or constant cannot be called on `Decimal<i64, Dynamic>` due to unsatisfied trait bounds
+  |
+ ::: src/scale.rs
+  |
+  | pub struct Dynamic {
+  | ------------------ doesn't satisfy `Dynamic: FromBytes`
+  |
+ ::: src/decimal.rs
+  |
+  | pub struct Decimal<I, S> {
+  | ------------------------ doesn't satisfy `Decimal<i64, Dynamic>: FromBytes`
+  |
+note: if you're trying to build a new `Decimal<i64, Dynamic>` consider using one of the following associated functions:
+      ddust::convert::<impl Decimal<I, S>>::from_int
+      Decimal::<I, S>::from_steps
+      Decimal::<I, S>::new
+      Decimal::<I, S>::new_round
+      and $N others
+ --> src/decimal.rs
+  |
+  |       pub const fn from_steps(steps: I, scale: S) -> Self {
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  | /     pub const fn new(digits: I, decimals: u8, scale: S) -> Result<Self, ConvertError>
+  | |     where
+  | |         I: [const] Int,
+  | |         S: [const] Scale,
+  | |_________________________^
+...
+  | /     pub const fn new_round<R>(
+  | |         digits: I, decimals: u8, scale: S, mode: R,
+  | |     ) -> Result<Self, ConvertError>
+  | |     where
+  | |         I: [const] Int,
+  | |         S: [const] Scale,
+  | |         R: [const] RoundingMode,
+  | |________________________________^
+  |
+ ::: src/convert.rs
+  |
+  | /     pub const fn from_int(n: I, scale: S) -> Result<Self, ConvertError>
+  | |     where
+  | |         I: [const] Int,
+  | |         S: [const] Scale,
+  | |_________________________^
+  = note: the following trait bounds were not satisfied:
+          `Dynamic: FromBytes`
+          which is required by `Decimal<i64, Dynamic>: FromBytes`

@@ -1,5 +1,10 @@
 //! [`Decimal`]: a whole number of steps, and the scale that says what a step is.
 
+#[cfg(feature = "bytemuck")]
+use bytemuck::Zeroable;
+#[cfg(feature = "zerocopy-08")]
+use zerocopy::{FromBytes, Immutable, KnownLayout};
+
 use crate::errors::{ConvertError, ConvertErrorKind};
 use crate::int::Int;
 use crate::round::{RoundingMode, Trunc};
@@ -36,6 +41,8 @@ use crate::scale::{Fixed, Scale, StaticScale};
 /// assert_eq!((total + cash).to_string(), "20.02", "the sum, exact");
 /// ```
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "bytemuck", derive(Zeroable))]
+#[cfg_attr(feature = "zerocopy-08", derive(FromBytes, Immutable, KnownLayout))]
 #[repr(C)]
 pub struct Decimal<I, S> {
     /// How many steps.
@@ -43,6 +50,24 @@ pub struct Decimal<I, S> {
     /// What a step is.
     scale: S,
 }
+
+// A decimal of a `Fixed` scale is its integer's bytes, which `IntoBytes` and `Pod` in `interop`
+// rely on.
+const _: () = {
+    macro_rules! same_layout {
+        ($($integer:ty),*) => {$(
+            assert!(
+                size_of::<Decimal<$integer, Fixed<0>>>() == size_of::<$integer>(),
+                "a `Fixed` scale takes no room"
+            );
+            assert!(
+                align_of::<Decimal<$integer, Fixed<0>>>() == align_of::<$integer>(),
+                "and no alignment"
+            );
+        )*};
+    }
+    same_layout!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+};
 
 /// A decimal of `i8` steps at `D` decimals: one byte.
 pub type D8<const D: u8> = Decimal<i8, Fixed<D>>;
@@ -92,6 +117,13 @@ const fn shift_round<I: [const] Int, R: [const] RoundingMode>(
     Ok(value.scale_down(from.wrapping_sub(to), mode.table()).0)
 }
 
+#[cfg_attr(
+    feature = "num-traits-02",
+    expect(
+        clippy::same_name_method,
+        reason = "num-traits' traits name these methods, and forward to them"
+    )
+)]
 impl<I: Int, S: Scale> Decimal<I, S> {
     /// The decimal of `steps` steps at `scale`: its raw representation, for storage and for types
     /// built on it; [`new`](Self::new), [`dec!`](crate::dec!) and parsing are what a program reads
@@ -412,7 +444,11 @@ impl<I: Int, S: Scale + Default> Default for Decimal<I, S> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "bytemuck")]
+    use bytemuck::{bytes_of, pod_read_unaligned};
     use rstest::rstest;
+    #[cfg(feature = "zerocopy-08")]
+    use zerocopy::{FromBytes as _, IntoBytes as _};
 
     use crate::round::{Ceil, Floor, HalfEven, HalfExpand, Rounding, Trunc};
     use crate::{ConvertError, ConvertErrorKind, D8, D64, D128, Decimal, Dynamic, Fixed, UD64};
@@ -497,5 +533,22 @@ mod tests {
         assert_eq!(UD64::<0>::ONE.steps(), 1, "at no decimals, one step");
         assert_eq!(Decimal::<i64, Dynamic>::default().decimals(), 0, "a run-time zero has none");
         assert!(Cents::ZERO.is_zero() && !Cents::ZERO.is_positive() && Cents::ONE.is_positive());
+    }
+
+    #[cfg(feature = "zerocopy-08")]
+    #[test]
+    fn zerocopy_reads_a_decimal_from_its_steps_bytes() {
+        let price = Cents::read_from_bytes(&1_234_i64.to_ne_bytes()).expect("eight bytes");
+        assert_eq!(price, Cents::from_steps(1_234, Fixed), "1,234 hundredths");
+        let precision = Dynamic::new(4).expect("at most 38");
+        assert_eq!(precision.as_bytes(), [4], "its decimals, one byte");
+    }
+
+    #[cfg(feature = "bytemuck")]
+    #[test]
+    fn bytemuck_reads_a_decimal_from_its_steps_bytes() {
+        let price: Cents = pod_read_unaligned(&1_234_i64.to_ne_bytes());
+        assert_eq!(price, Cents::from_steps(1_234, Fixed), "1,234 hundredths");
+        assert_eq!(bytes_of(&Dynamic::new(4).expect("at most 38")), [4], "its decimals, one byte");
     }
 }

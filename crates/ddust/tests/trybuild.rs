@@ -8,4 +8,10 @@ mod tests {
     fn every_refused_misuse_fails_to_compile() {
         TestCases::new().compile_fail("tests/compile_fail/*.rs");
     }
+
+    #[cfg(all(feature = "bytemuck", feature = "zerocopy-08"))]
+    #[test]
+    fn every_refused_misuse_of_bytes_fails_to_compile() {
+        TestCases::new().compile_fail("tests/compile_fail_bytes/*.rs");
+    }
 }

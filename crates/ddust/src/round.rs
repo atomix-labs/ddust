@@ -1,6 +1,9 @@
 //! Rounding modes: each a zero-sized type the compiler resolves, and [`Rounding`], one chosen at
 //! run time. Every operation that can lose digits takes either, as its last argument.
 
+#[cfg(feature = "defmt")]
+use defmt::Format;
+
 /// Seals [`RoundingMode`]: the nine modes and [`Rounding`] are all there are.
 mod sealed {
     /// Implemented by the nine modes and by [`Rounding`](super::Rounding).
@@ -72,9 +75,16 @@ macro_rules! modes {
         /// assert_ne!(mode, Rounding::HalfExpand, "ties to even, not away from zero");
         /// ```
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[cfg_attr(feature = "defmt", derive(Format))]
         #[repr(u16)]
         pub enum Rounding {
             $($(#[$doc])* $name = $table,)*
+        }
+
+        impl Rounding {
+            /// Every mode, for the values the test integrations choose from.
+            #[cfg(any(feature = "arbitrary", feature = "proptest"))]
+            pub(crate) const MODES: &[Self] = &[$(Self::$name),*];
         }
 
         impl sealed::Sealed for Rounding {}
