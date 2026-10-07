@@ -426,7 +426,11 @@ impl<I: Int, S: Scale + Default> Default for Decimal<I, S> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "bytemuck")]
+    use bytemuck::{bytes_of, pod_read_unaligned};
     use rstest::rstest;
+    #[cfg(feature = "zerocopy-08")]
+    use zerocopy::{FromBytes as _, IntoBytes as _};
 
     use crate::round::{Ceil, Floor, HalfEven, HalfExpand, Rounding, Trunc};
     use crate::{ConvertError, ConvertErrorKind, D8, D64, D128, Decimal, Dynamic, Fixed, UD64};
@@ -511,5 +515,22 @@ mod tests {
         assert_eq!(UD64::<0>::ONE.steps(), 1, "at no decimals, one step");
         assert_eq!(Decimal::<i64, Dynamic>::default().decimals(), 0, "a run-time zero has none");
         assert!(Cents::ZERO.is_zero() && !Cents::ZERO.is_positive() && Cents::ONE.is_positive());
+    }
+
+    #[cfg(feature = "zerocopy-08")]
+    #[test]
+    fn zerocopy_reads_a_decimal_from_its_steps_bytes() {
+        let price = Cents::read_from_bytes(&1_234_i64.to_ne_bytes()).expect("eight bytes");
+        assert_eq!(price, Cents::from_steps(1_234, Fixed), "1,234 hundredths");
+        let precision = Dynamic::new(4).expect("at most 38");
+        assert_eq!(precision.as_bytes(), [4], "its decimals, one byte");
+    }
+
+    #[cfg(feature = "bytemuck")]
+    #[test]
+    fn bytemuck_reads_a_decimal_from_its_steps_bytes() {
+        let price: Cents = pod_read_unaligned(&1_234_i64.to_ne_bytes());
+        assert_eq!(price, Cents::from_steps(1_234, Fixed), "1,234 hundredths");
+        assert_eq!(bytes_of(&Dynamic::new(4).expect("at most 38")), [4], "its decimals, one byte");
     }
 }

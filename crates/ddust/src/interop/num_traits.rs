@@ -117,7 +117,8 @@ fn convert<J: Int, I: Int>(n: J) -> Option<I> {
 
 /// A whole number exactly, and a float at the nearest step, a tie to the even one, where an
 /// integer truncates: a float is rarely exact at a decimal scale, and its nearest step is the
-/// decimal it was written from. `None` past the range, and for a float that is not finite.
+/// decimal it was written from while the steps stay below 2^52. `None` past the range, and for a
+/// float that is not finite.
 ///
 /// # Examples
 /// ```
@@ -161,7 +162,7 @@ impl<I: Int, S: StaticScale> FromPrimitive for Decimal<I, S> {
 }
 
 /// The whole part, truncated toward zero as a float's is, or `None` past the integer's range; and
-/// the nearest float.
+/// the nearest `f64`, which an `f32` is then rounded from.
 ///
 /// # Examples
 /// ```

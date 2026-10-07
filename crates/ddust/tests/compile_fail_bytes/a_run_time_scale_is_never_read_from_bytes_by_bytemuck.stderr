@@ -1,0 +1,40 @@
+error[E0277]: the trait bound `Dynamic: AnyBitPattern` is not satisfied
+ --> tests/compile_fail_bytes/a_run_time_scale_is_never_read_from_bytes_by_bytemuck.rs:8:27
+  |
+8 |     let _scale: Dynamic = pod_read_unaligned(&[4]);
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Pod` is not implemented for `Dynamic`
+  |
+  = help: the following other types implement trait `Pod`:
+            ()
+            ManuallyDrop<T>
+            Option<T>
+            PhantomData<T>
+            PhantomPinned
+            Wrapping<T>
+            [T; 0]
+            [T; 1024]
+          and $N others
+  = note: required for `Dynamic` to implement `AnyBitPattern`
+note: required by a bound in `bytemuck::pod_read_unaligned`
+ --> $CARGO/bytemuck-$VERSION/src/lib.rs
+  |
+  | pub fn pod_read_unaligned<T: AnyBitPattern>(bytes: &[u8]) -> T {
+  |                              ^^^^^^^^^^^^^ required by this bound in `pod_read_unaligned`
+
+error[E0277]: the trait bound `Decimal<i64, Dynamic>: AnyBitPattern` is not satisfied
+ --> tests/compile_fail_bytes/a_run_time_scale_is_never_read_from_bytes_by_bytemuck.rs:9:41
+  |
+9 |     let _price: Decimal<i64, Dynamic> = pod_read_unaligned(&[0; 16]);
+  |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `AnyBitPattern` is not implemented for `Decimal<i64, Dynamic>`
+  |
+help: the trait `AnyBitPattern` is conditionally implemented for `Decimal<I, S>`
+ --> src/decimal.rs
+  |
+  | #[cfg_attr(feature = "bytemuck", derive(AnyBitPattern))]
+  |                                         ^^^^^^^^^^^^^ unsatisfied requirement introduced here: `_: AnyBitPattern`
+note: required by a bound in `bytemuck::pod_read_unaligned`
+ --> $CARGO/bytemuck-$VERSION/src/lib.rs
+  |
+  | pub fn pod_read_unaligned<T: AnyBitPattern>(bytes: &[u8]) -> T {
+  |                              ^^^^^^^^^^^^^ required by this bound in `pod_read_unaligned`
+  = note: this error originates in the derive macro `AnyBitPattern` (in Nightly builds, run with -Z macro-backtrace for more info)

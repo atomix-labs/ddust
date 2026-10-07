@@ -8,9 +8,9 @@
 //! keeps. A [`Dynamic`] scale on its own is its decimals.
 //!
 //! A peer that writes a decimal of a static scale another way names it at the field, with one of
-//! the modules here, each with an `option` twin for a field that may be absent: [`text`] for the
-//! text in every format, [`steps`] for the steps in every format, and [`float`] for a double,
-//! rounded to the scale.
+//! the modules here, each with an `option` twin for an `Option` field, `null` or a value, and
+//! missing too beside `#[serde(default)]`: [`text`] for the text in every format, [`steps`] for the
+//! steps in every format, and [`float`] for a double, rounded to the scale.
 //!
 //! # Examples
 //! ```
@@ -122,7 +122,11 @@ impl<I: Int + Serialize, S: StaticScale> Serialize for Decimal<I, S> {
         if serializer.is_human_readable() {
             serializer.collect_str(self)
         } else {
-            self.steps().serialize(serializer)
+            // The steps alone in a tuple, which bincode and postcard write as the bare integer: a
+            // reader that buffers the field, as serde's `flatten` and tagged enums do, says the
+            // format is one a person reads, and refuses a sequence where it would read a bare
+            // integer as a whole number.
+            (self.steps(),).serialize(serializer)
         }
     }
 }
@@ -144,7 +148,7 @@ impl<I: Int + Serialize, S: StaticScale> Serialize for Decimal<I, S> {
 impl<'de, I: Int + Deserialize<'de>, S: StaticScale> Deserialize<'de> for Decimal<I, S> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         read(deserializer, |compact| {
-            I::deserialize(compact).map(|steps| Self::from_steps(steps, S::INSTANCE))
+            <(I,)>::deserialize(compact).map(|(steps,)| Self::from_steps(steps, S::INSTANCE))
         })
     }
 }
@@ -232,7 +236,8 @@ impl<'de> Deserialize<'de> for Dynamic {
 /// module does: `write` and `read` are the bounds on the integer each needs.
 macro_rules! option_module {
     (write [$($write:tt)*], read [$($read:tt)*]) => {
-        /// The same, for a field that may be absent.
+        /// The same, for an `Option` field: `null` or a value, and missing too beside
+        /// `#[serde(default)]`.
         pub mod option {
             use serde_core::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -390,8 +395,8 @@ pub mod steps {
 /// from one at the nearest step, or from a whole number exactly.
 ///
 /// A double is rarely exact at a decimal scale, and its nearest step, a tie to the even one, is the
-/// decimal it was written from: 0.1 is 0.1000000000000000055511151231257827 as a double, and 0.10
-/// at two decimals.
+/// decimal it was written from while the steps stay below 2^52: 0.1 is
+/// 0.1000000000000000055511151231257827 as a double, and 0.10 at two decimals.
 ///
 /// # Examples
 /// ```
@@ -474,8 +479,9 @@ pub mod float {
 
 #[cfg(test)]
 mod tests {
-    use alloc::format;
     use alloc::string::{String, ToString as _};
+    use alloc::vec::Vec;
+    use alloc::{format, vec};
 
     use proptest::prelude::*;
     use serde::{Deserialize, Serialize};
@@ -513,11 +519,10 @@ mod tests {
     };
 
     /// `FORMS`'s tokens, from the struct's name to its end, with `default` written as `first`.
-    fn forms(first: Token) -> [Token; 18] {
-        [
-            Token::Struct { name: "Forms", len: 7 },
-            Token::Str("default"),
-            first,
+    fn forms(first: &[Token]) -> Vec<Token> {
+        let mut tokens = vec![Token::Struct { name: "Forms", len: 7 }, Token::Str("default")];
+        tokens.extend_from_slice(first);
+        tokens.extend_from_slice(&[
             Token::Str("text"),
             Token::Str("12.5"),
             Token::Str("steps"),
@@ -533,13 +538,41 @@ mod tests {
             Token::Str("float_option"),
             Token::None,
             Token::StructEnd,
-        ]
+        ]);
+        tokens
     }
 
     #[test]
     fn each_form_writes_and_reads_as_its_module_says() {
-        assert_tokens(&FORMS.readable(), &forms(Token::Str("12.5")));
-        assert_tokens(&FORMS.compact(), &forms(Token::I64(1_250)));
+        assert_tokens(&FORMS.readable(), &forms(&[Token::Str("12.5")]));
+        let steps = [Token::Tuple { len: 1 }, Token::I64(1_250), Token::TupleEnd];
+        assert_tokens(&FORMS.compact(), &forms(&steps));
+    }
+
+    #[test]
+    fn a_buffered_field_refuses_the_compact_steps_rather_than_misreading_them() {
+        #[derive(Debug, Deserialize)]
+        struct Outer {
+            #[serde(flatten)]
+            #[expect(dead_code, reason = "read only to be refused")]
+            inner: Inner,
+        }
+        #[derive(Debug, Deserialize)]
+        struct Inner {
+            #[expect(dead_code, reason = "read only to be refused")]
+            price: D64<2>,
+        }
+        // A compact format's map, buffered by `flatten`, whose reader says a person reads it.
+        let tokens = [
+            Token::Map { len: Some(1) },
+            Token::Str("price"),
+            Token::Tuple { len: 1 },
+            Token::I64(1_250),
+            Token::TupleEnd,
+            Token::MapEnd,
+        ];
+        let refused = "invalid type: sequence, expected a decimal as a string, as \"60000.5\", or a whole number";
+        assert_de_tokens_error::<serde_test::Compact<Outer>>(&tokens, refused);
     }
 
     #[test]

@@ -39,13 +39,14 @@ arbitrary  = { workspace = true, optional = true }
 bytemuck   = { workspace = true, optional = true }
 defmt      = { workspace = true, optional = true }
 num-traits = { workspace = true, optional = true }
-proptest   = { workspace = true, optional = true, features = ["alloc", "no_std"] }
+proptest   = { workspace = true, features = ["alloc", "no_std"], optional = true }
 rand       = { workspace = true, optional = true }
 serde_core = { workspace = true, optional = true }
 zerocopy   = { workspace = true, optional = true }
 
 [dev-dependencies]
 # external
+bytemuck   = { workspace = true }
 proptest   = { workspace = true, features = ["std"] }
 rand       = { workspace = true, features = ["thread_rng"] }
 rstest     = { workspace = true }
@@ -53,3 +54,4 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 serde_test = { workspace = true }
 trybuild   = { workspace = true }
+zerocopy   = { workspace = true }

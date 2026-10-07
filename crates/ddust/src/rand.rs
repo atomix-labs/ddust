@@ -79,7 +79,10 @@ mod tests {
         let mut rng = rng();
         for _ in 0..1_000 {
             let tick: D8<1> = rng.random_range(dec!(-0.1)..=dec!(0.1));
-            assert!([dec!(-0.1), dec!(0), dec!(0.1)].contains(&tick), "{tick}");
+            assert!(
+                [dec!(-0.1), dec!(0), dec!(0.1)].contains(&tick),
+                "{tick} is a tenth from -0.1 to 0.1"
+            );
         }
         let wide: D128<18> = rng.random_range(D128::<18>::MIN..D128::<18>::MAX);
         assert!(wide < D128::<18>::MAX, "below the bound");
