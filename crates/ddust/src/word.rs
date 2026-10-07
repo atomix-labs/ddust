@@ -73,8 +73,9 @@ const fn threshold<D: [const] Word>(bits: u16, divisor: D) -> D {
 
 /// What adding to a dividend before dividing rounds it by `table` for a result of sign
 /// `negative`, where the mode reads no parity: a quotient moves when its remainder passes the
-/// threshold `t`, so `⌊(n + d − 1 − t) / d⌋` is the rounded quotient. `None` for a mode that reads
-/// the quotient's parity, as half to even does, which rounds by the remainder instead.
+/// threshold `t`, so `⌊(n + d − 1 − t) / d⌋` is the rounded quotient, and the bias is 0 where no
+/// remainder moves it, `t` being `d`. `None` for a mode that reads the quotient's parity, as half
+/// to even does, which rounds by the remainder instead.
 #[inline]
 pub(crate) const fn parity_free_bias<D: [const] Word>(
     table: u16, negative: bool, divisor: D,
@@ -92,7 +93,8 @@ pub(crate) const fn parity_free_bias<D: [const] Word>(
 }
 
 /// `quotient`, one step further from zero when [`rounds_up`] says so for the division that left
-/// `remainder` of `divisor`: every rounding in the crate is this. A quotient moves only when the
+/// `remainder` of `divisor`: every rounding by a remainder in the crate is this, and every other
+/// is by [`parity_free_bias`], from the same table. A quotient moves only when the
 /// divisor is at least 2, so it is at most half its word, and moving never wraps.
 #[inline]
 pub(crate) const fn rounded<Q: [const] Word, R: [const] Word>(
@@ -160,8 +162,8 @@ pub(crate) const trait Word: Copy + [const] Ord {
     /// `self / 10^k`, [`rounded`] by `table` for a result of sign `negative`, and whether nothing
     /// was rounded away; or `None` when `10^k` is past the word, or a word below the widest leaves
     /// the quotient to the double. A word whose compiler has no cheap division by a constant
-    /// divides by the power's reciprocal, and rounds by the remainder in the narrowest word that
-    /// holds it.
+    /// divides by the power's reciprocal, and rounds by a bias added first for a mode that reads
+    /// no parity, or by the remainder in the narrowest word that holds it.
     #[inline]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
         match Self::pow10(k) {
@@ -282,7 +284,7 @@ word!(u8, u16, u32, u64, u128 {
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
     )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
         if let Ok(word) = u64::try_from(divisor)
@@ -295,9 +297,10 @@ word!(u8, u16, u32, u64, u128 {
 
     // LLVM divides a `u128` by a constant through a multiply-high of four multiplies, and by a
     // power known only at run time through a library call. A value with no high word divides as a
-    // `u64`; any other, by one Möller–Granlund step when its quotient fits a word, and by two when
-    // it does not, inline: a call on the path, even one never taken, makes every caller save its
-    // registers. A power past `10^19` is left to the double.
+    // `u64`; any other, by a power below 2^32 in two 64-by-32-bit steps, by one Möller–Granlund step
+    // when its quotient fits a word, and by two when it does not, inline: a call on the path, even
+    // one never taken, makes every caller save its registers. A power past `10^19` is left to the
+    // double.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -310,8 +313,9 @@ word!(u8, u16, u32, u64, u128 {
                 let (quotient, remainder) = value.div_rem(divisor);
                 (u128::from(quotient), remainder, divisor)
             } else if let Some(bias) = parity_free_bias(table, negative, power)
+                && let Some(biased) = self.checked_add(bias)
                 && let Some((quotient, remainder, _)) =
-                    reciprocal::divide_u128_by_short_power(self.wrapping_add(bias), k)
+                    reciprocal::divide_u128_by_short_power(biased, k)
             {
                 // Rounded by the bias already; exact when the remainder is the bias itself.
                 return Some((u128::from(quotient), u128::from(remainder) == bias));
@@ -670,7 +674,7 @@ const impl Word for U256 {
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
     )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
         // A numerator of one word divides in it, by the library's 128-bit division, which divides
@@ -695,7 +699,7 @@ const impl Word for U256 {
     #[inline(always)]
     #[expect(
         clippy::inline_always,
-        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+        reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
     )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
         // A mode that reads no parity rounds by a bias added first, as the narrow word's does: the
@@ -795,12 +799,64 @@ mod tests {
     use proptest::prelude::*;
     use rstest::rstest;
 
-    use super::{Double, U256, Word, rounded_zero, rounds_up};
+    use super::{Double, U256, Word, rounded, rounded_zero, rounds_up};
     use crate::round::{Rounding, RoundingMode};
 
     /// A 256-bit word from its two halves.
     const fn wide(high: u128, low: u128) -> U256 {
         U256 { high, low }
+    }
+
+    #[rstest]
+    fn a_power_divides_as_its_remainder_rounds_at_every_edge(
+        #[values(
+            Rounding::Floor,
+            Rounding::Ceil,
+            Rounding::Trunc,
+            Rounding::Expand,
+            Rounding::HalfFloor,
+            Rounding::HalfCeil,
+            Rounding::HalfTrunc,
+            Rounding::HalfExpand,
+            Rounding::HalfEven
+        )]
+        mode: Rounding,
+    ) {
+        // Each word's division, by a bias or by the remainder, against the quotient and remainder
+        // rounded as every rounding reads them: at zero, either side of a multiple and of the word
+        // a quotient fits, and the top of the range, where a bias would wrap.
+        let table = mode.table();
+        for k in 0_u8..=10 {
+            let d = 10_u128.pow(u32::from(k));
+            for n in [
+                0,
+                d - 1,
+                d,
+                3 * d,
+                (d << 64) - d,
+                (d << 64) - 1,
+                d << 64,
+                u128::MAX - d,
+                u128::MAX,
+            ] {
+                for negative in [false, true] {
+                    let expected = (rounded(n / d, n % d, d, negative, table), n % d == 0);
+                    let narrow = n.divide_pow10_round(k, negative, table);
+                    assert_eq!(
+                        narrow,
+                        Some(expected),
+                        "{mode:?}: {n} / 10^{k}, negative {negative}"
+                    );
+                    let wide = U256::from_u128(n).divide_pow10_round(k, negative, table);
+                    let expected_wide = (U256::from_u128(expected.0), expected.1);
+                    assert_eq!(
+                        wide.map(|(q, exact)| (q.low, q.high, exact)),
+                        Some((expected_wide.0.low, expected_wide.0.high, expected_wide.1)),
+                        "and in 256 bits"
+                    );
+                }
+            }
+        }
     }
 
     proptest! {
