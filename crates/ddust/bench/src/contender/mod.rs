@@ -323,6 +323,9 @@ macro_rules! for_each_contender {
     };
     (mul_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(add, $apply, $function);
+        $crate::for_each_contender!(@each $apply $function [
+            ddust::NarrowTrunc ddust::NarrowHalfExpand ddust::WideTrunc ddust::WideHalfExpand
+        ]);
     };
     (div_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [
@@ -333,9 +336,19 @@ macro_rules! for_each_contender {
             fastnum::Wide fin_decimal::Wide fixnum::Wide nexus_decimal::Wide
             primitive_fixed_point_decimal::Wide rust_decimal::Wide
         ]);
+        $crate::for_each_contender!(@each $apply $function [
+            ddust::NarrowTrunc ddust::NarrowHalfExpand ddust::WideTrunc ddust::WideHalfExpand
+        ]);
     };
     (format, $apply:ident, $function:tt) => {
-        $crate::for_each_contender!(div_round, $apply, $function);
+        $crate::for_each_contender!(@each $apply $function [
+            floors::I64 floors::F64Narrow ddust::Narrow bigdecimal::Narrow decimal_rs::Narrow
+            fastnum::Narrow fin_decimal::Narrow fixdec::Narrow fixnum::Narrow
+            nexus_decimal::Narrow primitive_fixed_point_decimal::Narrow rust_decimal::Narrow
+            floors::I128 floors::F64Wide ddust::Wide bigdecimal::Wide decimal_rs::Wide
+            fastnum::Wide fin_decimal::Wide fixnum::Wide nexus_decimal::Wide
+            primitive_fixed_point_decimal::Wide rust_decimal::Wide
+        ]);
     };
     (rescale_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [
@@ -345,6 +358,9 @@ macro_rules! for_each_contender {
             floors::I128 floors::F64Wide ddust::Wide bigdecimal::Wide decimal_rs::Wide
             fastnum::Wide fin_decimal::Wide nexus_decimal::Wide
             primitive_fixed_point_decimal::Wide rust_decimal::Wide
+        ]);
+        $crate::for_each_contender!(@each $apply $function [
+            ddust::NarrowTrunc ddust::NarrowHalfExpand ddust::WideTrunc ddust::WideHalfExpand
         ]);
     };
     (parse, $apply:ident, $function:tt) => {
