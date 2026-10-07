@@ -11,7 +11,7 @@
 //! the quotient fits one word: a quotient past it is past the integer the result goes into, and
 //! takes the plain division, off the hot path.
 
-use crate::word::{Narrow, POW5};
+use crate::word::{Narrow, POW5, Word as _, pow10_u128};
 
 /// A one-word divisor, shifted until its top bit is set, with its reciprocal.
 #[derive(Clone, Copy, Debug)]
@@ -78,6 +78,32 @@ const fn divide_two_by_one(u1: u64, u0: u64, divisor: u64, inverse: u64) -> (u64
     } else {
         (q1, remainder)
     }
+}
+
+/// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `10^k` is below 2^32, `k` at
+/// most 9, and the quotient fits one word: two 64-by-32-bit divisions, each of 32 bits of the low
+/// word after the remainder before it, which LLVM performs for a constant power by one
+/// multiply-high each and no correction (nexus-decimal's split).
+#[inline]
+pub(crate) const fn divide_u128_by_short_power(numerator: u128, k: u8) -> Option<(u64, u64, u64)> {
+    let Some(power) = pow10_u128(k) else { return None };
+    // Below 2^32, so every step's remainder, shifted 32 bits up, still fits a word.
+    if power >= 1 << 32 {
+        return None;
+    }
+    let divisor = u64::low_bits(power);
+    let (n1, n0) = (high(numerator), u64::low_bits(numerator));
+    // The quotient fits a word exactly when the high word is below the divisor; then each step's
+    // numerator, a remainder below 2^32 and 32 bits, is below divisor·2^32, and its quotient below
+    // 2^32.
+    if n1 >= divisor {
+        return None;
+    }
+    let upper = (n1 << 32) | (n0 >> 32);
+    let (q1, r1) = upper.div_rem(divisor);
+    let lower = (r1 << 32) | (n0 & 0xFFFF_FFFF);
+    let (q0, r0) = lower.div_rem(divisor);
+    Some(((q1 << 32) | q0, r0, divisor))
 }
 
 /// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `k` is at most 19 and the
@@ -391,12 +417,26 @@ pub(crate) const fn quotient_by_pow5(magnitude: u128, d: u8) -> Option<(u64, i32
 mod tests {
     use proptest::prelude::*;
 
-    use super::{RECIPROCALS, divide_u128, divide_u256};
+    use super::{RECIPROCALS, divide_u128, divide_u128_by_short_power, divide_u256};
     use crate::word::U256;
 
     /// `10^k`.
     fn power(k: u8) -> u128 {
         10_u128.pow(u32::from(k))
+    }
+
+    #[test]
+    fn a_short_power_refuses_what_its_steps_cannot_divide() {
+        assert_eq!(divide_u128_by_short_power(power(9) << 64, 9), None, "a quotient past a word");
+        assert_eq!(divide_u128_by_short_power(1, 10), None, "10^10 is past 2^32");
+        let largest = ((power(9) - 1) << 64) | u128::from(u64::MAX);
+        let expected =
+            (u64::try_from(largest / power(9)).ok(), u64::try_from(largest % power(9)).ok());
+        assert_eq!(
+            divide_u128_by_short_power(largest, 9).map(|(q, r, _)| (Some(q), Some(r))),
+            Some(expected),
+            "the largest numerator whose quotient fits a word"
+        );
     }
 
     #[test]
@@ -453,6 +493,15 @@ mod tests {
             let shifted = divisor << divisor.leading_zeros();
             let inverse = u128::MAX / u128::from(shifted) - (1 << 64);
             prop_assert_eq!(u128::from(super::reciprocal_word(shifted)), inverse);
+        }
+
+        #[test]
+        fn a_short_power_divides_in_two_steps_as_division_does(high: u64, low: u64, k in 0_u8..=9) {
+            let d = power(k);
+            // A high word below the divisor, so the quotient fits a word: the steps' domain.
+            let n = (u128::from(high % u64::try_from(d).unwrap_or(1)) << 64) | u128::from(low);
+            let expected = (u64::try_from(n / d).unwrap_or(0), u64::try_from(n % d).unwrap_or(0));
+            prop_assert_eq!(divide_u128_by_short_power(n, k), Some((expected.0, expected.1, u64::try_from(d).unwrap_or(0))));
         }
 
         #[test]

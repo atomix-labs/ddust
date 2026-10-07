@@ -289,6 +289,10 @@ word!(u8, u16, u32, u64, u128 {
             if let (Ok(value), Ok(divisor)) = (u64::try_from(self), u64::try_from(power)) {
                 let (quotient, remainder) = value.div_rem(divisor);
                 (u128::from(quotient), remainder, divisor)
+            } else if let Some((quotient, remainder, divisor)) =
+                reciprocal::divide_u128_by_short_power(self, k)
+            {
+                (u128::from(quotient), remainder, divisor)
             } else if let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self, k) {
                 (u128::from(quotient), remainder, divisor)
             } else if let Some(divided) = reciprocal::divide_u256(0, self, k) {
