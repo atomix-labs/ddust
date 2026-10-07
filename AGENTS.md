@@ -69,10 +69,13 @@ What a change here keeps, beyond what the checks hold it to.
   `$crate::` and `::core::`.
 - Every name is whole words, never a fragment such as `at`, `by` or `held`.
 - The crate is `#![no_std]` and allocates nothing outside its tests.
-- No `unsafe` but a SIMD kernel's call, which the workspace's lints deny
-  elsewhere: a `#[target_feature]` function is called from one `unsafe` block,
-  in a function marked `#[expect(unsafe_code)]`, its `// SAFETY:` comment the
-  `cfg` or the CPU check that proves the feature is there.
+- No `unsafe` but in two places, which the workspace's lints deny elsewhere: a
+  SIMD kernel's call, a `#[target_feature]` function called from one `unsafe`
+  block, in a function marked `#[expect(unsafe_code)]`, its `// SAFETY:` comment
+  the `cfg` or the CPU check that proves the feature is there; and zerocopy's
+  `IntoBytes` and bytemuck's `Pod` for a decimal of a static scale, which no
+  derive proves, each `unsafe impl` saying why the decimal is its integer's
+  bytes, beside the assertions of its size and alignment.
 - The crate builds on the nightly `rust-toolchain.toml` pins, and only there.
   `lib.rs` lists each `#![feature]` with what it is for; adding one is a change
   of its own. `rust-version` is the pinned nightly's version, raised by hand

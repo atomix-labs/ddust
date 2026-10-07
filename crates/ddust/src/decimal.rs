@@ -1,7 +1,7 @@
 //! [`Decimal`]: a whole number of steps, and the scale that says what a step is.
 
 #[cfg(feature = "bytemuck")]
-use bytemuck::AnyBitPattern;
+use bytemuck::Zeroable;
 #[cfg(feature = "zerocopy-08")]
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
@@ -41,7 +41,7 @@ use crate::scale::{Fixed, Scale, StaticScale};
 /// assert_eq!((total + cash).to_string(), "20.02", "the sum, exact");
 /// ```
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "bytemuck", derive(AnyBitPattern))]
+#[cfg_attr(feature = "bytemuck", derive(Zeroable))]
 #[cfg_attr(feature = "zerocopy-08", derive(FromBytes, Immutable, KnownLayout))]
 #[repr(C)]
 pub struct Decimal<I, S> {
