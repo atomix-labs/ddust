@@ -1,28 +1,18 @@
-//! bytemuck's `Pod` for a decimal of a static scale, which no derive can prove of a generic
+//! bytemuck's `Pod` for a decimal of a `Fixed` scale, which no derive can prove of a generic
 //! `repr(C)` struct: the decimal is its integer's bytes.
 
 use bytemuck::Pod;
 
 use crate::{Decimal, Fixed, Int};
 
-// `Fixed<D>` takes no room and no alignment, so a decimal of it has its integer's size and
-// alignment, which the `Pod` below relies on; checked here for each of the ten integers.
-const _: () = {
-    macro_rules! same_layout {
-        ($($integer:ty),*) => {$(
-            assert!(size_of::<Decimal<$integer, Fixed<0>>>() == size_of::<$integer>());
-            assert!(align_of::<Decimal<$integer, Fixed<0>>>() == align_of::<$integer>());
-        )*};
-    }
-    same_layout!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
-};
-
-#[expect(unsafe_code, reason = "no derive proves a generic `repr(C)` struct free of padding")]
 // SAFETY: `Decimal` is `repr(C)`, its steps an `I` and its scale a `Fixed<D>`, a `repr(C)` struct
-// of no field, so its size is 0 and its alignment 1: the decimal is `I`'s size and alignment, as
-// the assertions above check, with no padding. Its bytes are `I`'s, and every `I` is `Pod`: any
-// bytes are a decimal, and every byte of one is initialized. It is `Copy`, `'static` and
-// `Zeroable`, as `Pod` requires.
+// of no field, so of size 0 and alignment 1: the decimal is `I`'s size and alignment, as the
+// assertions beside `Decimal` check, with no padding, and it is inhabited, as `I` is. Its bytes
+// are `I`'s, and every `I` is `Pod`: any bytes are a decimal, every byte of one is initialized,
+// and neither field holds a pointer or a cell, so a shared decimal is only read. `Fixed<D>` is no
+// `Pod`, since bytemuck's derive refuses its const parameter, but it has no bytes for `Pod` to ask
+// anything of. The decimal is `Copy`, `'static` and `Zeroable`, as `Pod` requires.
+#[expect(unsafe_code, reason = "no derive proves a generic `repr(C)` struct free of padding")]
 unsafe impl<I: Int + Pod, const D: u8> Pod for Decimal<I, Fixed<D>> {}
 
 #[cfg(test)]

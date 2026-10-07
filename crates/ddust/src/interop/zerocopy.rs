@@ -1,31 +1,19 @@
-//! zerocopy's `IntoBytes` for a decimal of a static scale, which its derive cannot prove of a
+//! zerocopy's `IntoBytes` for a decimal of a `Fixed` scale, which its derive cannot prove of a
 //! generic `repr(C)` struct of two fields: the decimal is its integer's bytes.
 
 use zerocopy::IntoBytes;
 
 use crate::{Decimal, Fixed, Int};
 
-// `Fixed<D>` takes no room and no alignment, so a decimal of it has its integer's size and
-// alignment, which the `IntoBytes` below relies on; checked here for each of the ten integers.
-const _: () = {
-    macro_rules! same_layout {
-        ($($integer:ty),*) => {$(
-            assert!(size_of::<Decimal<$integer, Fixed<0>>>() == size_of::<$integer>());
-            assert!(align_of::<Decimal<$integer, Fixed<0>>>() == align_of::<$integer>());
-        )*};
-    }
-    same_layout!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
-};
-
-#[expect(
-    unsafe_code,
-    reason = "zerocopy's derive cannot prove a generic struct of two fields free of padding"
-)]
+// zerocopy asks that `IntoBytes` come from its derive, and the trait's one method, named for that
+// and `#[doc(hidden)]`, is outside its documented API: a 0.8 release that renames the method, or
+// adds another, fails this build.
+//
 // SAFETY: `Decimal` is `repr(C)`, its steps an `I` and its scale a `Fixed<D>`, a `repr(C)` struct
-// of no field, so its size is 0 and its alignment 1: the decimal is `I`'s size and alignment, as
-// the assertions above check, with no padding, and its bytes are `I`'s, which `I: IntoBytes`
-// says are all initialized. zerocopy names its one method for its derive, which is how a hand-
-// written impl satisfies it; were it to change, this would fail to compile.
+// of no field, so of size 0 and alignment 1: the decimal is `I`'s size and alignment, as the
+// assertions beside `Decimal` check, with no padding, and its bytes are `I`'s, which
+// `I: IntoBytes` says are all initialized.
+#[expect(unsafe_code, reason = "zerocopy's derive cannot prove this struct free of padding")]
 unsafe impl<I: Int + IntoBytes, const D: u8> IntoBytes for Decimal<I, Fixed<D>> {
     fn only_derive_is_allowed_to_implement_this_trait() {}
 }
@@ -50,7 +38,7 @@ mod tests {
         let price: D64<8> = dec!(60000.5);
         assert_eq!(price.as_bytes(), 6_000_050_000_000_i64.to_ne_bytes(), "its steps' bytes");
         let wide = UD128::<18>::from_steps(u128::MAX, Fixed);
-        assert_eq!(wide.as_bytes(), u128::MAX.to_ne_bytes(), "every width");
+        assert_eq!(wide.as_bytes(), u128::MAX.to_ne_bytes(), "and at sixteen bytes");
     }
 
     #[test]

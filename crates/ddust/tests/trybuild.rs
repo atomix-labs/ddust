@@ -11,7 +11,7 @@ mod tests {
 
     #[cfg(all(feature = "bytemuck", feature = "zerocopy-08"))]
     #[test]
-    fn a_run_time_scale_is_never_read_from_bytes() {
+    fn every_refused_misuse_of_bytes_fails_to_compile() {
         TestCases::new().compile_fail("tests/compile_fail_bytes/*.rs");
     }
 }

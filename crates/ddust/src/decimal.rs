@@ -51,6 +51,24 @@ pub struct Decimal<I, S> {
     scale: S,
 }
 
+// A decimal of a `Fixed` scale is its integer's bytes, which `IntoBytes` and `Pod` in `interop`
+// rely on.
+const _: () = {
+    macro_rules! same_layout {
+        ($($integer:ty),*) => {$(
+            assert!(
+                size_of::<Decimal<$integer, Fixed<0>>>() == size_of::<$integer>(),
+                "a `Fixed` scale takes no room"
+            );
+            assert!(
+                align_of::<Decimal<$integer, Fixed<0>>>() == align_of::<$integer>(),
+                "and no alignment"
+            );
+        )*};
+    }
+    same_layout!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+};
+
 /// A decimal of `i8` steps at `D` decimals: one byte.
 pub type D8<const D: u8> = Decimal<i8, Fixed<D>>;
 /// A decimal of `i16` steps at `D` decimals: two bytes.
