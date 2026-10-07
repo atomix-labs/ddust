@@ -125,12 +125,16 @@ def contenders():
     return {package["name"]: package["version"] for package in lock["package"] if package["name"] in wanted}
 
 
+# What the manifest says where the system shows nothing.
+NONE_VISIBLE = "none visible"
+
+
 def load():
     """The host's load averages over one, five and fifteen minutes, as the manifest writes them."""
     try:
         return " ".join(f"{average:.2f}" for average in os.getloadavg())
     except OSError:
-        return "none visible"
+        return NONE_VISIBLE
 
 
 def manifest(run_id, purpose, placed, cpu, features, filters, passes, loads):
@@ -160,7 +164,7 @@ def manifest(run_id, purpose, placed, cpu, features, filters, passes, loads):
             f"perf-event-paranoid = {toml_string(read('/proc/sys/kernel/perf_event_paranoid'))}",
             f"aslr                = {toml_string(read('/proc/sys/kernel/randomize_va_space'))}",
             f"transparent-hugepages = {toml_string(read('/sys/kernel/mm/transparent_hugepage/enabled'))}",
-            f"governor            = {toml_string(read(f'/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor') or 'none visible')}",
+            f"governor            = {toml_string(read(f'/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor') or NONE_VISIBLE)}",
         ]
     rustc = output("rustc", "-vV").splitlines()
     lines += [
@@ -283,10 +287,11 @@ def main():
             with open(directory / f"{bench}-{number}.txt", "w") as table:
                 command = [*prefix, binaries[bench], "--bench", *arguments.filter, "--save", str(save)]
                 subprocess.run(command, cwd=HERE, stdout=table, check=True)
+    after = load()
     sizes = output(sys.executable, str(HERE / "scripts" / "assembly.py"), "sizes", probe)
     (directory / "assembly.txt").write_text(sizes + "\n")
     (directory / "manifest.toml").write_text(
-        manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes, (before, load()))
+        manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes, (before, after))
     )
     summarize(directory, arguments.passes)
     # Formatted as the repository's own TOML is, which `just check` holds every file to.
@@ -295,7 +300,7 @@ def main():
         subprocess.run(["taplo", "fmt", *files], cwd=HERE, check=True, capture_output=True)
     found = disagreements(directory, arguments.passes)
     print(f"run: {directory.relative_to(HERE)}")
-    busy = [figure for figure in (before, load()) if figure != "none visible" and float(figure.split()[0]) > 1.0]
+    busy = [figure for figure in (before, after) if figure != NONE_VISIBLE and float(figure.split()[0]) > 1.0]
     if busy:
         print(f"the host was busy, load {', '.join(busy)}: other work shares its caches and memory with the run")
     for disagreement in found:

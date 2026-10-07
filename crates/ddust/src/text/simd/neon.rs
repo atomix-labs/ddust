@@ -1,14 +1,8 @@
-//! The kernels in NEON, which every aarch64 target has.
+//! The vector reader in NEON, on every aarch64 target that has it.
 //!
-//! Each is a `#[target_feature(enable = "neon")]` function, in which the intrinsics are safe to
-//! call, and its one caller is the only `unsafe`: calling it is sound wherever NEON is enabled,
-//! which the module's `cfg` checks.
-
-#![expect(
-    unsafe_code,
-    reason = "each kernel is called from code without its `#[target_feature]`: sound, since \
-              `cfg(target_feature = \"neon\")` holds wherever the module is compiled"
-)]
+//! Its kernel is a `#[target_feature(enable = "neon")]` function, in which the intrinsics
+//! are safe to call; calling it is the one `unsafe`, sound wherever NEON is enabled, which
+//! this module's `cfg` requires.
 
 use core::arch::aarch64::{
     uint8x16_t, vaddq_u8, vandq_u8, vandq_u16, vandq_u32, vbslq_u8, vceqq_u8, vcgeq_u8, vcgtq_u8,
@@ -18,26 +12,26 @@ use core::arch::aarch64::{
     vshrn_n_u16, vshrq_n_u16, vshrq_n_u32, vsubq_u8,
 };
 
-use crate::text::swar::{load, short};
+use super::words;
 
 /// The lanes' own indices, 0 to 15.
 const IOTA: [u64; 2] = [0x0706_0504_0302_0100, 0x0F0E_0D0C_0B0A_0908];
 
-/// The short texts [`super::read_plain`] reads, on NEON: the text in one vector from two loads, the
-/// point found by one compare, and the steps' digits put in place by one table lookup whose indices
-/// the point and the scale give, so no load waits on where the point is.
+/// Reads the short texts [`super::read_plain`] reads, on NEON: the text in one vector from two
+/// loads, the point found by one compare, and the steps' digits put in place by one table lookup
+/// whose indices the point and the scale give, so no load waits on where the point is.
 #[inline]
-pub(super) fn read_short(text: &[u8], decimals: u8) -> Option<u64> {
-    let len = u8::try_from(text.len()).ok().filter(|&len| len <= 16)?;
+#[expect(
+    unsafe_code,
+    reason = "calls the NEON kernel from code without its `#[target_feature]`: sound, since this \
+              module's `cfg` requires NEON"
+)]
+pub(super) fn read(text: &[u8], decimals: u8) -> Option<u64> {
     if decimals > 16 {
         return None;
     }
-    let (low, high) = if len >= 8 {
-        (load(text, 0), load(text, usize::from(len).wrapping_sub(8)))
-    } else {
-        (short(text)?, 0)
-    };
-    // SAFETY: NEON is enabled, as this module's `cfg` requires, so its kernel may be called.
+    let (len, low, high) = words(text)?;
+    // SAFETY: NEON is enabled, as this module's `cfg` requires.
     unsafe { read16(low, high, len, decimals) }
 }
 

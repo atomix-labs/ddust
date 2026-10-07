@@ -11,8 +11,8 @@ pub(crate) const ONES: u64 = 0x0101_0101_0101_0101;
 pub(crate) const HIGHS: u64 = 0x8080_8080_8080_8080;
 /// ASCII `'.'` in every byte.
 pub(crate) const DOTS: u64 = 0x2E2E_2E2E_2E2E_2E2E;
-/// `10^8`, one group's worth of places.
-const GROUP: u128 = 100_000_000;
+/// `10^8`: a group of eight digits' worth.
+pub(crate) const GROUP: u64 = 100_000_000;
 
 /// Whether all eight bytes are ASCII digits.
 #[inline]
@@ -56,7 +56,7 @@ pub(crate) fn load(text: &[u8], start: usize) -> u64 {
 /// A text of fewer than eight bytes as one word, the first in the lowest byte and zeros past its
 /// end, from two loads that overlap where it is not a power of two long: `None` when it is empty.
 #[inline]
-pub(crate) fn short(text: &[u8]) -> Option<u64> {
+pub(crate) fn load_short(text: &[u8]) -> Option<u64> {
     let len = text.len();
     match len {
         0 => None,
@@ -74,10 +74,10 @@ pub(crate) fn short(text: &[u8]) -> Option<u64> {
     }
 }
 
-/// `text`'s eight bytes from any `start`, zeros past its end, without a load past it.
+/// How to read a text's eight bytes from any `start`, zeros past its end, without a load past it.
 trait Window {
     /// The eight bytes from `start`.
-    fn at(&self, start: usize) -> u64;
+    fn word(&self, start: usize) -> u64;
 }
 
 /// A text of eight bytes or more: a window past its last eight is those, shifted down.
@@ -85,7 +85,7 @@ struct Long<'a>(&'a [u8]);
 
 impl Window for Long<'_> {
     #[inline]
-    fn at(&self, start: usize) -> u64 {
+    fn word(&self, start: usize) -> u64 {
         let from = start.min(self.0.len().wrapping_sub(8));
         load(self.0, from).unbounded_shr(bits(start.wrapping_sub(from)))
     }
@@ -96,14 +96,14 @@ struct Short(u64);
 
 impl Window for Short {
     #[inline]
-    fn at(&self, start: usize) -> u64 {
+    fn word(&self, start: usize) -> u64 {
         self.0.unbounded_shr(bits(start))
     }
 }
 
-/// The magnitude at `decimals` of `text`, `[digits][.digits]` with no sign, when it fits and its
-/// digits past the scale are zeros; `None` for any other text, which the general reader then
-/// reads or refuses.
+/// The magnitude at `decimals` of `text`, `[digits][.digits]` with no sign, when it fits
+/// and its digits past the scale are zeros; `None` for any other text, which the general
+/// reader then reads or refuses.
 ///
 /// Eight bytes at a time, and never past the text: each group is a window, masked to `'0'`
 /// where it runs past its digits, so one test says all eight are digits and three multiplies read
@@ -112,13 +112,13 @@ impl Window for Short {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: inline, a static scale's decimals fold, and the reader runs fewer instructions"
+    reason = "inline, a static scale's decimals reach `fraction` as a constant, and its loop over the groups folds"
 )]
 pub(crate) fn read_plain(text: &[u8], decimals: u8) -> Option<u128> {
     if text.len() >= 8 {
         read(&Long(text), text.len(), decimals)
     } else {
-        read(&Short(short(text)?), text.len(), decimals)
+        read(&Short(load_short(text)?), text.len(), decimals)
     }
 }
 
@@ -126,16 +126,16 @@ pub(crate) fn read_plain(text: &[u8], decimals: u8) -> Option<u128> {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: inline, a static scale's decimals fold, and the reader runs fewer instructions"
+    reason = "inline, a static scale's decimals reach `fraction` as a constant, and its loop over the groups folds"
 )]
 fn read(window: &impl Window, len: usize, decimals: u8) -> Option<u128> {
-    let dot = point(window, len);
-    let fraction_len = len.saturating_sub(dot.wrapping_add(1));
-    if dot == 0 && fraction_len == 0 {
+    let point = point(window, len);
+    let fraction_len = len.saturating_sub(point.wrapping_add(1));
+    if point == 0 && fraction_len == 0 {
         return None;
     }
-    let integer = integer(window, dot)?;
-    let fraction = fraction(window, dot.wrapping_add(1), fraction_len, decimals)?;
+    let integer = integer(window, point)?;
+    let fraction = fraction(window, point.wrapping_add(1), fraction_len, decimals)?;
     let power = pow10_u128(decimals)?;
     let scaled = match (u64::try_from(integer), u64::try_from(power)) {
         (Ok(integer), Ok(power)) => u128::from(integer).wrapping_mul(u128::from(power)),
@@ -148,12 +148,12 @@ fn read(window: &impl Window, len: usize, decimals: u8) -> Option<u128> {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: inline, a static scale's decimals fold, and the reader runs fewer instructions"
+    reason = "measured: with `#[inline]` LLVM calls it out of line, and a narrow text reads in 21 more instructions, a wide one in 26"
 )]
 fn point(window: &impl Window, len: usize) -> usize {
     let mut start = 0;
     while start < len {
-        let probe = window.at(start) ^ DOTS;
+        let probe = window.word(start) ^ DOTS;
         let dots = probe.wrapping_sub(ONES) & !probe & HIGHS;
         if dots != 0 {
             // The first match is exact: a false one only ever follows a true one.
@@ -165,21 +165,21 @@ fn point(window: &impl Window, len: usize) -> usize {
     len
 }
 
-/// The value of the `dot` digits before the point, in groups of eight that end at it, the first
-/// padded with leading `'0'`s: `None` past 38 digits, or for a byte that is not a digit.
+/// The value of the `point` digits before the point, in groups of eight that end at it, the
+/// first padded with leading `'0'`s: `None` past 38 digits, or for a byte that is not a digit.
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: inline, a static scale's decimals fold, and the reader runs fewer instructions"
+    reason = "measured: with `#[inline]` LLVM calls it out of line, and a narrow text reads in 21 more instructions, a wide one in 26"
 )]
-fn integer(window: &impl Window, dot: usize) -> Option<u128> {
-    if dot > 38 {
+fn integer(window: &impl Window, point: usize) -> Option<u128> {
+    if point > 38 {
         return None;
     }
-    let lead = dot % 8;
+    let lead = point % 8;
     let mut value = if lead > 0 {
         let pad = low_bytes(8_usize.wrapping_sub(lead));
-        let shifted = window.at(0).unbounded_shl(bits(8_usize.wrapping_sub(lead)));
+        let shifted = window.word(0).unbounded_shl(bits(8_usize.wrapping_sub(lead)));
         let word = (shifted & !pad) | (ZEROS & pad);
         if !all_digits(word) {
             return None;
@@ -190,21 +190,21 @@ fn integer(window: &impl Window, dot: usize) -> Option<u128> {
     };
     let mut start = lead;
     // Two groups at most in a `u64`, below 10^16, so a short integer never takes a `u128` step.
-    if start < dot && start <= 8 {
-        let word = window.at(start);
+    if start < point && start <= 8 {
+        let word = window.word(start);
         if !all_digits(word) {
             return None;
         }
-        value = value.wrapping_mul(100_000_000).wrapping_add(eight_digits(word));
+        value = value.wrapping_mul(GROUP).wrapping_add(eight_digits(word));
         start = start.wrapping_add(8);
     }
     let mut value = u128::from(value);
-    while start < dot {
-        let word = window.at(start);
+    while start < point {
+        let word = window.word(start);
         if !all_digits(word) {
             return None;
         }
-        value = value.wrapping_mul(GROUP).wrapping_add(u128::from(eight_digits(word)));
+        value = value.wrapping_mul(u128::from(GROUP)).wrapping_add(u128::from(eight_digits(word)));
         start = start.wrapping_add(8);
     }
     Some(value)
@@ -219,7 +219,7 @@ fn integer(window: &impl Window, dot: usize) -> Option<u128> {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: inline, a static scale's decimals fold, and the reader runs fewer instructions"
+    reason = "inline, a static scale's decimals reach `fraction` as a constant, and its loop over the groups folds"
 )]
 fn fraction(window: &impl Window, from: usize, len: usize, decimals: u8) -> Option<u128> {
     let places = usize::from(decimals);
@@ -228,7 +228,7 @@ fn fraction(window: &impl Window, from: usize, len: usize, decimals: u8) -> Opti
     let mut past = read;
     while past < len {
         let keep = low_bytes(len.wrapping_sub(past).min(8));
-        if (window.at(from.wrapping_add(past)) & keep) | (ZEROS & !keep) != ZEROS {
+        if (window.word(from.wrapping_add(past)) & keep) | (ZEROS & !keep) != ZEROS {
             return None;
         }
         past = past.wrapping_add(8);
@@ -236,7 +236,7 @@ fn fraction(window: &impl Window, from: usize, len: usize, decimals: u8) -> Opti
     let group = |place: usize, width: usize| {
         let digits = read.saturating_sub(place).min(width);
         let keep = low_bytes(digits);
-        let word = (window.at(from.wrapping_add(place)) & keep) | (ZEROS & !keep);
+        let word = (window.word(from.wrapping_add(place)) & keep) | (ZEROS & !keep);
         let pad = low_bytes(8_usize.wrapping_sub(width));
         let word = (word.unbounded_shl(bits(8_usize.wrapping_sub(width))) & !pad) | (ZEROS & pad);
         all_digits(word).then(|| u128::from(eight_digits(word)))
@@ -245,7 +245,7 @@ fn fraction(window: &impl Window, from: usize, len: usize, decimals: u8) -> Opti
     let mut value = if lead > 0 { group(0, lead)? } else { 0 };
     let mut place = lead;
     while place < places {
-        value = value.wrapping_mul(GROUP).wrapping_add(group(place, 8)?);
+        value = value.wrapping_mul(u128::from(GROUP)).wrapping_add(group(place, 8)?);
         place = place.wrapping_add(8);
     }
     Some(value)
@@ -257,25 +257,39 @@ mod tests {
     use alloc::format;
 
     use proptest::prelude::*;
+    use rstest::rstest;
 
-    use super::{all_digits, eight_digits, read_plain, short};
+    use super::{all_digits, eight_digits, load_short, read_plain};
 
     #[test]
     fn eight_digits_read_as_a_number() {
         let word = u64::from_le_bytes(*b"12345678");
         assert!(all_digits(word), "eight digits");
         assert_eq!(eight_digits(word), 12_345_678);
-        assert!(!all_digits(u64::from_le_bytes(*b"1234.678")), "a point is no digit");
     }
 
     #[test]
-    fn a_short_text_is_one_word() {
-        for text in [&b"1"[..], b"12", b"123", b"1234", b"12345", b"123456", b"1234567"] {
-            let mut bytes = [0; 8];
-            bytes[..text.len()].copy_from_slice(text);
-            assert_eq!(short(text), Some(u64::from_le_bytes(bytes)), "{text:?}");
-        }
-        assert_eq!(short(b""), None, "nothing");
+    fn a_point_is_no_digit() {
+        assert!(!all_digits(u64::from_le_bytes(*b"1234.678")));
+    }
+
+    #[rstest]
+    #[case::one(b"1")]
+    #[case::two(b"12")]
+    #[case::three(b"123")]
+    #[case::four(b"1234")]
+    #[case::five(b"12345")]
+    #[case::six(b"123456")]
+    #[case::seven(b"1234567")]
+    fn a_short_text_is_one_word(#[case] text: &[u8]) {
+        let mut bytes = [0; 8];
+        bytes[..text.len()].copy_from_slice(text);
+        assert_eq!(load_short(text), Some(u64::from_le_bytes(bytes)), "{text:?}");
+    }
+
+    #[test]
+    fn an_empty_text_is_no_word() {
+        assert_eq!(load_short(b""), None);
     }
 
     proptest! {

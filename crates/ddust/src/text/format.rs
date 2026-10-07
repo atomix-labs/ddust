@@ -3,7 +3,7 @@
 use core::fmt::Write as _;
 use core::{fmt, str};
 
-use super::swar::ZEROS;
+use super::swar::{GROUP, ZEROS};
 use crate::decimal::Decimal;
 use crate::int::Int;
 use crate::reciprocal;
@@ -16,9 +16,6 @@ pub const MAX_ASCII_LEN: usize = 41;
 
 /// The room the eight-byte writer stores into: the text, and up to seven bytes past it.
 const EIGHT_BYTE_ROOM: usize = 48;
-
-/// `10^8`: the digits [`digits8`] writes at a time.
-const CHUNK: u64 = 100_000_000;
 
 /// `10^k` as a `u64`, or `None` past `10^19`.
 #[inline]
@@ -81,8 +78,8 @@ impl Text {
 
     /// Appends `n` with no leading zeros, `0` for zero.
     fn push_integer(&mut self, n: u64) {
-        let (high, rest) = (n / (CHUNK * CHUNK), n % (CHUNK * CHUNK));
-        let (middle, low) = (rest / CHUNK, rest % CHUNK);
+        let (high, rest) = (n / (GROUP * GROUP), n % (GROUP * GROUP));
+        let (middle, low) = (rest / GROUP, rest % GROUP);
         if high > 0 {
             self.push_digits(high, significant(high));
             self.push_digits(middle, 8);
@@ -98,15 +95,15 @@ impl Text {
     /// Appends `n` with no leading zeros, for values past a `u64`.
     #[expect(clippy::arithmetic_side_effects, reason = "division by non-zero powers of ten")]
     fn push_wide_integer(&mut self, n: u128) {
-        let split = u128::from(CHUNK * CHUNK * 1_000);
+        let split = u128::from(GROUP * GROUP * 1_000);
         if let Ok(narrow) = u64::try_from(n) {
             self.push_integer(narrow);
         } else {
             self.push_wide_integer(n / split);
             let rest = u64::try_from(n % split).unwrap_or_default();
-            self.push_digits(rest / (CHUNK * CHUNK), 3);
-            self.push_digits(rest / CHUNK % CHUNK, 8);
-            self.push_digits(rest % CHUNK, 8);
+            self.push_digits(rest / (GROUP * GROUP), 3);
+            self.push_digits(rest / GROUP % GROUP, 8);
+            self.push_digits(rest % GROUP, 8);
         }
     }
 
@@ -122,12 +119,12 @@ impl Text {
             return;
         }
         let chunks = width.div_ceil(8);
-        let mut power = (1..chunks).fold(1_u128, |power, _| power * u128::from(CHUNK));
+        let mut power = (1..chunks).fold(1_u128, |power, _| power * u128::from(GROUP));
         let first = u64::try_from(fraction / power).unwrap_or_default();
         self.push_digits(first, width - 8 * (chunks - 1));
         let mut rest = fraction % power;
         while power > 1 {
-            power /= u128::from(CHUNK);
+            power /= u128::from(GROUP);
             self.push_digits(u64::try_from(rest / power).unwrap_or_default(), 8);
             rest %= power;
         }
@@ -327,15 +324,15 @@ fn put_short(out: &mut [u8], position: usize, n: u64) -> Option<usize> {
 /// Puts `n` with no leading zeros, eight digits at a time; the end it wrote to.
 #[inline]
 fn put_integer(out: &mut [u8], position: usize, n: u64) -> Option<usize> {
-    if n < CHUNK {
+    if n < GROUP {
         return put_short(out, position, n);
     }
-    let (high, low) = (n / CHUNK, n % CHUNK);
-    let position = if high < CHUNK {
+    let (high, low) = (n / GROUP, n % GROUP);
+    let position = if high < GROUP {
         put_short(out, position, high)?
     } else {
-        let position = put_short(out, position, high / CHUNK)?;
-        put(out, position, digits8(high % CHUNK) | ZEROS)?;
+        let position = put_short(out, position, high / GROUP)?;
+        put(out, position, digits8(high % GROUP) | ZEROS)?;
         position.checked_add(8)?
     };
     put(out, position, digits8(low) | ZEROS)?;
@@ -399,8 +396,8 @@ pub(crate) fn write_ascii_narrow(
 /// [`write_ascii_narrow`] for a magnitude past a `u64`, at most 19 decimals: the integer and the
 /// fraction split by two Möller–Granlund steps on the scale's reciprocal, and an integer past a
 /// word split once more by `10^16`, where the [`Text`] writer divides in a `u128` for each. `None`
-/// past what that reaches, or when the text and the eight bytes past it do not fit. Out of line,
-/// so that the narrow writer stays as small as it was with one caller.
+/// past what that reaches, or when the text and the eight bytes past it do not fit. Out of line:
+/// inline, it led LLVM to call `put_integer` out of line from the narrow writer as well.
 #[inline(never)]
 fn write_ascii_split(
     negative: bool, magnitude: u128, decimals: u8, out: &mut [u8],
@@ -417,8 +414,8 @@ fn write_ascii_split(
         Err(_past_a_word) => {
             let (high, low, _) = reciprocal::divide_u128(integer, 16)?;
             let position = put_integer(out, position, high)?;
-            put(out, position, digits8(low / CHUNK) | ZEROS)?;
-            put(out, position.checked_add(8)?, digits8(low % CHUNK) | ZEROS)?;
+            put(out, position, digits8(low / GROUP) | ZEROS)?;
+            put(out, position.checked_add(8)?, digits8(low % GROUP) | ZEROS)?;
             position.checked_add(16)?
         },
     };
@@ -551,7 +548,7 @@ impl<I: Int, S: Scale> Decimal<I, S> {
                 out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
                 Some(len)
             },
-            Err(_) if decimals <= 19 => {
+            Err(_past_a_word) if decimals <= 19 => {
                 let mut room = [0; EIGHT_BYTE_ROOM];
                 match write_ascii_split(negative, magnitude, decimals, &mut room) {
                     Some(len) => {

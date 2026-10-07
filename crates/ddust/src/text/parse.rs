@@ -5,7 +5,7 @@ use core::ops::Range;
 use core::str::FromStr;
 
 use super::simd::read_plain;
-use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits};
+use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits, low_bytes};
 use crate::decimal::Decimal;
 use crate::errors::{ParseError, ParseErrorKind};
 use crate::int::Int;
@@ -129,7 +129,7 @@ fn read_general(
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a static scale's decimals are no constant to the reader"
+    reason = "out of line, a static scale's decimals are no constant to the reader"
 )]
 fn read_or_round(
     text: &[u8], decimals: u8, table: Option<u16>,
@@ -141,7 +141,7 @@ fn read_or_round(
         _ => (false, text),
     };
     read_plain(digits, decimals).map_or_else(
-        || read_signed(negative, digits, decimals, table),
+        || read_general_signed(negative, digits, decimals, table),
         |magnitude| Ok((negative, magnitude)),
     )
 }
@@ -149,7 +149,7 @@ fn read_or_round(
 /// Reads the `digits` of a number of sign `negative` at `decimals` by the general reader,
 /// whatever their shape: out of line, off the plain shape's path.
 #[inline(never)]
-fn read_signed(
+fn read_general_signed(
     negative: bool, digits: &[u8], decimals: u8, table: Option<u16>,
 ) -> Result<(bool, u128), ParseErrorKind> {
     let round = table.map(|table| (negative, table));
@@ -164,20 +164,6 @@ fn read_signed(
 pub(crate) fn read(text: &[u8], decimals: u8) -> Result<(bool, u128), ParseErrorKind> {
     read_or_round(text, decimals, None)
 }
-
-/// Bytes `0..n` set, for `n` in `0..=9`.
-const LOW: [u64; 10] = [
-    0,
-    0xFF,
-    0xFFFF,
-    0x00FF_FFFF,
-    0xFFFF_FFFF,
-    0x00FF_FFFF_FFFF,
-    0xFFFF_FFFF_FFFF,
-    0x00FF_FFFF_FFFF_FFFF,
-    u64::MAX,
-    u64::MAX,
-];
 
 /// The eight bytes of `window` from `position`, little-endian.
 #[inline]
@@ -202,7 +188,7 @@ fn read_window(
     let negative = first & 0xFF == u64::from(b'-');
     let sign = usize::from(negative);
     let probe = first ^ DOTS;
-    let dots = probe.wrapping_sub(ONES) & !probe & HIGHS & *LOW.get(len.min(8))?;
+    let dots = probe.wrapping_sub(ONES) & !probe & HIGHS & low_bytes(len.min(8));
     let dot = if dots != 0 {
         usize::try_from(dots.trailing_zeros().wrapping_shr(3)).ok()?
     } else if len > 8 && window.get(16) == Some(&b'.') {
@@ -214,9 +200,9 @@ fn read_window(
     if dot > 8 || fraction_len > 8 || dot == sign || (dot < len && fraction_len == 0) {
         return None;
     }
-    let fill = *LOW.get(8_usize.checked_sub(dot)?.checked_add(sign)?)?;
+    let fill = low_bytes(8_usize.checked_sub(dot)?.checked_add(sign)?);
     let integer_word = (word(window, dot)? & !fill) | (ZEROS & fill);
-    let keep = *LOW.get(fraction_len)?;
+    let keep = low_bytes(fraction_len);
     let fraction_word = (word(window, dot.checked_add(9)?)? & keep) | (ZEROS & !keep);
     if !(all_digits(integer_word) && all_digits(fraction_word)) {
         return None;
@@ -641,8 +627,8 @@ mod tests {
         fn the_plain_reader_agrees_with_the_general_one(
             text in "[0-9.eE+x-]{0,24}|[0-9]{0,24}\\.?[0-9]{0,24}", decimals in 0_u8..=38,
         ) {
-            // Wherever the eight-at-a-time reader answers, it answers as the byte loop does; and on
-            // the plain shape it refuses only what the byte loop refuses or rounds.
+            // Wherever the plain reader answers, it answers as the general reader does; and on the
+            // plain shape it refuses only what the general reader refuses or rounds.
             let bytes = text.as_bytes();
             let general = read_general(bytes, decimals, None);
             let points: usize = bytes.iter().map(|&byte| usize::from(byte == b'.')).sum();

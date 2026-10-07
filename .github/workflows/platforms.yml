@@ -41,7 +41,7 @@ jobs:
 
   # Each path the text kernels take on x86_64 Linux, past the x86-64-v2 floor `check.yml` tests:
   # none at plain x86-64, which leaves the SWAR twin; SSSE3 found at run time by
-  # `runtime-dispatch` on the same build; and x86-64-v3's.
+  # `runtime-dispatch` on the same build; and x86-64-v3, where `from_f64` reads the FMA residual.
   x86-64-levels:
     strategy:
       fail-fast: false
