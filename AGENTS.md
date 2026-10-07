@@ -69,7 +69,10 @@ What a change here keeps, beyond what the checks hold it to.
   `$crate::` and `::core::`.
 - Every name is whole words, never a fragment such as `at`, `by` or `held`.
 - The crate is `#![no_std]` and allocates nothing outside its tests.
-- No `unsafe`, which the workspace's lints deny.
+- No `unsafe` but a SIMD kernel's call, which the workspace's lints deny
+  elsewhere: a `#[target_feature]` function is called from one `unsafe` block,
+  in a function marked `#[expect(unsafe_code)]`, its `// SAFETY:` comment the
+  `cfg` or the CPU check that proves the feature is there.
 - The crate builds on the nightly `rust-toolchain.toml` pins, and only there.
   `lib.rs` lists each `#![feature]` with what it is for; adding one is a change
   of its own. `rust-version` is the pinned nightly's version, raised by hand
@@ -128,7 +131,9 @@ What a change here keeps, beyond what the checks hold it to.
   cites moves. A run is named for its time in UTC, its pull request, what it
   measures and its machine (`2026-10-06T09-30Z-pr3-baseline-graviton4`); its
   passes agree, by 2% in time and cycles and 0.5% in instructions, or it is
-  taken again with five, and the book cites the median of their medians.
+  taken again with five, and the book cites the median of their medians. A run
+  is taken on a host doing nothing else, which the manifest's load before and
+  after shows, since work on other cores shares their caches and memory with it.
 - Contenders are compared within one binary and one run, never across builds,
   since code layout alone moves a figure between builds. A claim that one form
   is faster cites the run that shows it.

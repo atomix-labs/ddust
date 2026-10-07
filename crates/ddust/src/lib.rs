@@ -56,6 +56,17 @@
 //!
 //! ddust builds on nightly Rust, from `nightly-2026-09-28`: its arithmetic, rounding and literals
 //! are `const fn` over every integer through const traits, which are not stable yet.
+//!
+//! # Crate Features
+//!
+//! | Feature | What it adds |
+//! | ------- | ------------ |
+//! | `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read with SSSE3 where the CPU has it |
+//!
+//! Text is read with NEON on every aarch64 target but the soft-float ones, and with SSSE3 on an
+//! `x86_64` build for a CPU that has it, `-C target-cpu=x86-64-v2` or newer, with no check at run
+//! time; elsewhere eight bytes at a time in a 64-bit word, as on a soft-float target, which has no
+//! vector registers for `runtime-dispatch` to use.
 
 #![no_std]
 // Const traits: the arithmetic, the rounding and the literal parser are `const fn` over every
