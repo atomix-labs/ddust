@@ -47,7 +47,7 @@ const fn bits(count: usize) -> u32 {
 /// The eight bytes of `text` from `start`, the first in the lowest byte, for a `start` at least
 /// eight bytes before its end.
 #[inline]
-fn load(text: &[u8], start: usize) -> u64 {
+pub(crate) fn load(text: &[u8], start: usize) -> u64 {
     text.get(start..start.wrapping_add(8))
         .and_then(|bytes| <[u8; 8]>::try_from(bytes).ok())
         .map_or(0, u64::from_le_bytes)
@@ -56,7 +56,7 @@ fn load(text: &[u8], start: usize) -> u64 {
 /// A text of fewer than eight bytes as one word, the first in the lowest byte and zeros past its
 /// end, from two loads that overlap where it is not a power of two long: `None` when it is empty.
 #[inline]
-fn short(text: &[u8]) -> Option<u64> {
+pub(crate) fn short(text: &[u8]) -> Option<u64> {
     let len = text.len();
     match len {
         0 => None,

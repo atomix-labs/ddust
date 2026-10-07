@@ -4,7 +4,8 @@
 use core::ops::Range;
 use core::str::FromStr;
 
-use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits, read_plain};
+use super::simd::read_plain;
+use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits};
 use crate::decimal::Decimal;
 use crate::errors::{ParseError, ParseErrorKind};
 use crate::int::Int;
