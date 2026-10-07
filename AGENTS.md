@@ -128,7 +128,9 @@ What a change here keeps, beyond what the checks hold it to.
   cites moves. A run is named for its time in UTC, its pull request, what it
   measures and its machine (`2026-10-06T09-30Z-pr3-baseline-graviton4`); its
   passes agree, by 2% in time and cycles and 0.5% in instructions, or it is
-  taken again with five, and the book cites the median of their medians.
+  taken again with five, and the book cites the median of their medians. It runs
+  on a host doing nothing else, which the manifest's load before and after
+  shows, since work on other cores shares their caches and memory with it.
 - Contenders are compared within one binary and one run, never across builds,
   since code layout alone moves a figure between builds. A claim that one form
   is faster cites the run that shows it.

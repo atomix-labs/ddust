@@ -1,5 +1,5 @@
 """Runs the benches into a directory a pull request commits: two passes, each a process of its own,
-on one isolated CPU, with a manifest of the machine, the toolchain and the contenders.
+on one isolated CPU, with a manifest of the machine, its load, the toolchain and the contenders.
 
 Usage: run.py --pr <n> --subject <word> --host <word> [--passes <n>] [--purpose <text>] [--cpu <cpu>]
               [--filter <word>]...
@@ -125,8 +125,17 @@ def contenders():
     return {package["name"]: package["version"] for package in lock["package"] if package["name"] in wanted}
 
 
-def manifest(run_id, purpose, placed, cpu, features, filters, passes):
-    """The run's manifest, as TOML."""
+def load():
+    """The host's load averages over one, five and fifteen minutes, as the manifest writes them."""
+    try:
+        return " ".join(f"{average:.2f}" for average in os.getloadavg())
+    except OSError:
+        return "none visible"
+
+
+def manifest(run_id, purpose, placed, cpu, features, filters, passes, loads):
+    """The run's manifest, as TOML: `loads` is the host's load before the first pass and after the
+    last, which other work on the shared cores raises."""
     model, machine, cpus, caches = hardware(cpu)
     linux = platform.system() == "Linux"
     lines = [
@@ -142,6 +151,8 @@ def manifest(run_id, purpose, placed, cpu, features, filters, passes):
         "[environment]",
         f"system    = {toml_string(platform.platform())}",
         f"placement = {toml_string(placed)}",
+        f"load-before = {toml_string(loads[0])}",
+        f"load-after  = {toml_string(loads[1])}",
     ]
     if linux:
         lines += [
@@ -265,6 +276,7 @@ def main():
     directory = HERE / "results" / run_id
     directory.mkdir(parents=True)
     prefix, placed = placement(arguments.cpu)
+    before = load()
     for number in range(1, arguments.passes + 1):
         for bench in BENCHES:
             save = directory / f"{bench}-{number}.toml"
@@ -274,7 +286,7 @@ def main():
     sizes = output(sys.executable, str(HERE / "scripts" / "assembly.py"), "sizes", probe)
     (directory / "assembly.txt").write_text(sizes + "\n")
     (directory / "manifest.toml").write_text(
-        manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes)
+        manifest(run_id, arguments.purpose, placed, arguments.cpu, features, arguments.filter, arguments.passes, (before, load()))
     )
     summarize(directory, arguments.passes)
     # Formatted as the repository's own TOML is, which `just check` holds every file to.
@@ -283,6 +295,9 @@ def main():
         subprocess.run(["taplo", "fmt", *files], cwd=HERE, check=True, capture_output=True)
     found = disagreements(directory, arguments.passes)
     print(f"run: {directory.relative_to(HERE)}")
+    busy = [figure for figure in (before, load()) if figure != "none visible" and float(figure.split()[0]) > 1.0]
+    if busy:
+        print(f"the host was busy, load {', '.join(busy)}: other work shares its caches and memory with the run")
     for disagreement in found:
         print(f"passes disagree: {disagreement}")
     if found and arguments.passes < 5:
