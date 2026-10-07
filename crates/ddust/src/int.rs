@@ -352,7 +352,7 @@ const trait Magnitude: Copy {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
 )]
 const fn outcome<I: [const] Magnitude, D: [const] Double<I::Unsigned>>(
     exact: Exact<D>,
@@ -389,7 +389,7 @@ macro_rules! exact {
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
 )]
 const fn settled<I: [const] Magnitude + [const] Int>(
     outcome: Option<Outcome<I>>, negative: bool,
@@ -411,7 +411,7 @@ const fn scale_up<I: [const] Magnitude + [const] Int>(a: I, k: u8) -> Outcome<I>
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rescale takes 4.29 ns, not 4.12"
 )]
 const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16) -> (I, bool) {
     let (negative, a) = a.split();
@@ -431,7 +431,7 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
 )]
 const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
@@ -469,7 +469,7 @@ const fn mul_up<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8) -> Outcom
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
 )]
 const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
@@ -481,7 +481,7 @@ const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u1
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
 )]
 const fn div_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
@@ -644,6 +644,8 @@ macro_rules! int {
 
             #[inline]
             fn scale_up(self, k: u8) -> Outcome<Self> { scale_up(self, k) }
+            // Forced inline as the functions they forward to are, each with what was measured: out
+            // of line, a binary that rounds by two modes passes the table at run time.
             #[inline(always)]
             fn scale_down(self, k: u8, table: u16) -> (Self, bool) { scale_down(self, k, table) }
             #[inline(always)]
@@ -654,7 +656,7 @@ macro_rules! int {
             fn div_up(self, k: u8, rhs: Self, table: u16) -> Outcome<Self> { div_up(self, k, rhs, table) }
             #[inline(always)]
             fn div_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self> { div_down(self, rhs, k, table) }
-            #[inline(always)]
+            #[inline]
             fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self> { mul_div(self, b, c, table) }
             #[inline]
             fn multiple(self, step: Self, table: u16) -> Outcome<Self> { multiple(self, step, table) }

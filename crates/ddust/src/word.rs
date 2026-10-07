@@ -71,11 +71,12 @@ const fn threshold<D: [const] Word>(bits: u16, divisor: D) -> D {
     }
 }
 
-/// What adding to a dividend before dividing rounds it by `table` for a result of sign
-/// `negative`, where the mode reads no parity: a quotient moves when its remainder passes the
-/// threshold `t`, so `⌊(n + d − 1 − t) / d⌋` is the rounded quotient, and the bias is 0 where no
-/// remainder moves it, `t` being `d`. `None` for a mode that reads the quotient's parity, as half
-/// to even does, which rounds by the remainder instead.
+/// The bias that, added to a dividend before dividing, rounds the quotient by `table` for a result
+/// of sign `negative`, or `None` where the mode reads the quotient's parity.
+///
+/// A mode that reads no parity moves a quotient when its remainder passes the threshold `t`, so
+/// `⌊(n + d − 1 − t) / d⌋` is the rounded quotient, and the bias is 0 where no remainder moves it,
+/// `t` being `d`. Half to even reads the parity, and rounds by the remainder instead.
 #[inline]
 pub(crate) const fn parity_free_bias<D: [const] Word>(
     table: u16, negative: bool, divisor: D,
@@ -94,8 +95,10 @@ pub(crate) const fn parity_free_bias<D: [const] Word>(
 
 /// `quotient`, one step further from zero when [`rounds_up`] says so for the division that left
 /// `remainder` of `divisor`: every rounding by a remainder in the crate is this, and every other
-/// is by [`parity_free_bias`], from the same table. A quotient moves only when the
-/// divisor is at least 2, so it is at most half its word, and moving never wraps.
+/// is by [`parity_free_bias`], from the same table.
+///
+/// A quotient moves only when the divisor is at least 2, so it is at most half its word,
+/// and moving never wraps.
 #[inline]
 pub(crate) const fn rounded<Q: [const] Word, R: [const] Word>(
     quotient: Q, remainder: R, divisor: R, negative: bool, table: u16,
@@ -161,9 +164,11 @@ pub(crate) const trait Word: Copy + [const] Ord {
 
     /// `self / 10^k`, [`rounded`] by `table` for a result of sign `negative`, and whether nothing
     /// was rounded away; or `None` when `10^k` is past the word, or a word below the widest leaves
-    /// the quotient to the double. A word whose compiler has no cheap division by a constant
-    /// divides by the power's reciprocal, and rounds by a bias added first for a mode that reads
-    /// no parity, or by the remainder in the narrowest word that holds it.
+    /// the quotient to the double.
+    ///
+    /// A word whose compiler has no cheap division by a constant divides by the power's
+    /// reciprocal, and rounds by a bias added first for a mode that reads no parity, or by the
+    /// remainder in the narrowest word that holds it.
     #[inline]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
         match Self::pow10(k) {
@@ -297,10 +302,10 @@ word!(u8, u16, u32, u64, u128 {
 
     // LLVM divides a `u128` by a constant through a multiply-high of four multiplies, and by a
     // power known only at run time through a library call. A value with no high word divides as a
-    // `u64`; any other, by a power below 2^32 in two 64-by-32-bit steps, by one Möller–Granlund step
-    // when its quotient fits a word, and by two when it does not, inline: a call on the path, even
-    // one never taken, makes every caller save its registers. A power past `10^19` is left to the
-    // double.
+    // `u64`; any other, by a power below 2^32 in two 64-by-32-bit steps, by one Möller–Granlund
+    // step when its quotient fits a word, and by two when it does not, inline: a call on the path,
+    // even one never taken, makes every caller save its registers. A power past `10^19` is left to
+    // the double.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -677,9 +682,9 @@ const impl Word for U256 {
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
     )]
     fn divide_round(self, divisor: Self, negative: bool, table: u16) -> Self {
-        // A numerator of one word divides in it, by the library's 128-bit division, which divides
-        // by a one-word divisor in hardware, where computing the divisor's reciprocal first, for
-        // two steps on it, takes longer than the division it would spare.
+        // A numerator of 128 bits divides in them, by the library's 128-bit division, which
+        // divides by a divisor of 64 bits in hardware, where computing the divisor's reciprocal
+        // first, for two steps on it, takes longer than the division it would spare.
         if self.high == 0 && divisor.high == 0 {
             let (quotient, remainder) = self.low.div_rem(divisor.low);
             return rounded(Self::from_u128(quotient), remainder, divisor.low, negative, table);
@@ -822,9 +827,9 @@ mod tests {
         )]
         mode: Rounding,
     ) {
-        // Each word's division, by a bias or by the remainder, against the quotient and remainder
-        // rounded as every rounding reads them: at zero, either side of a multiple and of the word
-        // a quotient fits, and the top of the range, where a bias would wrap.
+        // Each word's division, by a bias or by the remainder, against `rounded` on the exact
+        // quotient and remainder: at zero, either side of a multiple and of the word a quotient
+        // fits, and the top of the range, where a bias would wrap.
         let table = mode.table();
         for k in 0_u8..=10 {
             let d = 10_u128.pow(u32::from(k));

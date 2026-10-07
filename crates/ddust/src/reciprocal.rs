@@ -80,11 +80,13 @@ const fn divide_two_by_one(u1: u64, u0: u64, divisor: u64, inverse: u64) -> (u64
     }
 }
 
-/// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `k` is from 1 to 9, so `10^k`
-/// below 2^32, and the quotient fits one word: two 64-by-32-bit divisions, each of 32 bits of the
-/// low word after the remainder before it, each by one multiply-high with [`SHORT_POWERS`]'
-/// multiplier and no correction (nexus-decimal's split), so that a power known only at run time
-/// costs a table load where a hardware division would wait twice.
+/// `numerator / 10^k`, the remainder and `10^k`, or `None` unless `k` is from 1 to 9, so `10^k` is
+/// below 2^32, and the quotient fits one word.
+///
+/// Two 64-by-32-bit divisions, nexus-decimal's split, each of 32 bits of the low word after the
+/// remainder before it, and each by one multiply-high with [`SHORT_POWERS`]' multiplier and no
+/// correction, so that a power known only at run time costs a table load where a hardware
+/// division would wait twice.
 #[inline]
 pub(crate) const fn divide_u128_by_short_power(numerator: u128, k: u8) -> Option<(u64, u64, u64)> {
     let Some(ShortPower { divisor, multiplier, shift }) = short_power(k) else { return None };
@@ -109,7 +111,8 @@ const fn short_step(n: u64, divisor: u64, multiplier: u64, shift: u32) -> (u64, 
 
 /// A power of ten below 2^32, with the multiplier `⌈2^(64+s) / d⌉` and the shift `s = ⌊log2 d⌋`
 /// that divide by it: the high word of a numerator below 2^63 times the multiplier, shifted, is
-/// its quotient, the multiplier's excess, below `d`, times the numerator being below `2^(64+s)`.
+/// its quotient, since the multiplier's excess, below `d`, times the numerator is below
+/// `2^(64+s)`.
 #[derive(Clone, Copy)]
 struct ShortPower {
     /// The power.
@@ -488,7 +491,7 @@ mod tests {
         assert_eq!(
             divide_u128_by_short_power(largest, 9).map(|(q, r, _)| (Some(q), Some(r))),
             Some(expected),
-            "the largest numerator whose quotient fits a word"
+            "its quotient and remainder are `u128` division's"
         );
     }
 

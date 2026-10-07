@@ -33,10 +33,10 @@ use crate::scale::{Fixed, Scale, StaticScale};
 /// # Layout
 ///
 /// `Decimal` is `repr(C)`, its steps first. A decimal of a [`Fixed`] scale, which takes no room,
-/// is therefore its integer: the same size, alignment and bytes, which the crate also checks when
-/// it compiles. It is read from and written as bytes through zerocopy's and bytemuck's traits, and
-/// held in shared memory or a file as its integer. Across a C boundary it is its steps, since C
-/// has no equal of its scale's type: pass [`steps`](Self::steps), and read back with
+/// is therefore its integer: the same size, alignment and bytes, the size and alignment checked
+/// when the crate compiles. It is read from and written as bytes through zerocopy's and bytemuck's
+/// traits, and held in shared memory or a file as its integer. Across a C boundary it is its steps,
+/// since C has no equal of its scale's type: pass [`steps`](Self::steps), and read back with
 /// [`from_steps`](Self::from_steps). A decimal of a [`Dynamic`](crate::Dynamic) scale holds a byte
 /// of scale after its steps, and padding, and is never read from or written as bytes.
 ///

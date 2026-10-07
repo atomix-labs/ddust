@@ -74,7 +74,7 @@ pub(crate) const fn scale_up<U: [const] Narrow, D: [const] Double<U>>(
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rescale takes 4.29 ns, not 4.12"
 )]
 pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, table: u16,
@@ -92,7 +92,7 @@ pub(crate) const fn scale_down<U: [const] Narrow, D: [const] Double<U>>(
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
 )]
 pub(crate) const fn mul_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
@@ -127,7 +127,7 @@ pub(crate) const fn mul_up<U: [const] Narrow, D: [const] Double<U>>(
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
 )]
 pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, b: U, table: u16,
@@ -189,7 +189,7 @@ const fn divide_past_38_digits<D: [const] Word>(
 #[inline(always)]
 #[expect(
     clippy::inline_always,
-    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a narrow rounded product on mixed inputs takes 8.8 ns, not 4.0"
+    reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and the wide rounded quotient on mixed inputs takes 34.0 ns, not 29.0"
 )]
 pub(crate) const fn div_down<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, b: U, k: u8, table: u16,
