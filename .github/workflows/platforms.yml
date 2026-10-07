@@ -73,11 +73,13 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup target add aarch64-unknown-none x86_64-unknown-none
-      # With no feature, and with every feature.
+      # With no feature, and with every feature but arbitrary's, whose crate needs std.
       - run: |
+          features=$(cargo metadata --locked --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "ddust") | .features | keys - ["default", "arbitrary"] | join(",")')
           for target in aarch64-unknown-none x86_64-unknown-none; do
             cargo build --locked --package ddust --target "$target"
-            cargo build --locked --package ddust --target "$target" --all-features
+            cargo build --locked --package ddust --target "$target" --features "$features"
           done
 
   linux-32-bit:
