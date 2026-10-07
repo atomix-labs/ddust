@@ -1,7 +1,8 @@
 # What `check.yml`, on x86_64 Linux, cannot show: the tests on arm64 Linux and on macOS, on Apple
-# silicon and on Intel, where 128-bit and 256-bit arithmetic compile to other instructions; the
-# crate built for bare metal, where a use of `std` fails the build, and checked for 32-bit Linux;
-# and every fuzz target run from the corpus committed under `crates/ddust/fuzz/`.
+# silicon and on Intel, where 128-bit and 256-bit arithmetic compile to other instructions; each
+# x86_64 level the text kernels take a path at; the crate built for bare metal, where a use of
+# `std` fails the build, and checked for 32-bit Linux; and every fuzz target run from the corpus
+# committed under `crates/ddust/fuzz/`.
 name: platforms
 
 on:
@@ -37,6 +38,32 @@ jobs:
       - run: cargo test --workspace --all-features --locked
       - run: cargo test --workspace --locked
       - run: cargo test --workspace --locked --release
+
+  # Each path the text kernels take on x86_64 Linux, past the x86-64-v2 floor `check.yml` tests:
+  # none at plain x86-64, which leaves the SWAR twin; SSSE3 found at run time by
+  # `runtime-dispatch` on the same build; and x86-64-v3's.
+  x86-64-levels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cpu: x86-64
+            features: ""
+          - cpu: x86-64
+            features: runtime-dispatch
+          - cpu: x86-64-v3
+            features: ""
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUSTFLAGS: -C target-cpu=${{ matrix.cpu }}
+      FEATURES: ${{ matrix.features }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo test --workspace --locked --features "$FEATURES"
+      - run: cargo test --workspace --locked --release --features "$FEATURES"
 
   no-std:
     runs-on: ubuntu-latest
