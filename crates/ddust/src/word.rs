@@ -330,7 +330,7 @@ word!(u8, u16, u32, u64, u128 {
                 (u128::from(quotient), remainder, divisor)
             } else if let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self, k) {
                 (u128::from(quotient), remainder, divisor)
-            } else if let Some(divided) = reciprocal::divide_u256(0, self, k) {
+            } else if let Some(divided) = reciprocal::divide_u128_past_a_word(self, k) {
                 divided
             } else {
                 return None;
