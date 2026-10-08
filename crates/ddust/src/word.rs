@@ -910,13 +910,11 @@ const impl<U: [const] Narrow> Double<U> for U256 {
             return largest;
         }
         // Long division, 128 bits of the quotient a step: each remainder is below `b`, so each
-        // step's quotient fits 128 bits.
-        let Some((high, remainder)) = reciprocal::divide_u256_by_u128(t, 0, b) else {
-            return largest;
-        };
-        let Some((low, remainder)) = reciprocal::divide_u256_by_u128(remainder, 0, b) else {
-            return largest;
-        };
+        // step's quotient fits 128 bits. By Hacker's Delight's steps, where the hot path's own
+        // division would gain a second caller, and a binary that prepares a divisor would call it
+        // out of line from every wide quotient by a decimal.
+        let (high, remainder) = Self::div_rem_narrow(t, 0, b);
+        let (low, remainder) = Self::div_rem_narrow(remainder, 0, b);
         let (low, carry) = low.overflowing_add(u128::from(remainder != 0));
         Self { high: high.wrapping_add(u128::from(carry)), low }
     }
