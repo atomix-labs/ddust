@@ -773,16 +773,23 @@ const impl Word for U256 {
             let quotient = rounded(u128::from(quotient), remainder, divisor, negative, table);
             return Some((Self::from_u128(quotient), remainder == 0));
         }
-        match reciprocal::divide_u256(self.high, self.low, k) {
-            Some((quotient, remainder, divisor)) => {
-                let quotient =
-                    rounded(Self::from_u128(quotient), remainder, divisor, negative, table);
-                Some((quotient, remainder == 0))
-            },
-            None => match Self::pow10(k) {
-                Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),
-                None => None,
-            },
+        if let Some((quotient, remainder, divisor)) =
+            reciprocal::divide_u256(self.high, self.low, k)
+        {
+            let quotient = rounded(Self::from_u128(quotient), remainder, divisor, negative, table);
+            return Some((quotient, remainder == 0));
+        }
+        // A quotient past 128 bits, by a power of one word: a long division in base 2^128, inline,
+        // where a call would cost every product a stack frame.
+        if let Some((high, low, remainder, divisor)) =
+            reciprocal::divide_u256_long(self.high, self.low, k)
+        {
+            let quotient = rounded(Self { high, low }, remainder, divisor, negative, table);
+            return Some((quotient, remainder == 0));
+        }
+        match Self::pow10(k) {
+            Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),
+            None => None,
         }
     }
 }
@@ -799,9 +806,8 @@ const fn divide_round_by_long_division(
 }
 
 /// `value / power`, rounded by `table` for a result of sign `negative`, and whether nothing was
-/// rounded away, for a power past `10^19` or a quotient past 128 bits: by the run-time reciprocal
-/// for a power of 128 bits or fewer, and by long division past them, off the hot path and out of
-/// line.
+/// rounded away, for a power past `10^19`: by the run-time reciprocal for a power of 128 bits or
+/// fewer, and by long division past them, off the hot path and out of line.
 #[cold]
 #[inline(never)]
 const fn divide_pow10_by_long_division(
@@ -842,10 +848,24 @@ const impl<U: [const] Narrow> Double<U> for U256 {
 #[expect(clippy::arithmetic_side_effects, reason = "the reference model's own arithmetic")]
 mod tests {
     use proptest::prelude::*;
+    use proptest::sample::select;
     use rstest::rstest;
 
     use super::{Double, U256, Word, rounded, rounded_zero, rounds_up};
     use crate::round::{Rounding, RoundingMode};
+
+    /// Every mode.
+    const MODES: [Rounding; 9] = [
+        Rounding::Floor,
+        Rounding::Ceil,
+        Rounding::Trunc,
+        Rounding::Expand,
+        Rounding::HalfFloor,
+        Rounding::HalfCeil,
+        Rounding::HalfTrunc,
+        Rounding::HalfExpand,
+        Rounding::HalfEven,
+    ];
 
     /// A 256-bit word from its two halves.
     const fn wide(high: u128, low: u128) -> U256 {
@@ -929,6 +949,20 @@ mod tests {
             let back = quotient.checked_mul(divisor).and_then(|product| product.checked_add(remainder));
             prop_assert_eq!(back, Some(wide(high, low)));
             prop_assert!(remainder < divisor);
+        }
+
+        #[test]
+        fn a_wide_value_divides_by_a_power_as_long_division_does(
+            high: u128, low: u128, k in 0_u8..=38, negative: bool,
+            mode in select(MODES.to_vec()),
+        ) {
+            // Every quotient, past 128 bits as well as within them, against the reference's long
+            // division and `rounded`.
+            let (value, power) = (wide(high, low), U256::pow10(k).expect("at most 10^38"));
+            let (quotient, remainder) = value.div_rem(power);
+            let table = mode.table();
+            let expected = (rounded(quotient, remainder, power, negative, table), remainder == U256::ZERO);
+            prop_assert_eq!(value.divide_pow10_round(k, negative, table), Some(expected));
         }
 
         #[test]

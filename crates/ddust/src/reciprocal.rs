@@ -291,19 +291,52 @@ pub(crate) const fn divide_u127(numerator: u128, k: u8) -> Option<(u128, u64)> {
 pub(crate) const fn divide_u256(
     high_half: u128, low_half: u128, k: u8,
 ) -> Option<(u128, u64, u64)> {
-    let Some(Reciprocal { divisor, inverse, shift }) = reciprocal(k) else { return None };
+    let Some(reciprocal) = reciprocal(k) else { return None };
+    let power = reciprocal.divisor >> reciprocal.shift;
     // The quotient fits 128 bits exactly when the high half is below the power, which then fits
     // one word.
-    if high_half >= u128::from(divisor >> shift) {
+    if high_half >= u128::from(power) {
         return None;
     }
-    let (n2, n1, n0) = (u64::low_bits(high_half), high(low_half), u64::low_bits(low_half));
-    // The three live words, shifted as one number: each takes the bits the next one shifts out.
-    let (u2, _) = shifted(n2, n1, shift);
-    let (u1, u0) = shifted(n1, n0, shift);
+    let inverse_low = INVERSES_LOW[usize::from(k)];
     let (quotient, remainder) =
-        divide_three_by_one(u2, u1, u0, divisor, inverse, INVERSES_LOW[usize::from(k)]);
-    Some((quotient, remainder >> shift, divisor >> shift))
+        divide_below_power(u64::low_bits(high_half), low_half, reciprocal, inverse_low);
+    Some((quotient, remainder, power))
+}
+
+/// `(high:low) / 10^k` for any 256-bit numerator, the quotient's two halves, high first, the
+/// remainder and `10^k`, or `None` unless `k` is at most 19: the high half's quotient in two
+/// steps, then in one that of its remainder and the low half, a long division in base 2^128.
+#[inline]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "`reciprocal` has checked `k` against the tables' length"
+)]
+pub(crate) const fn divide_u256_long(
+    high_half: u128, low_half: u128, k: u8,
+) -> Option<(u128, u128, u64, u64)> {
+    let Some(reciprocal) = reciprocal(k) else { return None };
+    let Some((quotient_high, carried, power)) = divide_u128_past_a_word(high_half, k) else {
+        return None;
+    };
+    let inverse_low = INVERSES_LOW[usize::from(k)];
+    let (quotient_low, remainder) = divide_below_power(carried, low_half, reciprocal, inverse_low);
+    Some((quotient_high, quotient_low, remainder, power))
+}
+
+/// `(high:low) / 10^k` and the remainder, for a `high` word below the power, so the quotient fits
+/// 128 bits, by the power's reciprocal and the low word of its two-word inverse.
+#[inline]
+const fn divide_below_power(
+    high_word: u64, low_half: u128, reciprocal: Reciprocal, inverse_low: u64,
+) -> (u128, u64) {
+    let Reciprocal { divisor, inverse, shift } = reciprocal;
+    let (n1, n0) = (high(low_half), u64::low_bits(low_half));
+    // The three live words, shifted as one number: each takes the bits the next one shifts out.
+    let (u2, _) = shifted(high_word, n1, shift);
+    let (u1, u0) = shifted(n1, n0, shift);
+    let (quotient, remainder) = divide_three_by_one(u2, u1, u0, divisor, inverse, inverse_low);
+    (quotient, remainder >> shift)
 }
 
 /// `(n1:n0) << shift`, its two words, for a `shift` below 64.
