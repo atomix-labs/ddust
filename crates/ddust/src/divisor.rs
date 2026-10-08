@@ -1,6 +1,8 @@
 //! A divisor prepared once, for many divisions by it: [`Divisor`], and [`DivideBy`], what
 //! [`div_round`](Decimal::div_round) takes, a decimal or a prepared divisor.
 
+use core::hash::{Hash, Hasher};
+
 use crate::decimal::Decimal;
 use crate::int::{Int, Outcome};
 use crate::scale::Scale;
@@ -16,7 +18,7 @@ pub struct Prepared<U, D> {
     pub(crate) whole: U,
     /// Whether the whole part was past the word, so that every dividend but zero overflows.
     pub(crate) whole_past: bool,
-    /// `⌈2^n × (10^k mod b) / b⌉`, `n` being the word's bits: the multiplier of the rest.
+    /// `⌈2^n × (10^k mod b) / b⌉`, `n` being the double's bits: the multiplier of the rest.
     pub(crate) multiplier: D,
     /// The fractions a remainder of one leaves, of half rounded up, and of half rounded down and
     /// one: where each class of remainder starts.
@@ -50,6 +52,22 @@ pub struct Divisor<I: Int, S: Scale> {
     prepared: I::Prepared,
 }
 
+// By its value alone: what is prepared follows from it, and two values equal as decimals, `1.5`
+// and `1.50` at run-time scales, divide alike.
+const impl<I: [const] Int, S: [const] Scale> PartialEq for Divisor<I, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+const impl<I: [const] Int, S: [const] Scale> Eq for Divisor<I, S> {}
+
+impl<I: Int, S: Scale> Hash for Divisor<I, S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
 impl<I: Int, S: Scale> Divisor<I, S> {
     /// `value` prepared as a divisor, or `None` for zero.
     ///
@@ -75,15 +93,6 @@ impl<I: Int, S: Scale> Divisor<I, S> {
     }
 
     /// The value it divides by.
-    ///
-    /// # Examples
-    /// ```
-    /// use ddust::{D64, Divisor, dec};
-    ///
-    /// let price: D64<2> = dec!(99.95);
-    /// let by_price = Divisor::new(price).expect("not zero");
-    /// assert_eq!(by_price.get(), price);
-    /// ```
     #[inline]
     #[must_use]
     pub const fn get(self) -> Decimal<I, S> {
@@ -161,6 +170,7 @@ mod tests {
     use rstest::rstest;
 
     use super::Divisor;
+    use crate::cmp::tests::hash_of;
     use crate::round::{HalfEven, Rounding, RoundingMode};
     use crate::{D64, D128, Decimal, Dynamic, Int, dec};
 
@@ -219,30 +229,33 @@ mod tests {
         a_u128_divides_as_the_decimal_does: u128
     );
 
+    /// No remainder, then either side of where each class of remainder starts: one, half rounded
+    /// up, and half rounded down and one, which meet for an odd divisor.
+    fn edge_remainder<T: Int>(b: T, edge: usize) -> T {
+        let two = T::ONE + T::ONE;
+        let (half, half_up) = (b / two, b - b / two);
+        [T::ZERO, T::ONE, half_up - T::ONE, half_up, half, half + T::ONE, b - T::ONE][edge]
+    }
+
     proptest! {
         #[test]
         fn a_remainder_at_each_edge_rounds_as_the_decimal_does(
-            q in 0_i64..1 << 40, b in 2_i64..1 << 20, edge in 0_usize..4, negative: bool,
+            q in 0_i64..1 << 40, b in 3_i64..1 << 20, edge in 0_usize..7, negative: bool,
             mode in select(Rounding::MODES),
         ) {
-            // q × b plus no remainder, one, half of an even divisor, and one below the divisor:
-            // where each class of remainder starts, at no decimals, where the dividend sets it.
-            let b = b & !1;
-            let remainder = [0, 1, b / 2, b - 1][edge];
-            let a = q * b + remainder;
+            // q × b and a remainder, at no decimals, where the dividend sets the remainder.
+            let a = q * b + edge_remainder(b, edge);
             check(if negative { -a } else { a }, b, 0, mode)?;
             check(i128::from(a) << 60, i128::from(b) << 60, 0, mode)?;
         }
 
         #[test]
         fn a_wide_remainder_at_each_edge_rounds_as_the_decimal_does(
-            q: u64, b in 2_u128.., edge in 0_usize..4, mode in select(Rounding::MODES),
+            q: u128, b in 3_u128.., edge in 0_usize..7, mode in select(Rounding::MODES),
         ) {
-            let b = b & !1;
-            let remainder = [0, 1, b / 2, b - 1][edge];
-            if let Some(a) = u128::from(q).checked_mul(b).and_then(|a| a.checked_add(remainder)) {
-                check(a, b, 0, mode)?;
-            }
+            // Fewer whole divisors than `u128::MAX / b`, so the dividend fits.
+            let a = q % (u128::MAX / b) * b + edge_remainder(b, edge);
+            check(a, b, 0, mode)?;
         }
     }
 
@@ -260,24 +273,46 @@ mod tests {
     }
 
     #[test]
-    fn a_divisor_divides_as_its_value_does_and_refuses_zero() {
+    fn a_divisor_divides_as_its_value_does() {
         let price: D64<2> = dec!(64_250.50);
         let by_price = Divisor::new(price).expect("not zero");
         let notional: D64<8> = dec!(1_000_000);
-        assert_eq!(notional.div_round(by_price, HalfEven), notional.div_round(price, HalfEven));
-        assert_eq!(notional.checked_div_round(by_price, HalfEven), Some(dec!(15.56408121)));
         assert_eq!(
-            D64::<8>::MAX
-                .checked_div_round(Divisor::new(dec!(0.5: D64<2>)).expect("not zero"), HalfEven),
-            None,
-            "past the range"
+            notional.div_round(by_price, HalfEven),
+            notional.div_round(price, HalfEven),
+            "narrow"
         );
-        assert!(Divisor::new(D64::<2>::ZERO).is_none(), "never zero");
+        assert_eq!(
+            notional.checked_div_round(by_price, HalfEven),
+            Some(dec!(15.56408121)),
+            "units of it"
+        );
         let wide: D128<18> = dec!(-2.5);
         let by_wide = Divisor::new(wide).expect("not zero");
         let amount: D128<18> = dec!(1_000.000000000000000001);
-        assert_eq!(amount.div_round(by_wide, HalfEven), amount.div_round(wide, HalfEven));
+        assert_eq!(amount.div_round(by_wide, HalfEven), amount.div_round(wide, HalfEven), "wide");
         let run_time = Decimal::from_steps(3_i64, Dynamic::new(0).expect("at most 38"));
         assert_eq!(Divisor::new(run_time).map(Divisor::get), Some(run_time), "a run-time scale");
+    }
+
+    #[test]
+    fn a_quotient_past_the_range_is_none() {
+        let by_half = Divisor::new(dec!(0.5: D64<2>)).expect("0.5 is not zero");
+        assert_eq!(D64::<8>::MAX.checked_div_round(by_half, HalfEven), None, "twice the largest");
+    }
+
+    #[test]
+    fn a_zero_divisor_is_refused() {
+        assert_eq!(Divisor::new(D64::<2>::ZERO), None, "never zero");
+    }
+
+    #[test]
+    fn two_divisors_equal_as_decimals_are_equal_and_hash_alike() {
+        let scale = |decimals| Dynamic::new(decimals).expect("at most 38");
+        let (short, long) =
+            (Decimal::from_steps(15_i64, scale(1)), Decimal::from_steps(150_i64, scale(2)));
+        let (a, b) = (Divisor::new(short), Divisor::new(long));
+        assert_eq!(a, b, "1.5 and 1.50");
+        assert_eq!(hash_of(&a), hash_of(&b), "and hash alike");
     }
 }

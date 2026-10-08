@@ -316,9 +316,10 @@ pub fn format_by_display<T: fmt::Display>(value: &T, buffer: &mut Buffer) {
 /// `$function` is one token tree handed to every call, as the function to run for the contender.
 ///
 /// The operations: `add`, `compare` and `mul_round`, which every crate has; `div_round` and
-/// `format`, which the binary `fixed` lacks; `rescale_round`, which `fixnum` lacks too; `parse`,
-/// which the integer floors lack; the conversions `to_f64` and `from_f64`, which the `f64` floor
-/// does not need; and `mul_exact`, the price-times-quantity product, a row of its own types.
+/// `format`, which the binary `fixed` lacks; `prepared_div_round`, by a prepared divisor, which only
+/// ddust has; `rescale_round`, which `fixnum` lacks too; `parse`, which the integer floors lack; the
+/// conversions `to_f64` and `from_f64`, which the `f64` floor does not need; and `mul_exact`, the
+/// price-times-quantity product, a row of its own types.
 #[macro_export]
 macro_rules! for_each_contender {
     (add, $apply:ident, $function:tt) => {

@@ -28,10 +28,9 @@
 //! - **Integers.** [`Int`], implemented by the ten primitive integers, and [`Signed`].
 //! - **Scales.** [`Scale`]; [`Fixed`] and [`Dynamic`]; [`StaticScale`]; and in [`scale`], a
 //!   product's [`Sum`](scale::Sum) and the [`Times`](scale::Times) that gives it.
-//! - **Rounding.** The nine modes in [`round`], each a zero-sized type, and
-//!   [`Rounding`](round::Rounding), one chosen at run time.
-//! - **Division.** [`Divisor`], a divisor prepared once for many divisions by multiplication, and
-//!   [`DivideBy`], what [`div_round`](Decimal::div_round) takes: a decimal or a prepared divisor.
+//! - **Rounding and division.** The nine modes in [`round`], each a zero-sized type, and
+//!   [`Rounding`](round::Rounding), one chosen at run time; [`Divisor`], a divisor prepared once
+//!   for many divisions, and [`DivideBy`], what [`div_round`](Decimal::div_round) takes.
 //! - **Refusals.** [`ParseError`] and [`ConvertError`], each with a kind.
 //!
 //! # Examples

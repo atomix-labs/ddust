@@ -474,9 +474,8 @@ macro_rules! double {
                 // remainder below `b` shifted by a narrow word, which a `u128` holds.
                 let (b, bits) = (u128::from(b), <$narrow>::BITS);
                 let (high, remainder) = (u128::from(t) << bits).div_rem(b);
-                let (low, remainder) = (remainder << bits).div_rem(b);
-                let quotient = ((high << bits) | low).wrapping_add(u128::from(remainder != 0));
-                <$wide>::low_bits(quotient)
+                // Below `2^n`, as `t` is below `b`: the sum never wraps.
+                <$wide>::low_bits((high << bits).wrapping_add((remainder << bits).div_ceil(b)))
             }
         }
     )*};
