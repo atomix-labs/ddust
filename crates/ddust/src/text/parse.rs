@@ -4,14 +4,13 @@
 use core::ops::Range;
 use core::str::FromStr;
 
-use super::simd::read_plain;
-use super::swar::{DOTS, HIGHS, ONES, ZEROS, all_digits, eight_digits, low_bytes};
+use super::simd::{read_plain, read_plain_in, read_rest};
 use crate::decimal::Decimal;
 use crate::errors::{ParseError, ParseErrorKind};
 use crate::int::Int;
 use crate::round::RoundingMode;
 use crate::scale::{Dynamic, MAX_DECIMALS, Scale, StaticScale};
-use crate::word::{pow10_u128, rounds_up_by_class};
+use crate::word::rounds_up_by_class;
 
 /// Where a number's parts are in its text: the integer digits, the fraction's, and the exponent.
 struct Parts<'a> {
@@ -134,24 +133,33 @@ fn read_general(
 fn read_or_round(
     text: &[u8], decimals: u8, table: Option<u16>,
 ) -> Result<(bool, u128), ParseErrorKind> {
-    let (negative, digits) = match text {
-        [] => return Err(ParseErrorKind::Empty),
-        [b'-', rest @ ..] => (true, rest),
-        [b'+', rest @ ..] => (false, rest),
-        _ => (false, text),
-    };
+    let (negative, sign) = sign(text)?;
+    let digits = text.get(sign..).unwrap_or_default();
     read_plain(digits, decimals).map_or_else(
         || read_general_signed(negative, digits, decimals, table),
         |magnitude| Ok((negative, magnitude)),
     )
 }
 
-/// Reads the `digits` of a number of sign `negative` at `decimals` by the general reader,
-/// whatever their shape: out of line, off the plain shape's path.
+/// Whether `text` is negative, and the bytes its sign takes: `Empty` for an empty text.
+#[inline(always)]
+#[expect(clippy::inline_always, reason = "a compare or two, on every read's path")]
+fn sign(text: &[u8]) -> Result<(bool, usize), ParseErrorKind> {
+    let Some(&first) = text.first() else { return Err(ParseErrorKind::Empty) };
+    let negative = first == b'-';
+    Ok((negative, usize::from(negative || first == b'+')))
+}
+
+/// Reads the `digits` of a number of sign `negative` at `decimals`, whatever their shape: the plain
+/// shape [`read_plain`] leaves by [`read_rest`], and any other by the general reader; out of line,
+/// off the plain shape's path.
 #[inline(never)]
 fn read_general_signed(
     negative: bool, digits: &[u8], decimals: u8, table: Option<u16>,
 ) -> Result<(bool, u128), ParseErrorKind> {
+    if let Some(magnitude) = read_rest(digits, decimals) {
+        return Ok((negative, magnitude));
+    }
     let round = table.map(|table| (negative, table));
     match read_general(digits, decimals, round) {
         Err(ParseErrorKind::PosOverflow) if negative => Err(ParseErrorKind::NegOverflow),
@@ -165,76 +173,24 @@ pub(crate) fn read(text: &[u8], decimals: u8) -> Result<(bool, u128), ParseError
     read_or_round(text, decimals, None)
 }
 
-/// The eight bytes of `window` from `position`, little-endian.
-#[inline]
-fn word(window: &[u8; 32], position: usize) -> Option<u64> {
-    let bytes: [u8; 8] = window.get(position..position.checked_add(8)?)?.try_into().ok()?;
-    Some(u64::from_le_bytes(bytes))
-}
-
-/// The path with no loop over the digits: a number of at most eight integer and eight
-/// fraction digits whose magnitude fits a `u64`, read eight bytes at a time from the 32 bytes
-/// around it, or `None` for anything else, which the byte loop then reads.
-#[inline]
-fn read_window(
-    buffer: &[u8], start: usize, len: usize, decimals: u8,
-) -> Option<Result<(bool, u128), ParseErrorKind>> {
-    let window: &[u8; 32] =
-        buffer.get(start.checked_sub(8)?..start.checked_add(24)?)?.try_into().ok()?;
-    if len == 0 || len > 17 {
-        return None;
-    }
-    let first = word(window, 8)?;
-    let negative = first & 0xFF == u64::from(b'-');
-    let sign = usize::from(negative);
-    let probe = first ^ DOTS;
-    let dots = probe.wrapping_sub(ONES) & !probe & HIGHS & low_bytes(len.min(8));
-    let dot = if dots != 0 {
-        usize::try_from(dots.trailing_zeros().wrapping_shr(3)).ok()?
-    } else if len > 8 && window.get(16) == Some(&b'.') {
-        8
-    } else {
-        len
-    };
-    let fraction_len = len.saturating_sub(dot.checked_add(1)?);
-    if dot > 8 || fraction_len > 8 || dot == sign || (dot < len && fraction_len == 0) {
-        return None;
-    }
-    let fill = low_bytes(8_usize.checked_sub(dot)?.checked_add(sign)?);
-    let integer_word = (word(window, dot)? & !fill) | (ZEROS & fill);
-    let keep = low_bytes(fraction_len);
-    let fraction_word = (word(window, dot.checked_add(9)?)? & keep) | (ZEROS & !keep);
-    if !(all_digits(integer_word) && all_digits(fraction_word)) {
-        return None;
-    }
-    let (integer, fraction) = (eight_digits(integer_word), eight_digits(fraction_word));
-    let pow = |k: u8| pow10_u128(k).and_then(|power| u64::try_from(power).ok());
-    let magnitude = if decimals >= 8 {
-        let scaled = fraction.checked_mul(pow(decimals.saturating_sub(8))?)?;
-        integer.checked_mul(pow(decimals)?).and_then(|integer| integer.checked_add(scaled))
-    } else {
-        let drop = pow(8_u8.saturating_sub(decimals))?;
-        if fraction.checked_rem(drop)? != 0 {
-            return Some(Err(ParseErrorKind::TooManyDecimals));
-        }
-        integer
-            .checked_mul(pow(decimals)?)
-            .and_then(|integer| integer.checked_add(fraction.checked_div(drop)?))
-    };
-    magnitude.map(|magnitude| Ok((negative, u128::from(magnitude))))
-}
-
-/// Reads the number at `range` of `buffer` at `decimals`: with no loop over the digits
-/// when the 32 bytes around it are in the buffer, by the byte loop otherwise.
-#[inline]
+/// Reads the number at `range` of `buffer` at `decimals`: as [`read`] reads it, and, on a build
+/// with the vector reader, from the bytes around it where the buffer has them, so the same way
+/// whatever its length.
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "out of line, a static scale's decimals are no constant to the reader"
+)]
 pub(crate) fn read_at(
     buffer: &[u8], range: Range<usize>, decimals: u8,
 ) -> Result<(bool, u128), ParseErrorKind> {
-    let len = range.end.saturating_sub(range.start);
-    match read_window(buffer, range.start, len, decimals) {
-        Some(read) => read,
-        None => read(buffer.get(range).ok_or(ParseErrorKind::RangeOutsideBuffer)?, decimals),
-    }
+    let text = buffer.get(range.clone()).ok_or(ParseErrorKind::RangeOutsideBuffer)?;
+    let (negative, sign) = sign(text)?;
+    let digits = range.start.saturating_add(sign)..range.end;
+    read_plain_in(buffer, digits, decimals).map_or_else(
+        || read_general_signed(negative, text.get(sign..).unwrap_or_default(), decimals, None),
+        |magnitude| Ok((negative, magnitude)),
+    )
 }
 
 /// How many bytes at the front of `bytes` are a number: a sign, digits with an optional
@@ -363,8 +319,10 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         Ok(Self::from_steps(steps(read(text, scale.decimals()))?, scale))
     }
 
-    /// The decimal at `range` of `buffer`: as [`from_ascii`](Self::from_ascii), with no loop
-    /// over the digits when the 32 bytes around the number are in the buffer.
+    /// The decimal at `range` of `buffer`: as [`from_ascii`](Self::from_ascii), and, for a number
+    /// of at most 32 bytes on a build with a vector unit, read the same way whatever its length,
+    /// from the 16 bytes from its start and the 16 before its end, where the buffer has them, as in
+    /// a message read whole.
     ///
     /// # Errors
     /// As [`from_ascii`](Self::from_ascii), and `RangeOutsideBuffer` for a `range` that is not
@@ -471,12 +429,11 @@ fn read_rounded<R: RoundingMode>(
 #[expect(clippy::arithmetic_side_effects, reason = "offsets into a test buffer")]
 mod tests {
     use alloc::format;
-    use alloc::string::String;
 
     use proptest::prelude::*;
     use rstest::rstest;
 
-    use super::{read, read_general, read_plain, read_rounded};
+    use super::{read, read_general, read_plain, read_rest, read_rounded};
     use crate::round::{Ceil, Floor, HalfEven, Rounding, RoundingMode};
     use crate::{D64, D128, Decimal, Dynamic, Fixed, ParseError, ParseErrorKind, UD64, UD128};
 
@@ -633,7 +590,7 @@ mod tests {
             let general = read_general(bytes, decimals, None);
             let points: usize = bytes.iter().map(|&byte| usize::from(byte == b'.')).sum();
             let plain = bytes.iter().all(|&byte| byte.is_ascii_digit() || byte == b'.') && points <= 1;
-            match read_plain(bytes, decimals) {
+            match read_plain(bytes, decimals).or_else(|| read_rest(bytes, decimals)) {
                 Some(magnitude) => prop_assert_eq!(general, Ok(magnitude), "{}", text),
                 None => prop_assert!(general.is_err() || !plain || bytes.len() > 38, "{} read as {:?}", text, general),
             }
@@ -665,12 +622,15 @@ mod tests {
         }
 
         #[test]
-        fn the_windowed_read_agrees_with_the_byte_loop(text in "-?[0-9]{1,9}(\\.[0-9]{1,9})?", decimals in 0_u8..=18) {
-            let mut buffer = String::from("........");
-            buffer.push_str(&text);
-            buffer.push_str("\",\"....................");
-            let range = 8..8 + text.len();
-            prop_assert_eq!(super::read_at(buffer.as_bytes(), range, decimals), read(text.as_bytes(), decimals));
+        fn a_number_in_a_buffer_reads_as_the_number_alone(
+            text in "[+-]?[0-9]{0,20}(\\.[0-9]{0,20})?|[0-9.e+-]{0,8}",
+            before in 0_usize..=20, after in 0_usize..=20, decimals in 0_u8..=38,
+        ) {
+            // From the bytes around the number where the buffer has them, and from its own where
+            // it does not: as the number alone reads, whatever surrounds it.
+            let buffer = format!("{}{text}{}", "9".repeat(before), ".".repeat(after));
+            let range = before..before + text.len();
+            prop_assert_eq!(super::read_at(buffer.as_bytes(), range, decimals), read(text.as_bytes(), decimals), "{}", text);
         }
     }
 }
