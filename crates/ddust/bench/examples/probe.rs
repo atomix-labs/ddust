@@ -13,7 +13,7 @@ use core::hint::black_box;
 
 use ddust_bench::contender::{
     Buffer, CheckedAdd, Compare, DivRound, Format, FromF64, MulExact, MulRound, Parse,
-    RescaleRound, ToF64,
+    PreparedDivRound, RescaleRound, ToF64,
 };
 use ddust_bench::for_each_contender;
 
@@ -39,6 +39,12 @@ fn mul_round<C: MulRound>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
 #[inline(never)]
 fn div_round<C: DivRound>(a: &C::Value, b: &C::Value) -> Option<C::Value> {
     C::checked_div_round(a, b)
+}
+
+/// The rounded quotient by a prepared divisor.
+#[inline(never)]
+fn div_round_prepared<C: PreparedDivRound>(a: &C::Value, b: &C::Prepared) -> Option<C::Value> {
+    C::checked_div_round_prepared(a, b)
 }
 
 /// The value to cents.
@@ -88,6 +94,7 @@ fn main() {
     for_each_contender!(compare, keep, compare);
     for_each_contender!(mul_round, keep, mul_round);
     for_each_contender!(div_round, keep, div_round);
+    for_each_contender!(prepared_div_round, keep, div_round_prepared);
     for_each_contender!(rescale_round, keep, rescale_round);
     for_each_contender!(parse, keep, parse);
     for_each_contender!(format, keep, format);

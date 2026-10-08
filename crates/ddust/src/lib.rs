@@ -30,6 +30,8 @@
 //!   product's [`Sum`](scale::Sum) and the [`Times`](scale::Times) that gives it.
 //! - **Rounding.** The nine modes in [`round`], each a zero-sized type, and
 //!   [`Rounding`](round::Rounding), one chosen at run time.
+//! - **Division.** [`Divisor`], a divisor prepared once for many divisions by multiplication, and
+//!   [`DivideBy`], what [`div_round`](Decimal::div_round) takes: a decimal or a prepared divisor.
 //! - **Refusals.** [`ParseError`] and [`ConvertError`], each with a kind.
 //!
 //! # Examples
@@ -94,6 +96,7 @@ extern crate alloc;
 mod cmp;
 mod convert;
 mod decimal;
+mod divisor;
 mod errors;
 mod float;
 mod int;
@@ -113,6 +116,7 @@ mod text;
 mod word;
 
 pub use crate::decimal::{D8, D16, D32, D64, D128, Decimal, UD8, UD16, UD32, UD64, UD128};
+pub use crate::divisor::{DivideBy, Divisor};
 pub use crate::errors::{ConvertError, ConvertErrorKind, ParseError, ParseErrorKind};
 #[doc(hidden)]
 pub use crate::int::Outcome;

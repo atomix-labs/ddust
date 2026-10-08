@@ -21,7 +21,7 @@ use core::hint::black_box;
 
 use ddust_bench::contender::{
     Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, Format, FromF64, MulExact,
-    MulRound as _, Parse, RescaleRound as _, ToF64 as _, ddust,
+    MulRound as _, Parse, PreparedDivRound, RescaleRound as _, ToF64 as _, ddust,
 };
 use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::oracle;
@@ -56,6 +56,15 @@ fn factors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
 /// Operands of a quotient.
 fn dividends_and_divisors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
     pairs::<C>(&input::dividends_and_divisors(C::WIDTH, Predictability::Unpredictable))
+}
+
+/// Dividends, and their one divisor prepared, once for each.
+fn dividends_and_prepared<C: PreparedDivRound>() -> (Vec<C::Value>, Vec<C::Prepared>) {
+    let set = input::dividends_and_one_divisor(C::WIDTH, Predictability::Unpredictable);
+    let (dividends, divisors) = pairs::<C>(&set);
+    let prepared = divisors.first().and_then(C::prepare);
+    let prepared = prepared.map_or_default(|divisor| vec![divisor; dividends.len()]);
+    (dividends, prepared)
 }
 
 /// Values to round, write or convert.
@@ -224,6 +233,27 @@ fn from_f64_wide(doubles: Vec<f64>) -> Vec<f64> {
     doubles
 }
 
+/// Divides each dividend by one divisor, prepared: a library benchmark of `C`'s, named `$name`.
+macro_rules! prepared {
+    ($name:ident : $contender:ty) => {
+        #[library_benchmark]
+        #[bench::values(setup = dividends_and_prepared::<$contender>)]
+        fn $name(
+            (dividends, divisors): (
+                Vec<<$contender as Contender>::Value>,
+                Vec<<$contender as PreparedDivRound>::Prepared>,
+            ),
+        ) -> (Vec<<$contender as Contender>::Value>, Vec<<$contender as PreparedDivRound>::Prepared>)
+        {
+            black_box(over_pairs(&dividends, &divisors, <$contender>::checked_div_round_prepared));
+            (dividends, divisors)
+        }
+    };
+}
+
+prepared!(div_round_prepared_narrow: ddust::Narrow);
+prepared!(div_round_prepared_wide: ddust::Wide);
+
 // Multiplies each price by its quantity, exactly.
 #[library_benchmark]
 #[bench::narrow(setup = notionals)]
@@ -245,6 +275,7 @@ library_benchmark_group!(
         mul_exact_narrow,
         mul_round_narrow,
         div_round_narrow,
+        div_round_prepared_narrow,
         rescale_round_narrow,
         parse_narrow,
         format_narrow,
@@ -260,6 +291,7 @@ library_benchmark_group!(
         compare_wide,
         mul_round_wide,
         div_round_wide,
+        div_round_prepared_wide,
         rescale_round_wide,
         parse_wide,
         format_wide,

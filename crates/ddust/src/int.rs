@@ -5,8 +5,9 @@ use core::fmt::{Debug, Display};
 use core::hash::Hash;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
+use crate::divisor::Prepared;
 use crate::kernel::{self, Exact};
-use crate::word::{Double, Narrow, U256, Word};
+use crate::word::{Double, Narrow, U256, Word, pow10_u128, rounds_up_by_fraction};
 
 /// Seals [`Int`] and [`Signed`]: the ten primitive integers are all there are.
 mod sealed {
@@ -260,6 +261,16 @@ pub const trait Int:
     /// `self / (rhs × 10^k)`, rounded by `table`, for an `rhs` that is not zero.
     #[doc(hidden)]
     fn div_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self>;
+    /// What a [`Divisor`](crate::Divisor) of this integer keeps: the work its divisions share.
+    #[doc(hidden)]
+    type Prepared: Copy + Debug;
+    /// `self` prepared as the divisor of dividends scaled by `10^k`, or `None` for zero.
+    #[doc(hidden)]
+    fn prepare(self, k: u8) -> Option<Self::Prepared>;
+    /// `self × 10^k / divisor`, rounded by `table`, by a divisor [`prepare`](Self::prepare) made
+    /// at `k`.
+    #[doc(hidden)]
+    fn div_prepared(self, divisor: Self::Prepared, table: u16) -> Outcome<Self>;
     /// `self × b / c`, rounded by `table`, for a `c` that is not zero.
     #[doc(hidden)]
     fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self>;
@@ -485,6 +496,61 @@ const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u1
     settled(exact!(I, div_up(negative, a, k, b, table)), negative)
 }
 
+/// `b` prepared as the divisor of dividends scaled by `10^k`, or `None` for a zero `b`.
+///
+/// `10^k` is `whole × b + rest`, so `a × 10^k / b` is `a × whole` and `a × rest / b`. The latter is
+/// the part of `a × m` past the double word, `m` being `⌈2^n × rest / b⌉` and `n` the double's
+/// bits, and the class of its remainder one comparison of the part within it with the fraction
+/// each class starts at, exact for every `a` and `b` of the magnitude's word, as their product is
+/// below `2^n` (Lemire, Kaser and Kurz, "Faster remainder by direct computation", 2019, lemma 1).
+#[inline]
+const fn prepare<I: [const] Magnitude + [const] Int>(
+    b: I, k: u8,
+) -> Option<Prepared<I::Unsigned, I::Double>> {
+    let (negative, b) = b.split();
+    if b == I::Unsigned::ZERO {
+        return None;
+    }
+    let Some(power) = pow10_u128(k) else { return None };
+    let (whole_steps, rest) = power.div_rem(b.to_u128());
+    let whole = I::Unsigned::low_bits(whole_steps);
+    let whole_past = whole.to_u128() != whole_steps;
+    // The rest is below `b`, which the magnitude's word holds.
+    let multiplier = I::Double::ceil_fraction(I::Unsigned::low_bits(rest), b);
+    let half = b.halved();
+    let thresholds = [
+        I::Double::ceil_fraction(I::Unsigned::ONE, b),
+        I::Double::ceil_fraction(b.wrapping_sub(half), b),
+        I::Double::ceil_fraction(half.wrapping_add(I::Unsigned::ONE), b),
+    ];
+    Some(Prepared { negative, whole, whole_past, multiplier, thresholds })
+}
+
+/// `a × 10^k / b`, rounded, by `b` [`prepare`]d at `k`: two products and a comparison, where
+/// [`div_up`] divides.
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "as `div_up`'s: out of line, a binary that rounds by two modes passes the table at run time"
+)]
+const fn div_prepared<I: [const] Magnitude + [const] Int>(
+    a: I, divisor: Prepared<I::Unsigned, I::Double>, table: u16,
+) -> Outcome<I> {
+    let (negative_a, a) = a.split();
+    let negative = negative_a != divisor.negative;
+    let (past, fraction) = I::Double::fraction_product(a, divisor.multiplier);
+    // Two narrow words' product, the part past the double word and a step of rounding stay below
+    // its top, so no step overflows it; a whole part past the narrow word keeps its low bits, which
+    // are the quotient's, as wrapping keeps them, and overflows every dividend but zero.
+    let product = I::Double::widening_mul(a, divisor.whole);
+    let quotient = product.wrapping_add(I::Double::from_narrow(past));
+    let odd = quotient.is_odd();
+    let up = rounds_up_by_fraction(fraction, divisor.thresholds, odd, negative, table);
+    let magnitude = quotient.wrapping_add(if up { I::Double::ONE } else { I::Double::ZERO });
+    let overflowed = divisor.whole_past && a != I::Unsigned::ZERO;
+    outcome::<I, I::Double>(Exact { negative, magnitude, overflowed })
+}
+
 /// `a / (b × 10^k)`, rounded, for any integer and a `b` that is not zero.
 #[inline(always)]
 #[expect(
@@ -577,7 +643,7 @@ const fn lined_up_rem<I: [const] Magnitude>(a: I, ka: u8, b: I, kb: u8) -> I {
 
 /// The methods every integer shares, forwarded to its own, and its kernels.
 macro_rules! int {
-    ($($t:ty => $unsigned:ty, $digits:literal;)*) => {$(
+    ($($t:ty => $unsigned:ty, $double:ty, $digits:literal;)*) => {$(
         impl sealed::Sealed for $t {}
 
         const impl Int for $t {
@@ -664,6 +730,13 @@ macro_rules! int {
             fn div_up(self, k: u8, rhs: Self, table: u16) -> Outcome<Self> { div_up(self, k, rhs, table) }
             #[inline(always)]
             fn div_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self> { div_down(self, rhs, k, table) }
+            type Prepared = Prepared<$unsigned, $double>;
+            #[inline]
+            fn prepare(self, k: u8) -> Option<Self::Prepared> { prepare(self, k) }
+            #[inline(always)]
+            fn div_prepared(self, divisor: Self::Prepared, table: u16) -> Outcome<Self> {
+                div_prepared(self, divisor, table)
+            }
             #[inline]
             fn mul_div(self, b: Self, c: Self, table: u16) -> Outcome<Self> { mul_div(self, b, c, table) }
             #[inline]
@@ -781,16 +854,16 @@ macro_rules! unsigned {
 }
 
 int! {
-    i8 => u8, 2;
-    i16 => u16, 4;
-    i32 => u32, 9;
-    i64 => u64, 18;
-    i128 => u128, 38;
-    u8 => u8, 2;
-    u16 => u16, 4;
-    u32 => u32, 9;
-    u64 => u64, 19;
-    u128 => u128, 38;
+    i8 => u8, u16, 2;
+    i16 => u16, u32, 4;
+    i32 => u32, u64, 9;
+    i64 => u64, u128, 18;
+    i128 => u128, U256, 38;
+    u8 => u8, u16, 2;
+    u16 => u16, u32, 4;
+    u32 => u32, u64, 9;
+    u64 => u64, u128, 19;
+    u128 => u128, U256, 38;
 }
 
 signed! {

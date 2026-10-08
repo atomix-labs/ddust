@@ -49,6 +49,35 @@ pub(crate) const fn rounds_up<D: [const] Word>(
 }
 
 /// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
+/// whose quotient is `odd`, from the fraction its remainder leaves and a prepared divisor's
+/// `thresholds`: the fractions a remainder of one leaves, of half rounded up, and of half rounded
+/// down and one, as [`rounds_up`] compares the remainder with the thresholds they stand for.
+#[inline]
+pub(crate) const fn rounds_up_by_fraction<D: [const] Word>(
+    fraction: D, thresholds: [D; 3], odd: bool, negative: bool, table: u16,
+) -> bool {
+    // An arm for each sign and parity, as `rounds_up` has, so a mode known when compiling decodes
+    // its table then.
+    let bits = match (negative, odd) {
+        (false, false) => table,
+        (false, true) => table >> 4,
+        (true, false) => table >> 8,
+        (true, true) => table >> 12,
+    };
+    // The threshold chosen first and compared once: a branch on the quotient's parity, which half
+    // to even reads, is mispredicted as often as quotients at random are odd.
+    let [any, half, past_half] = thresholds;
+    let (threshold, never) = match bits & 0xF {
+        0b1110 => (any, false),
+        0b1100 => (half, false),
+        0b1000 => (past_half, false),
+        // None: no remainder moves it.
+        _ => (any, true),
+    };
+    !never && fraction >= threshold
+}
+
+/// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
 /// whose quotient is `odd` and whose remainder's class is `class`: 0 for no remainder, 1 below
 /// half, 2 at half, 3 above.
 ///
@@ -210,6 +239,13 @@ pub(crate) const trait Double<U: [const] Narrow>: [const] Word {
     fn wrapping_narrow(self) -> U;
     /// The exact product of two narrow values.
     fn widening_mul(a: U, b: U) -> Self;
+    /// `a × multiplier`, split at this word: the part past it, which a narrow word holds, and the
+    /// part within it. For a prepared divisor, the quotient and the fraction its remainder leaves.
+    fn fraction_product(a: U, multiplier: Self) -> (U, Self);
+    /// `⌈t × 2^n / b⌉` for a `t` below `b`, `n` being this word's bits: the fraction a remainder of
+    /// `t` leaves in [`fraction_product`](Self::fraction_product), or the largest value for a `t`
+    /// at or past `b`, a remainder no division leaves.
+    fn ceil_fraction(t: U, b: U) -> Self;
 }
 
 /// The words for each primitive, forwarded to its own methods, with the items of a block a word is
@@ -422,6 +458,26 @@ macro_rules! double {
                 // The product of two halves fits the whole: wrapping never wraps.
                 <$wide>::from(a).wrapping_mul(<$wide>::from(b))
             }
+
+            #[inline]
+            fn fraction_product(a: $narrow, multiplier: $wide) -> ($narrow, $wide) {
+                let (fraction, past) = multiplier.carrying_mul(<$wide>::from(a), 0);
+                // Below 2^n × a / 2^n, so a narrow word holds the part past the word.
+                (<$narrow>::low_bits(u128::from(past)), fraction)
+            }
+
+            fn ceil_fraction(t: $narrow, b: $narrow) -> $wide {
+                if t >= b {
+                    return <$wide>::MAX;
+                }
+                // Long division, a narrow word of the quotient a step: each numerator is a
+                // remainder below `b` shifted by a narrow word, which a `u128` holds.
+                let (b, bits) = (u128::from(b), <$narrow>::BITS);
+                let (high, remainder) = (u128::from(t) << bits).div_rem(b);
+                let (low, remainder) = (remainder << bits).div_rem(b);
+                let quotient = ((high << bits) | low).wrapping_add(u128::from(remainder != 0));
+                <$wide>::low_bits(quotient)
+            }
         }
     )*};
 }
@@ -432,7 +488,7 @@ double!(u8 => u16, u16 => u32, u32 => u64, u64 => u128);
 /// when it outgrows a narrower double.
 #[derive(Clone, Copy, Debug)]
 #[derive_const(PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct U256 {
+pub struct U256 {
     /// The high 128 bits; declared first, so the derived order is the numeric one.
     high: u128,
     /// The low 128 bits.
@@ -832,6 +888,35 @@ const impl<U: [const] Narrow> Double<U> for U256 {
     fn widening_mul(a: U, b: U) -> Self {
         let (low, high) = a.to_u128().carrying_mul(b.to_u128(), 0);
         Self { high, low }
+    }
+
+    #[inline]
+    fn fraction_product(a: U, multiplier: Self) -> (U, Self) {
+        // Three words of 128 bits: the low product's low word, its high word and the high
+        // product's low word, and the high product's high word with their carry.
+        let a = a.to_u128();
+        let (low, high) = (Self::widening(a, multiplier.low), Self::widening(a, multiplier.high));
+        let (middle, carry) = low.high.overflowing_add(high.low);
+        let past = high.high.wrapping_add(u128::from(carry));
+        (U::low_bits(past), Self { high: middle, low: low.low })
+    }
+
+    fn ceil_fraction(t: U, b: U) -> Self {
+        let (t, b) = (t.to_u128(), b.to_u128());
+        let largest = Self { high: u128::MAX, low: u128::MAX };
+        if t >= b {
+            return largest;
+        }
+        // Long division, 128 bits of the quotient a step: each remainder is below `b`, so each
+        // step's quotient fits 128 bits.
+        let Some((high, remainder)) = reciprocal::divide_u256_by_u128(t, 0, b) else {
+            return largest;
+        };
+        let Some((low, remainder)) = reciprocal::divide_u256_by_u128(remainder, 0, b) else {
+            return largest;
+        };
+        let (low, carry) = low.overflowing_add(u128::from(remainder != 0));
+        Self { high: high.wrapping_add(u128::from(carry)), low }
     }
 }
 

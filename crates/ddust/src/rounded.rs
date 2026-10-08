@@ -3,6 +3,7 @@
 //! twin; past the range the other panics with overflow checks on, and wraps otherwise.
 
 use crate::decimal::Decimal;
+use crate::divisor::DivideBy;
 use crate::int::{Int, Operation, Outcome};
 use crate::round::{Ceil, Floor, RoundingMode, Trunc};
 use crate::scale::Scale;
@@ -164,19 +165,17 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     #[inline]
     #[must_use]
     #[track_caller]
-    pub const fn div_round<T, R>(self, rhs: Decimal<I, T>, mode: R) -> Self
+    pub const fn div_round<D, R>(self, rhs: D, mode: R) -> Self
     where
         I: [const] Int,
         S: [const] Scale,
-        T: [const] Scale,
+        D: [const] DivideBy<I>,
         R: [const] RoundingMode,
     {
-        let divisor = rhs.steps();
-        if divisor == I::ZERO {
-            divided_by_zero();
+        match rhs.divide_round(self.steps(), mode.table()) {
+            Some(steps) => Self::from_steps(steps.operator(Operation::Divide), self.scale()),
+            None => divided_by_zero(),
         }
-        let steps = self.steps().div_up(rhs.decimals(), divisor, mode.table());
-        Self::from_steps(steps.operator(Operation::Divide), self.scale())
     }
 
     /// The quotient by `rhs` at this value's scale, rounded by `mode`, or `None` for a zero divisor
@@ -193,19 +192,18 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     /// ```
     #[inline]
     #[must_use]
-    pub const fn checked_div_round<T, R>(self, rhs: Decimal<I, T>, mode: R) -> Option<Self>
+    pub const fn checked_div_round<D, R>(self, rhs: D, mode: R) -> Option<Self>
     where
         I: [const] Int,
         S: [const] Scale,
-        T: [const] Scale,
+        D: [const] DivideBy<I>,
         R: [const] RoundingMode,
     {
-        let divisor = rhs.steps();
-        if divisor == I::ZERO {
-            return None;
-        }
-        match self.steps().div_up(rhs.decimals(), divisor, mode.table()).checked() {
-            Some(steps) => Some(Self::from_steps(steps, self.scale())),
+        match rhs.divide_round(self.steps(), mode.table()) {
+            Some(outcome) => match outcome.checked() {
+                Some(steps) => Some(Self::from_steps(steps, self.scale())),
+                None => None,
+            },
             None => None,
         }
     }
