@@ -253,6 +253,34 @@ pub(crate) const fn divide_u128_past_a_word(numerator: u128, k: u8) -> Option<(u
     Some(((u128::from(q1) << 64) | u128::from(q0), remainder >> shift, divisor >> shift))
 }
 
+/// `numerator / 10^k` and the remainder, for a numerator below 2^127, or `None` unless `k` is from
+/// 1 to 19: a multiply-high by `m = ⌊2^(128 + l) / 10^k⌋ + 1 − 2^128`, `l` being `⌈log2 10^k⌉`,
+/// and a shift, `⌊(n + ⌊n × m / 2^128⌋) / 2^l⌋`, exact for every numerator below 2^128
+/// (Granlund and Montgomery, "Division by invariant integers using multiplication", 1994,
+/// theorem 4.2); below 2^127 the sum fits a `u128`. `m` is the shifted power's two-word inverse,
+/// and one.
+#[inline]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "`reciprocal` has checked `k` against the tables' length"
+)]
+pub(crate) const fn divide_u127(numerator: u128, k: u8) -> Option<(u128, u64)> {
+    // 10^0's multiplier is 2^128, past a `u128`.
+    if k == 0 {
+        return None;
+    }
+    let Some(Reciprocal { divisor, inverse, shift }) = reciprocal(k) else { return None };
+    let multiplier =
+        ((u128::from(inverse) << 64) | u128::from(INVERSES_LOW[usize::from(k)])).wrapping_add(1);
+    let (_, product_high) = numerator.carrying_mul(multiplier, 0);
+    let quotient = numerator.wrapping_add(product_high) >> 64_u32.wrapping_sub(shift);
+    // The remainder is below the power, so one word of each side holds it.
+    let power = divisor >> shift;
+    let remainder =
+        u64::low_bits(numerator).wrapping_sub(u64::low_bits(quotient).wrapping_mul(power));
+    Some((quotient, remainder))
+}
+
 /// `(high:low) / 10^k` for a 256-bit numerator, the remainder and `10^k`, or `None` unless `k` is
 /// at most 19 and the quotient fits 128 bits: one step for both of the quotient's words.
 #[inline]
@@ -664,6 +692,33 @@ mod tests {
     }
 
     #[test]
+    fn a_numerator_below_the_top_bit_divides_by_one_product_at_every_edge() {
+        let top = (1_u128 << 127) - 1;
+        for k in 1_u8..=19 {
+            let d = power(k);
+            let edges = [
+                0,
+                1,
+                d - 1,
+                d,
+                d + 1,
+                top,
+                top - top % d,
+                top - top % d - 1,
+                d << 64,
+                (d << 64) - 1,
+            ];
+            // 10^19 × 2^64 is past the top bit, outside the domain.
+            for n in edges.into_iter().filter(|&n| n <= top) {
+                let expected = Some((n / d, u64::try_from(n % d).unwrap_or(0)));
+                assert_eq!(super::divide_u127(n, k), expected, "{n} / 10^{k}");
+            }
+        }
+        assert_eq!(super::divide_u127(7, 0), None, "10^0 has no multiplier in a word");
+        assert_eq!(super::divide_u127(7, 20), None, "10^20 is past a word");
+    }
+
+    #[test]
     fn a_reciprocal_at_run_time_is_its_definition() {
         for divisor in [1_u64 << 63, u64::MAX, (1 << 63) | 1, 0xD000_0000_0000_0001, 10_u64.pow(19)]
         {
@@ -715,6 +770,13 @@ mod tests {
             let d = power(k);
             let expected = u64::try_from(n / d).ok().map(|q| (q, u64::try_from(n % d).unwrap_or(0)));
             prop_assert_eq!(divide_u128(n, k).map(|(q, r, _)| (q, r)), expected);
+        }
+
+        #[test]
+        fn a_numerator_below_the_top_bit_divides_as_division_does(n in 0_u128..1 << 127, k in 1_u8..=19) {
+            let d = power(k);
+            let expected = Some((n / d, u64::try_from(n % d).unwrap_or(0)));
+            prop_assert_eq!(super::divide_u127(n, k), expected);
         }
 
         #[test]

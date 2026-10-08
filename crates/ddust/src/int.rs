@@ -436,6 +436,14 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
 const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
     let negative = negative_a != negative_b;
+    if let Some(magnitude) = a.narrow_mul_down(b, k, negative, table) {
+        // Below the top bit, so in range of either sign.
+        return Outcome {
+            wrapped: I::wrapping_join(negative, magnitude),
+            overflowed: false,
+            negative,
+        };
+    }
     settled(exact!(I, mul_down(negative, a, b, k, table)), negative)
 }
 
