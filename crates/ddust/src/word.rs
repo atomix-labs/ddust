@@ -738,54 +738,38 @@ const impl Word for U256 {
         divide_round_by_long_division(self, divisor, negative, table)
     }
 
-    // One Möller–Granlund step for a value with no high word whose quotient fits a word, and two
-    // for every other quotient that fits 128 bits, where the long division calls the library three
-    // times.
+    // A power of one word divides any value by one path: the high half's quotient when it is at
+    // least the power, then one step for that of its remainder and the low half. A mode that reads
+    // no parity rounds by a bias added first, as the narrow word's does, and any other by the
+    // remainder, as does a bias that would pass 2^256. One path keeps the product small enough to
+    // inline, where a path for each size of quotient did not.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
     )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
-        // A mode that reads no parity rounds by a bias added first, as the narrow word's does: the
-        // steps' quotient is the rounded one, exact when the remainder is the bias.
-        if let Some(power) = pow10_u128(k)
-            && let Some(bias) = parity_free_bias(table, negative, power)
-            && let Some(biased) = self.checked_add(Self::from_u128(bias))
-        {
-            if biased.high == 0
-                && let Some((quotient, remainder, _)) = reciprocal::divide_u128(biased.low, k)
-            {
-                return Some((
-                    Self::from_u128(u128::from(quotient)),
-                    u128::from(remainder) == bias,
-                ));
-            }
-            if let Some((quotient, remainder, _)) =
-                reciprocal::divide_u256(biased.high, biased.low, k)
-            {
-                return Some((Self::from_u128(quotient), u128::from(remainder) == bias));
-            }
-        }
-        if self.high == 0
-            && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
-        {
-            let quotient = rounded(u128::from(quotient), remainder, divisor, negative, table);
-            return Some((Self::from_u128(quotient), remainder == 0));
-        }
-        if let Some((quotient, remainder, divisor)) =
-            reciprocal::divide_u256(self.high, self.low, k)
-        {
-            let quotient = rounded(Self::from_u128(quotient), remainder, divisor, negative, table);
-            return Some((quotient, remainder == 0));
-        }
-        // A quotient past 128 bits, by a power of one word: a long division in base 2^128, inline,
-        // where a call would cost every product a stack frame.
+        let Some(power) = pow10_u128(k) else { return None };
+        let biased = match parity_free_bias(table, negative, power) {
+            Some(bias) => match self.checked_add(Self::from_u128(bias)) {
+                Some(biased) => Some((biased, bias)),
+                None => None,
+            },
+            None => None,
+        };
+        let numerator = match biased {
+            Some((biased, _)) => biased,
+            None => self,
+        };
         if let Some((high, low, remainder, divisor)) =
-            reciprocal::divide_u256_long(self.high, self.low, k)
+            reciprocal::divide_u256(numerator.high, numerator.low, k)
         {
-            let quotient = rounded(Self { high, low }, remainder, divisor, negative, table);
-            return Some((quotient, remainder == 0));
+            let quotient = Self { high, low };
+            return Some(match biased {
+                // Rounded by the bias already; exact when the remainder is the bias itself.
+                Some((_, bias)) => (quotient, u128::from(remainder) == bias),
+                None => (rounded(quotient, remainder, divisor, negative, table), remainder == 0),
+            });
         }
         match Self::pow10(k) {
             Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),

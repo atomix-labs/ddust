@@ -281,43 +281,32 @@ pub(crate) const fn divide_u127(numerator: u128, k: u8) -> Option<(u128, u64)> {
     Some((quotient, remainder))
 }
 
-/// `(high:low) / 10^k` for a 256-bit numerator, the remainder and `10^k`, or `None` unless `k` is
-/// at most 19 and the quotient fits 128 bits: one step for both of the quotient's words.
-#[inline]
+/// `(high:low) / 10^k` for any 256-bit numerator, the quotient's two halves, high first, the
+/// remainder and `10^k`, or `None` unless `k` is at most 19: one step for the quotient's low half,
+/// after two for its high half when there is one, a long division in base 2^128.
+#[inline(always)]
 #[expect(
     clippy::indexing_slicing,
     reason = "`reciprocal` has checked `k` against the tables' length"
+)]
+#[expect(
+    clippy::inline_always,
+    reason = "out of line, LLVM loses the constant `k`, and a product keeps the division past `10^19`, \
+              its call and a stack frame"
 )]
 pub(crate) const fn divide_u256(
     high_half: u128, low_half: u128, k: u8,
-) -> Option<(u128, u64, u64)> {
-    let Some(reciprocal) = reciprocal(k) else { return None };
-    let power = reciprocal.divisor >> reciprocal.shift;
-    // The quotient fits 128 bits exactly when the high half is below the power, which then fits
-    // one word.
-    if high_half >= u128::from(power) {
-        return None;
-    }
-    let inverse_low = INVERSES_LOW[usize::from(k)];
-    let (quotient, remainder) =
-        divide_below_power(u64::low_bits(high_half), low_half, reciprocal, inverse_low);
-    Some((quotient, remainder, power))
-}
-
-/// `(high:low) / 10^k` for any 256-bit numerator, the quotient's two halves, high first, the
-/// remainder and `10^k`, or `None` unless `k` is at most 19: the high half's quotient in two
-/// steps, then in one that of its remainder and the low half, a long division in base 2^128.
-#[inline]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "`reciprocal` has checked `k` against the tables' length"
-)]
-pub(crate) const fn divide_u256_long(
-    high_half: u128, low_half: u128, k: u8,
 ) -> Option<(u128, u128, u64, u64)> {
     let Some(reciprocal) = reciprocal(k) else { return None };
-    let Some((quotient_high, carried, power)) = divide_u128_past_a_word(high_half, k) else {
-        return None;
+    let power = reciprocal.divisor >> reciprocal.shift;
+    // A high half below the power is the remainder of a quotient whose high half is zero.
+    let (quotient_high, carried) = if high_half < u128::from(power) {
+        (0, u64::low_bits(high_half))
+    } else {
+        match divide_u128_past_a_word(high_half, k) {
+            Some((quotient, remainder, _)) => (quotient, remainder),
+            None => return None,
+        }
     };
     let inverse_low = INVERSES_LOW[usize::from(k)];
     let (quotient_low, remainder) = divide_below_power(carried, low_half, reciprocal, inverse_low);
@@ -685,17 +674,23 @@ mod tests {
     }
 
     #[test]
-    fn a_wide_numerator_divides_in_two_steps() {
+    fn a_wide_numerator_divides_by_a_power_whatever_its_quotient() {
         let n = U256::widening(u128::MAX, 10_u128.pow(18));
         let (high, low) = n.halves();
         let power = 10_u64.pow(18);
         assert_eq!(
             divide_u256(high, low, 18),
-            Some((u128::MAX, 0, power)),
+            Some((0, u128::MAX, 0, power)),
             "(2^128 − 1) × 10^18 / 10^18"
         );
-        assert_eq!(divide_u256(10_u128.pow(18), 0, 18), None, "a quotient of 2^128, past 128 bits");
-        assert_eq!(divide_u256(0, 7, 0), Some((7, 0, 1)), "10^0");
+        assert_eq!(divide_u256(10_u128.pow(18), 0, 18), Some((1, 0, 0, power)), "2^128");
+        assert_eq!(
+            divide_u256(u128::MAX, u128::MAX, 19).map(|(high, _, _, _)| high),
+            Some(u128::MAX / 10_u128.pow(19)),
+            "(2^256 − 1) / 10^19, its high half"
+        );
+        assert_eq!(divide_u256(0, 7, 0), Some((0, 7, 0, 1)), "10^0");
+        assert_eq!(divide_u256(0, 7, 20), None, "10^20 is past a word");
     }
 
     #[rstest]
@@ -718,8 +713,8 @@ mod tests {
         let high = high + u128::from(carry);
         let expected = (quotient, u64::try_from(remainder).unwrap_or(0));
         assert_eq!(
-            divide_u256(high, low, k).map(|(q, r, _)| (q, r)),
-            Some(expected),
+            divide_u256(high, low, k).map(|(top, q, r, _)| (top, q, r)),
+            Some((0, expected.0, expected.1)),
             "{quotient} × 10^{k} + {remainder}"
         );
     }
@@ -829,9 +824,10 @@ mod tests {
             let (qa, ra) = (top / d, top % d);
             let bottom = (ra << 64) | (low_half & u128::from(u64::MAX));
             let (qb, rb) = (bottom / d, bottom % d);
-            let expected = Some(((qa << 64) | qb, u64::try_from(rb).unwrap_or(0)));
-            prop_assert_eq!(divide_u256(high, low_half, k).map(|(q, r, _)| (q, r)), expected);
-            prop_assert_eq!(divide_u256(d, low_half, k), None, "a high half at the power");
+            let expected = Some((0, (qa << 64) | qb, u64::try_from(rb).unwrap_or(0)));
+            prop_assert_eq!(divide_u256(high, low_half, k).map(|(top, q, r, _)| (top, q, r)), expected);
+            let past = Some((1, low_half / d, u64::try_from(low_half % d).unwrap_or(0)));
+            prop_assert_eq!(divide_u256(d, low_half, k).map(|(top, q, r, _)| (top, q, r)), past, "2^128 and the rest");
         }
 
         #[test]
@@ -844,8 +840,8 @@ mod tests {
             let (high, low) = U256::widening(quotient, d).halves();
             let (low, carry) = low.overflowing_add(remainder);
             let high = high + u128::from(carry);
-            let expected = Some((quotient, u64::try_from(remainder).unwrap_or(0)));
-            prop_assert_eq!(divide_u256(high, low, k).map(|(q, r, _)| (q, r)), expected);
+            let expected = Some((0, quotient, u64::try_from(remainder).unwrap_or(0)));
+            prop_assert_eq!(divide_u256(high, low, k).map(|(top, q, r, _)| (top, q, r)), expected);
         }
     }
 }
