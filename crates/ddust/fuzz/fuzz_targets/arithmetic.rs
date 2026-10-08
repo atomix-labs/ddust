@@ -1,10 +1,11 @@
 //! Products and quotients of any two 64- and 128-bit decimals, at any scales and in any mode,
-//! against an exact reference in arbitrary precision: each mode by its definition.
+//! against an exact reference in arbitrary precision: each mode by its definition. Quotients are
+//! taken by the second decimal both as it is and prepared as a `Divisor`.
 
 #![no_main]
 
 use ddust::round::Rounding;
-use ddust::{Decimal, Dynamic};
+use ddust::{Decimal, Divisor, Dynamic};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 use num_bigint::BigInt;
@@ -75,6 +76,10 @@ fuzz_target!(|input: Input| {
         let (up, down) = ((to + b).saturating_sub(a), a.saturating_sub(to + b));
         let quotient = divide(&(&x * pow10(up)), &(&y * pow10(down)), mode);
         assert_eq!(left.checked_div_round_to(right, scale(to), mode).map(Decimal::steps), fits(quotient), "{input:?}");
+        // The same divisor prepared, at the dividend's scale.
+        let quotient = divide(&(&x * pow10(b)), &y, mode);
+        let prepared = Divisor::new(right).expect("not zero");
+        assert_eq!(left.checked_div_round(prepared, mode).map(Decimal::steps), fits(quotient), "{input:?}");
     }
     let finer = a.max(b);
     let sum = &x * pow10(finer - a) + &y * pow10(finer - b);
@@ -87,4 +92,9 @@ fuzz_target!(|input: Input| {
     let product = if from >= to { divide(&(&x * &y), &pow10(from - to), mode) } else { &x * &y * pow10(to - from) };
     let fits = |value: BigInt| i64::try_from(value).ok();
     assert_eq!(left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps), fits(product), "{input:?}");
+    if b64 != 0 {
+        let quotient = divide(&(&x * pow10(b)), &y, mode);
+        let prepared = Divisor::new(right).expect("not zero");
+        assert_eq!(left.checked_div_round(prepared, mode).map(Decimal::steps), fits(quotient), "{input:?}");
+    }
 });

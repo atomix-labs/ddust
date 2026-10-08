@@ -138,6 +138,16 @@ pub fn dividends_and_divisors(width: Width, predictability: Predictability) -> P
     )
 }
 
+/// Operands of a quotient by one divisor: the dividends of [`dividends_and_divisors`], each by the
+/// first of its divisors, as a book is divided by one price.
+#[must_use]
+pub fn dividends_and_one_divisor(width: Width, predictability: Predictability) -> Pairs {
+    let mut set = dividends_and_divisors(width, predictability);
+    let first = set.right.first().copied().unwrap_or(1);
+    set.right.fill(first);
+    set
+}
+
 /// A price's steps at 2 decimals, below 100,000, and a quantity's at 5, below 100: their exact
 /// product, at 7, fits every width.
 #[must_use]

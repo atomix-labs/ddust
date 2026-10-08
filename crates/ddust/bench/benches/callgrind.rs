@@ -20,8 +20,8 @@
 use core::hint::black_box;
 
 use ddust_bench::contender::{
-    Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, Format, FromF64, MulExact,
-    MulRound as _, Parse, RescaleRound as _, ToF64 as _, ddust,
+    Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, DivRoundPrepared, Format,
+    FromF64, MulExact, MulRound as _, Parse, RescaleRound as _, ToF64 as _, ddust,
 };
 use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::oracle;
@@ -56,6 +56,15 @@ fn factors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
 /// Operands of a quotient.
 fn dividends_and_divisors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
     pairs::<C>(&input::dividends_and_divisors(C::WIDTH, Predictability::Unpredictable))
+}
+
+/// Dividends, and their one divisor, prepared once and copied for each.
+fn dividends_and_prepared<C: DivRoundPrepared>() -> (Vec<C::Value>, Vec<C::Prepared>) {
+    let set = input::dividends_and_one_divisor(C::WIDTH, Predictability::Unpredictable);
+    let (dividends, divisors) = pairs::<C>(&set);
+    let prepared = divisors.first().and_then(C::prepare);
+    let prepared = prepared.map_or_default(|divisor| vec![divisor; dividends.len()]);
+    (dividends, prepared)
 }
 
 /// Values to round, write or convert.
@@ -147,6 +156,20 @@ macro_rules! kernel {
             pairs
         }
     };
+    ($name:ident : $contender:ty,prepared $setup:ident, $operation:expr) => {
+        #[library_benchmark]
+        #[bench::values(setup = $setup::<$contender>)]
+        fn $name(
+            (dividends, divisors): (
+                Vec<<$contender as Contender>::Value>,
+                Vec<<$contender as DivRoundPrepared>::Prepared>,
+            ),
+        ) -> (Vec<<$contender as Contender>::Value>, Vec<<$contender as DivRoundPrepared>::Prepared>)
+        {
+            black_box(over_pairs(&dividends, &divisors, $operation));
+            (dividends, divisors)
+        }
+    };
     ($name:ident : $contender:ty,each $setup:ident, $operation:expr) => {
         #[library_benchmark]
         #[bench::values(setup = $setup::<$contender>)]
@@ -163,12 +186,14 @@ kernel!(add_narrow: ddust::Narrow, pairs addends, ddust::Narrow::checked_add);
 kernel!(compare_narrow: ddust::Narrow, pairs addends, ddust::Narrow::is_less);
 kernel!(mul_round_narrow: ddust::Narrow, pairs factors, ddust::Narrow::checked_mul_round);
 kernel!(div_round_narrow: ddust::Narrow, pairs dividends_and_divisors, ddust::Narrow::checked_div_round);
+kernel!(div_round_prepared_narrow: ddust::Narrow, prepared dividends_and_prepared, ddust::Narrow::checked_div_round_prepared);
 kernel!(rescale_round_narrow: ddust::Narrow, each singles, ddust::Narrow::rescale_round);
 kernel!(to_f64_narrow: ddust::Narrow, each singles, ddust::Narrow::to_f64);
 kernel!(add_wide: ddust::Wide, pairs addends, ddust::Wide::checked_add);
 kernel!(compare_wide: ddust::Wide, pairs addends, ddust::Wide::is_less);
 kernel!(mul_round_wide: ddust::Wide, pairs factors, ddust::Wide::checked_mul_round);
 kernel!(div_round_wide: ddust::Wide, pairs dividends_and_divisors, ddust::Wide::checked_div_round);
+kernel!(div_round_prepared_wide: ddust::Wide, prepared dividends_and_prepared, ddust::Wide::checked_div_round_prepared);
 kernel!(rescale_round_wide: ddust::Wide, each singles, ddust::Wide::rescale_round);
 kernel!(to_f64_wide: ddust::Wide, each singles, ddust::Wide::to_f64);
 
@@ -245,6 +270,7 @@ library_benchmark_group!(
         mul_exact_narrow,
         mul_round_narrow,
         div_round_narrow,
+        div_round_prepared_narrow,
         rescale_round_narrow,
         parse_narrow,
         format_narrow,
@@ -260,6 +286,7 @@ library_benchmark_group!(
         compare_wide,
         mul_round_wide,
         div_round_wide,
+        div_round_prepared_wide,
         rescale_round_wide,
         parse_wide,
         format_wide,

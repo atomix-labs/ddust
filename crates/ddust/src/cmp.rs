@@ -109,7 +109,7 @@ impl<I: Int, S: Scale> Hash for Decimal<I, S> {
 
 #[cfg(test)]
 #[expect(clippy::arithmetic_side_effects, reason = "the reference model's own arithmetic")]
-mod tests {
+pub(crate) mod tests {
     use core::hash::{BuildHasher, BuildHasherDefault, Hash, Hasher};
 
     use proptest::prelude::*;
@@ -138,7 +138,7 @@ mod tests {
     }
 
     /// The hash of a value.
-    fn hash_of<T: Hash>(value: &T) -> u64 {
+    pub(crate) fn hash_of<T: Hash>(value: &T) -> u64 {
         BuildHasherDefault::<Fnv>::default().hash_one(value)
     }
 

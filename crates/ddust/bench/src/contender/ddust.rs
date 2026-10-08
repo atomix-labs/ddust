@@ -3,11 +3,11 @@
 
 use ddust::round::{HalfEven, HalfExpand, Trunc};
 use ddust::scale::Sum;
-use ddust::{Decimal, Fixed};
+use ddust::{Decimal, Divisor, Fixed};
 
 use super::{
-    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, Kind,
+    MulExact, MulRound, Parse, RescaleRound, ToF64, low_byte,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -57,7 +57,7 @@ macro_rules! ddust_type {
 
 /// The rounded operations of ddust's type `$type` over `$integer`, each rounding by `$mode`.
 macro_rules! ddust_rounded {
-    ($type:ident, $integer:ty, $mode:ident) => {
+    ($type:ident, $integer:ty, $decimals:literal, $mode:ident) => {
         /// `checked_mul_round`, one rounding of the exact product.
         impl MulRound for $type {
             const MODE: Mode = Mode::$mode;
@@ -72,6 +72,21 @@ macro_rules! ddust_rounded {
             const MODE: Mode = Mode::$mode;
 
             fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value> {
+                a.checked_div_round(*b, $mode)
+            }
+        }
+
+        /// A `Divisor`, prepared once, and `checked_div_round` by it.
+        impl DivRoundPrepared for $type {
+            type Prepared = Divisor<$integer, Fixed<$decimals>>;
+
+            fn prepare(b: &Self::Value) -> Option<Self::Prepared> {
+                Divisor::new(*b)
+            }
+
+            fn checked_div_round_prepared(
+                a: &Self::Value, b: &Self::Prepared,
+            ) -> Option<Self::Value> {
                 a.checked_div_round(*b, $mode)
             }
         }
@@ -97,7 +112,7 @@ macro_rules! ddust_rounded {
 macro_rules! ddust {
     ($(#[$doc:meta])* $type:ident, $integer:ty, $decimals:literal, $width:expr, $label:literal) => {
         ddust_type!($(#[$doc])* $type, $integer, $decimals, $width, concat!("ddust ", $label));
-        ddust_rounded!($type, $integer, HalfEven);
+        ddust_rounded!($type, $integer, $decimals, HalfEven);
 
         /// `from_ascii`, on the text's bytes.
         impl Parse for $type {
@@ -144,7 +159,7 @@ macro_rules! ddust_mode {
             $width,
             concat!("ddust ", $label, " ", stringify!($mode))
         );
-        ddust_rounded!($type, $integer, $mode);
+        ddust_rounded!($type, $integer, $decimals, $mode);
     };
 }
 

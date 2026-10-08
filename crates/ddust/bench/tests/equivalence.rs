@@ -11,8 +11,8 @@ mod tests {
     use core::fmt::{Debug, Display};
 
     use ddust_bench::contender::{
-        Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact,
-        MulRound, Parse, RescaleRound, ToF64,
+        Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, Kind,
+        MulExact, MulRound, Parse, RescaleRound, ToF64,
     };
     use ddust_bench::input::{self, Predictability, Width};
     use ddust_bench::{for_each_contender, oracle};
@@ -159,6 +159,29 @@ mod tests {
         tally.verdict("div-round", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
     }
 
+    fn div_round_prepared<C: DivRoundPrepared>(failures: &mut Vec<String>) {
+        let decimals = C::WIDTH.decimals();
+        let mut tally = Tally::default();
+        for predictability in Predictability::ALL {
+            let set = input::dividends_and_divisors(C::WIDTH, predictability);
+            for ((a, b), (x, y)) in values::<C>(&set.left)
+                .iter()
+                .zip(&values::<C>(&set.right))
+                .zip(set.left.iter().zip(&set.right))
+            {
+                let expected = oracle::div_round(*x, *y, decimals, C::MODE);
+                // Each divisor prepared, as the timed rows prepare one.
+                let quotient = C::prepare(b).and_then(|b| C::checked_div_round_prepared(a, &b));
+                tally.count(
+                    &quotient.and_then(|quotient| C::to_steps(&quotient)),
+                    &expected,
+                    format_args!("{x} / {y}, prepared"),
+                );
+            }
+        }
+        tally.verdict("div-round-prepared", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
+    }
+
     fn rescale_round<C: RescaleRound>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
@@ -277,6 +300,7 @@ mod tests {
     every!(every_order_agrees: compare by compare);
     every!(every_rounded_product_agrees: mul_round by mul_round);
     every!(every_rounded_quotient_agrees: div_round by div_round);
+    every!(every_prepared_quotient_agrees: div_round_prepared by div_round_prepared);
     every!(every_value_to_cents_agrees: rescale_round by rescale_round);
     every!(every_text_reads_as_the_oracle_does: parse by parse);
     every!(every_text_written_reads_back: format by format);

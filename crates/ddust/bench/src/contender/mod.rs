@@ -101,6 +101,18 @@ pub trait DivRound: Contender {
     fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value>;
 }
 
+/// A rounded quotient by a divisor prepared once for many divisions: ddust's `Divisor`.
+pub trait DivRoundPrepared: DivRound {
+    /// What [`prepare`](Self::prepare) makes of a divisor.
+    type Prepared: Copy;
+
+    /// `b` prepared, or `None` for zero.
+    fn prepare(b: &Self::Value) -> Option<Self::Prepared>;
+
+    /// `a / b` by `b` prepared, rounded by [`MODE`](DivRound::MODE), or `None` past the range.
+    fn checked_div_round_prepared(a: &Self::Value, b: &Self::Prepared) -> Option<Self::Value>;
+}
+
 /// A value rounded to 2 decimals: a price to cents.
 pub trait RescaleRound: Contender {
     /// The rounding the call uses.
@@ -303,10 +315,11 @@ pub fn format_by_display<T: fmt::Display>(value: &T, buffer: &mut Buffer) {
 ///
 /// `$function` is one token tree handed to every call, as the function to run for the contender.
 ///
-/// The operations: `add`, `compare` and `mul_round`, which every crate has; `div_round` and `format`,
-/// which the binary `fixed` lacks; `rescale_round`, which `fixnum` lacks too; `parse`, which the
-/// integer floors lack; the conversions `to_f64` and `from_f64`, which the `f64` floor does not
-/// need; and `mul_exact`, the price-times-quantity product, a row of its own types.
+/// The operations: `add`, `compare` and `mul_round`, which every crate has; `div_round` and
+/// `format`, which the binary `fixed` lacks; `div_round_prepared`, by a prepared divisor, which
+/// only ddust has; `rescale_round`, which `fixnum` lacks too; `parse`, which the integer floors
+/// lack; the conversions `to_f64` and `from_f64`, which the `f64` floor does not need; and
+/// `mul_exact`, the price-times-quantity product, a row of its own types.
 #[macro_export]
 macro_rules! for_each_contender {
     (add, $apply:ident, $function:tt) => {
@@ -328,6 +341,10 @@ macro_rules! for_each_contender {
     };
     (div_round, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(format, $apply, $function);
+        $crate::for_each_contender!(@modes $apply $function);
+    };
+    (div_round_prepared, $apply:ident, $function:tt) => {
+        $crate::for_each_contender!(@each $apply $function [ddust::Narrow ddust::Wide]);
         $crate::for_each_contender!(@modes $apply $function);
     };
     // ddust in the modes the other contenders round by, for the rounded rows.
