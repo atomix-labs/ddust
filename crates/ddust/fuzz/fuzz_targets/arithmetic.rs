@@ -1,6 +1,6 @@
-//! Products and quotients of any two 64- and 128-bit decimals, at any scales and in any mode, by
-//! a decimal and by a prepared divisor, against an exact reference in arbitrary precision: each
-//! mode by its definition.
+//! Products and quotients of any two 64- and 128-bit decimals, at any scales and in any mode,
+//! against an exact reference in arbitrary precision: each mode by its definition. Quotients are
+//! taken by the second decimal both as it is and prepared as a `Divisor`.
 
 #![no_main]
 

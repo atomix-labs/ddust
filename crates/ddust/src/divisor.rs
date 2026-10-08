@@ -7,8 +7,7 @@ use crate::decimal::Decimal;
 use crate::int::{Int, Outcome};
 use crate::scale::Scale;
 
-/// What a prepared divisor keeps, in its integer's magnitude word `U` and its double `D`: the work
-/// its divisions share.
+/// The work a prepared divisor's divisions share, in the magnitude's word `U` and its double `D`.
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
 pub struct Prepared<U, D> {
@@ -115,9 +114,8 @@ mod sealed {
     impl<I: Int, S: Scale> Sealed for Divisor<I, S> {}
 }
 
-/// What a decimal of steps `I` divides by: a decimal of any scale, or a [`Divisor`] prepared from
-/// one, which [`div_round`](Decimal::div_round) and
-/// [`checked_div_round`](Decimal::checked_div_round) take alike.
+/// What [`div_round`](Decimal::div_round) and [`checked_div_round`](Decimal::checked_div_round)
+/// divide a decimal of steps `I` by: a decimal of any scale, or a [`Divisor`] prepared from one.
 ///
 /// # Examples
 /// ```
@@ -243,7 +241,7 @@ mod tests {
             q in 0_i64..1 << 40, b in 3_i64..1 << 20, edge in 0_usize..7, negative: bool,
             mode in select(Rounding::MODES),
         ) {
-            // q × b and a remainder, at no decimals, where the dividend sets the remainder.
+            // At no decimals, where the dividend alone sets the remainder.
             let a = q * b + edge_remainder(b, edge);
             check(if negative { -a } else { a }, b, 0, mode)?;
             check(i128::from(a) << 60, i128::from(b) << 60, 0, mode)?;

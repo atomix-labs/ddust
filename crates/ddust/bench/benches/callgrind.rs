@@ -58,7 +58,7 @@ fn dividends_and_divisors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
     pairs::<C>(&input::dividends_and_divisors(C::WIDTH, Predictability::Unpredictable))
 }
 
-/// Dividends, and their one divisor prepared, once for each.
+/// Dividends, and their one divisor, prepared once and copied for each.
 fn dividends_and_prepared<C: DivRoundPrepared>() -> (Vec<C::Value>, Vec<C::Prepared>) {
     let set = input::dividends_and_one_divisor(C::WIDTH, Predictability::Unpredictable);
     let (dividends, divisors) = pairs::<C>(&set);
@@ -186,12 +186,14 @@ kernel!(add_narrow: ddust::Narrow, pairs addends, ddust::Narrow::checked_add);
 kernel!(compare_narrow: ddust::Narrow, pairs addends, ddust::Narrow::is_less);
 kernel!(mul_round_narrow: ddust::Narrow, pairs factors, ddust::Narrow::checked_mul_round);
 kernel!(div_round_narrow: ddust::Narrow, pairs dividends_and_divisors, ddust::Narrow::checked_div_round);
+kernel!(div_round_prepared_narrow: ddust::Narrow, prepared dividends_and_prepared, ddust::Narrow::checked_div_round_prepared);
 kernel!(rescale_round_narrow: ddust::Narrow, each singles, ddust::Narrow::rescale_round);
 kernel!(to_f64_narrow: ddust::Narrow, each singles, ddust::Narrow::to_f64);
 kernel!(add_wide: ddust::Wide, pairs addends, ddust::Wide::checked_add);
 kernel!(compare_wide: ddust::Wide, pairs addends, ddust::Wide::is_less);
 kernel!(mul_round_wide: ddust::Wide, pairs factors, ddust::Wide::checked_mul_round);
 kernel!(div_round_wide: ddust::Wide, pairs dividends_and_divisors, ddust::Wide::checked_div_round);
+kernel!(div_round_prepared_wide: ddust::Wide, prepared dividends_and_prepared, ddust::Wide::checked_div_round_prepared);
 kernel!(rescale_round_wide: ddust::Wide, each singles, ddust::Wide::rescale_round);
 kernel!(to_f64_wide: ddust::Wide, each singles, ddust::Wide::to_f64);
 
@@ -246,9 +248,6 @@ fn from_f64_wide(doubles: Vec<f64>) -> Vec<f64> {
     black_box(converted::<ddust::Wide>(&doubles));
     doubles
 }
-
-kernel!(div_round_prepared_narrow: ddust::Narrow, prepared dividends_and_prepared, ddust::Narrow::checked_div_round_prepared);
-kernel!(div_round_prepared_wide: ddust::Wide, prepared dividends_and_prepared, ddust::Wide::checked_div_round_prepared);
 
 // Multiplies each price by its quantity, exactly.
 #[library_benchmark]

@@ -215,8 +215,7 @@ fn div_round_one_divisor<C: DivRound>(
     )
 }
 
-/// The quotient at one scale, rounded, of each dividend by one divisor prepared once, before the
-/// timing.
+/// The quotient at one scale, rounded, of each dividend by one divisor, prepared once, untimed.
 fn div_round_prepared<C: DivRoundPrepared>(
     harness: &mut Harness, predictability: Predictability,
 ) -> io::Result<()> {

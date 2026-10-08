@@ -48,10 +48,12 @@ pub(crate) const fn rounds_up<D: [const] Word>(
     remainder > threshold
 }
 
-/// Whether a quotient moves one step away from zero by `table`, for a result of sign `negative`
-/// whose quotient is `odd`, from the fraction its remainder leaves and a prepared divisor's
-/// `thresholds`: the fractions a remainder of one leaves, of half rounded up, and of half rounded
-/// down and one, as [`rounds_up`] compares the remainder with the thresholds they stand for.
+/// Whether a quotient moves one step away from zero by `table`, from the fraction its remainder
+/// leaves and a prepared divisor's `thresholds`.
+///
+/// `negative` is the result's sign and `odd` whether its quotient is odd, as in [`rounds_up`]. The
+/// thresholds are the fractions a remainder of one leaves, of half rounded up, and of half rounded
+/// down and one: the thresholds `rounds_up` compares a remainder with, as fractions.
 #[inline]
 pub(crate) const fn rounds_up_by_fraction<D: [const] Word>(
     fraction: D, thresholds: [D; 3], odd: bool, negative: bool, table: u16,
@@ -462,7 +464,8 @@ macro_rules! double {
             #[inline]
             fn fraction_product(a: $narrow, multiplier: $wide) -> ($narrow, $wide) {
                 let (fraction, past) = multiplier.carrying_mul(<$wide>::from(a), 0);
-                // Below 2^n × a / 2^n, so a narrow word holds the part past the word.
+                // The part past the word is below `a`, as the multiplier is below `2^n`, so a
+                // narrow word holds it.
                 (<$narrow>::low_bits(u128::from(past)), fraction)
             }
 

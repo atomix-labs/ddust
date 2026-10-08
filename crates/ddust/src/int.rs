@@ -500,9 +500,11 @@ const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u1
 ///
 /// `10^k` is `whole × b + rest`, so `a × 10^k / b` is `a × whole` and `a × rest / b`. The latter is
 /// the part of `a × m` past the double word, `m` being `⌈2^n × rest / b⌉` and `n` the double's
-/// bits, and the class of its remainder one comparison of the part within it with the fraction
-/// each class starts at, exact for every `a` and `b` of the magnitude's word, as their product is
-/// below `2^n` (Lemire, Kaser and Kurz, "Faster remainder by direct computation", 2019, lemma 1).
+/// bits. The part within it is `2^n × r / b` and `a` times `m`'s rounding, `r` being the remainder:
+/// that excess is below `a`, and `a` below `2^n / b`, as `a × b` is below `2^n` for any `a` and `b`
+/// the magnitude's word holds. So `r` reaches `t` exactly when the part within reaches
+/// `⌈2^n × t / b⌉`, and each class of remainder is one comparison, after the idea of Lemire, Kaser
+/// and Kurz ("Faster remainder by direct computation", 2019, lemma 1).
 #[inline]
 const fn prepare_divisor<I: [const] Magnitude + [const] Int>(
     b: I, k: u8,
@@ -540,8 +542,8 @@ const fn div_prepared<I: [const] Magnitude + [const] Int>(
     let negative = negative_a != divisor.negative;
     let (past, fraction) = I::Double::fraction_product(a, divisor.multiplier);
     // Two narrow words' product, the part past the double word and a step of rounding stay below
-    // its top, so no step overflows it; a whole part past the narrow word keeps its low bits, which
-    // are the quotient's, as wrapping keeps them, and overflows every dividend but zero.
+    // its top, so no step overflows it; a whole part past the narrow word keeps its low bits, the
+    // quotient's, as wrapping keeps them, and every dividend but zero overflows.
     let product = I::Double::widening_mul(a, divisor.whole);
     let quotient = product.wrapping_add(I::Double::from_narrow(past));
     let odd = quotient.is_odd();

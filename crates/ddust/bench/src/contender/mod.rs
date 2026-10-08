@@ -101,9 +101,9 @@ pub trait DivRound: Contender {
     fn checked_div_round(a: &Self::Value, b: &Self::Value) -> Option<Self::Value>;
 }
 
-/// A rounded quotient by a divisor prepared once for many: ddust's `Divisor`.
+/// A rounded quotient by a divisor prepared once for many divisions: ddust's `Divisor`.
 pub trait DivRoundPrepared: DivRound {
-    /// A divisor prepared.
+    /// What [`prepare`](Self::prepare) makes of a divisor.
     type Prepared: Copy;
 
     /// `b` prepared, or `None` for zero.

@@ -138,8 +138,8 @@ pub fn dividends_and_divisors(width: Width, predictability: Predictability) -> P
     )
 }
 
-/// Operands of a quotient by one divisor: the dividends of [`dividends_and_divisors`], each by its
-/// first divisor, as a book is divided by one price.
+/// Operands of a quotient by one divisor: the dividends of [`dividends_and_divisors`], each by the
+/// first of its divisors, as a book is divided by one price.
 #[must_use]
 pub fn dividends_and_one_divisor(width: Width, predictability: Predictability) -> Pairs {
     let mut set = dividends_and_divisors(width, predictability);

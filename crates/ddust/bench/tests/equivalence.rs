@@ -169,8 +169,8 @@ mod tests {
                 .zip(&values::<C>(&set.right))
                 .zip(set.left.iter().zip(&set.right))
             {
-                // Each divisor prepared, as the timed rows prepare one.
                 let expected = oracle::div_round(*x, *y, decimals, C::MODE);
+                // Each divisor prepared, as the timed rows prepare one.
                 let quotient = C::prepare(b).and_then(|b| C::checked_div_round_prepared(a, &b));
                 tally.count(
                     &quotient.and_then(|quotient| C::to_steps(&quotient)),
