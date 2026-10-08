@@ -1,7 +1,7 @@
 //! Every pair of 8-bit values, signed and unsigned, through every operation and every rounding
 //! mode, against an exact reference: integer arithmetic in an `i128`, and each mode by its
-//! definition rather than its table; and random pairs at 32 and 64 bits, where an `i128` is still
-//! exact.
+//! definition rather than its table; random pairs at 32 and 64 bits, where an `i128` is still
+//! exact; and random 128-bit pairs whose product an `i128` holds, either side of 2^126.
 
 #[cfg(test)]
 #[expect(clippy::arithmetic_side_effects, reason = "the reference's own arithmetic, in an i128")]
@@ -355,6 +355,60 @@ mod tests {
         Ok(())
     }
 
+    /// A value of `bits` bits, the top one set, of either sign.
+    fn sized(bits: u32) -> impl Strategy<Value = i128> {
+        (any::<u128>(), any::<bool>()).prop_map(move |(random, negative)| {
+            let magnitude = random.checked_shr(128 - bits).unwrap_or(0) | 1_u128 << bits >> 1;
+            let value = i128::try_from(magnitude).expect("at most 127 bits");
+            if negative { -value } else { value }
+        })
+    }
+
+    /// Two values whose product is below 2^127, so an `i128` holds it, on either side of 2^126,
+    /// below which a 128-bit product takes the magnitude's own word, and above it the double.
+    fn wide_pair() -> impl Strategy<Value = (i128, i128)> {
+        (0_u32..=127)
+            .prop_flat_map(|bits| (sized(bits), 0..=127 - bits))
+            .prop_flat_map(|(x, bits)| (Just(x), sized(bits)))
+    }
+
+    /// The product at `to` of an `i128` pair, and of their magnitudes as `u128`s, as [`check_one`]
+    /// checks a narrower pair's.
+    fn check_wide_product(
+        x: i128, y: i128, a: u8, b: u8, to: u8, mode: Rounding,
+    ) -> Result<(), TestCaseError> {
+        let scale = |decimals| Dynamic::new(decimals).expect("at most 38");
+        let reference = |exact: i128| {
+            if a + b >= to {
+                Some(divide(exact, pow10(a + b - to), mode))
+            } else {
+                exact.checked_mul(pow10(to - a - b))
+            }
+        };
+        let (left, right) = (Decimal::from_steps(x, scale(a)), Decimal::from_steps(y, scale(b)));
+        prop_assert_eq!(
+            left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps),
+            reference(x * y)
+        );
+        // The magnitudes' product is below 2^127; scaled up, it may pass an `i128` and still fit a
+        // `u128`, so the reference scales it in a `u128`.
+        let (ux, uy) = (x.unsigned_abs(), y.unsigned_abs());
+        let expected = if a + b >= to {
+            let Ok(exact) = i128::try_from(ux * uy) else {
+                return Err(TestCaseError::fail("a product past 2^127"));
+            };
+            fit::<u128>(divide(exact, pow10(a + b - to), mode))
+        } else {
+            (ux * uy).checked_mul(10_u128.pow(u32::from(to - a - b)))
+        };
+        let (left, right) = (Decimal::from_steps(ux, scale(a)), Decimal::from_steps(uy, scale(b)));
+        prop_assert_eq!(
+            left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps),
+            expected
+        );
+        Ok(())
+    }
+
     proptest! {
         #[test]
         fn random_i32_pairs_agree_with_the_reference(x: i32, y: i32, (a, b, to, mode) in scales_and_mode()) {
@@ -369,6 +423,13 @@ mod tests {
         #[test]
         fn random_u64_pairs_agree_with_the_reference(x: u64, y: u64, (a, b, to, mode) in scales_and_mode()) {
             check_one(x, y, a, b, to, mode)?;
+        }
+
+        #[test]
+        fn random_wide_products_on_both_sides_of_2_126_agree_with_the_reference(
+            (x, y) in wide_pair(), (a, b, to, mode) in scales_and_mode(),
+        ) {
+            check_wide_product(x, y, a, b, to, mode)?;
         }
     }
 }

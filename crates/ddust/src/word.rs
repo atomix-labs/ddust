@@ -180,6 +180,16 @@ pub(crate) const trait Word: Copy + [const] Ord {
             None => None,
         }
     }
+
+    /// `self × other / 10^k`, [`rounded`] by `table` for a result of sign `negative`, in this word,
+    /// when the product and its rounding fit below the word's top bit, and so are in range of
+    /// either sign; `None` when they may not, for the double word to compute.
+    ///
+    /// A word whose double divides as fast as it does leaves every product to the double.
+    #[inline]
+    fn narrow_mul_down(self, _other: Self, _k: u8, _negative: bool, _table: u16) -> Option<Self> {
+        None
+    }
 }
 
 /// A primitive word, which every magnitude is: it converts to and from a `u128`.
@@ -284,6 +294,38 @@ macro_rules! word {
 }
 
 word!(u8, u16, u32, u64, u128 {
+    // Operands whose leading zeros add to 130 or more multiply below 2^126, and a bias below 10^19
+    // keeps the sum below 2^127: one multiply-high divides it whatever the quotient's size, and the
+    // result is in range of either sign, joined with no branch on it. Its one branch is on the
+    // operands' size, which operands of mixed sizes predict; the double's path branches on the
+    // result's sign too, which signs mixed at random mispredict half the time. Measured, in
+    // `bench/results/2026-10-08T04-50Z-pr9-arithmetic-graviton4` against PR 8's run: a wide rounded
+    // product on mixed operands takes 7.21 ns half up, not 9.44, and on large ones 10.11, not 10.18.
+    #[inline(always)]
+    #[expect(
+        clippy::inline_always,
+        reason = "as `divide_pow10_round`'s: out of line it loses the constant `k`"
+    )]
+    fn narrow_mul_down(self, other: Self, k: u8, negative: bool, table: u16) -> Option<Self> {
+        if self.leading_zeros().wrapping_add(other.leading_zeros()) < 130 {
+            return None;
+        }
+        let product = self.wrapping_mul(other);
+        let Some(power) = pow10_u128(k) else { return None };
+        if let Some(bias) = parity_free_bias(table, negative, power) {
+            return match reciprocal::divide_u127(product.wrapping_add(bias), k) {
+                Some((quotient, _)) => Some(quotient),
+                None => None,
+            };
+        }
+        match reciprocal::divide_u127(product, k) {
+            Some((quotient, remainder)) => {
+                Some(rounded(quotient, u128::from(remainder), power, negative, table))
+            },
+            None => None,
+        }
+    }
+
     // A quotient that fits a word, by a divisor that fits one, is a 128-by-64-bit division, whose
     // remainder fits a word too.
     #[inline(always)]
@@ -330,7 +372,7 @@ word!(u8, u16, u32, u64, u128 {
                 (u128::from(quotient), remainder, divisor)
             } else if let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self, k) {
                 (u128::from(quotient), remainder, divisor)
-            } else if let Some(divided) = reciprocal::divide_u256(0, self, k) {
+            } else if let Some(divided) = reciprocal::divide_u128_past_a_word(self, k) {
                 divided
             } else {
                 return None;
@@ -698,51 +740,47 @@ const impl Word for U256 {
         divide_round_by_long_division(self, divisor, negative, table)
     }
 
-    // One Möller–Granlund step for a value with no high word whose quotient fits a word, and two
-    // for every other quotient that fits 128 bits, where the long division calls the library three
-    // times.
+    // A power of one word divides any value by one path: the high half's quotient when it is at
+    // least the power, then one step for that of its remainder and the low half. A mode that reads
+    // no parity rounds by a bias added first, as the narrow word's does, and any other by the
+    // remainder, as does a value the bias would carry past 2^256. With this one path and its fast
+    // path beside it, a wide rounded product takes 189 to 215 instructions by mode, where PR 8's,
+    // with neither, took 191 to 301 (each run's `assembly.txt` in `bench/results/`).
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
     )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
-        // A mode that reads no parity rounds by a bias added first, as the narrow word's does: the
-        // steps' quotient is the rounded one, exact when the remainder is the bias.
-        if let Some(power) = pow10_u128(k)
-            && let Some(bias) = parity_free_bias(table, negative, power)
-            && let Some(biased) = self.checked_add(Self::from_u128(bias))
-        {
-            if biased.high == 0
-                && let Some((quotient, remainder, _)) = reciprocal::divide_u128(biased.low, k)
-            {
-                return Some((
-                    Self::from_u128(u128::from(quotient)),
-                    u128::from(remainder) == bias,
-                ));
-            }
-            if let Some((quotient, remainder, _)) =
-                reciprocal::divide_u256(biased.high, biased.low, k)
-            {
-                return Some((Self::from_u128(quotient), u128::from(remainder) == bias));
-            }
-        }
-        if self.high == 0
-            && let Some((quotient, remainder, divisor)) = reciprocal::divide_u128(self.low, k)
-        {
-            let quotient = rounded(u128::from(quotient), remainder, divisor, negative, table);
-            return Some((Self::from_u128(quotient), remainder == 0));
-        }
-        match reciprocal::divide_u256(self.high, self.low, k) {
-            Some((quotient, remainder, divisor)) => {
-                let quotient =
-                    rounded(Self::from_u128(quotient), remainder, divisor, negative, table);
-                Some((quotient, remainder == 0))
-            },
-            None => match Self::pow10(k) {
-                Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),
+        // A power past 10^38 has no bias in a `u128`, and divides by long division below.
+        let bias = match pow10_u128(k) {
+            Some(power) => parity_free_bias(table, negative, power),
+            None => None,
+        };
+        let biased = match bias {
+            Some(bias) => match self.checked_add(Self::from_u128(bias)) {
+                Some(biased) => Some((biased, bias)),
                 None => None,
             },
+            None => None,
+        };
+        let numerator = match biased {
+            Some((biased, _)) => biased,
+            None => self,
+        };
+        if let Some((high, low, remainder, divisor)) =
+            reciprocal::divide_u256(numerator.high, numerator.low, k)
+        {
+            let quotient = Self { high, low };
+            return Some(match biased {
+                // Rounded by the bias already; exact when the remainder is the bias itself.
+                Some((_, bias)) => (quotient, u128::from(remainder) == bias),
+                None => (rounded(quotient, remainder, divisor, negative, table), remainder == 0),
+            });
+        }
+        match Self::pow10(k) {
+            Some(power) => Some(divide_pow10_by_long_division(self, power, negative, table)),
+            None => None,
         }
     }
 }
@@ -759,9 +797,8 @@ const fn divide_round_by_long_division(
 }
 
 /// `value / power`, rounded by `table` for a result of sign `negative`, and whether nothing was
-/// rounded away, for a power past `10^19` or a quotient past 128 bits: by the run-time reciprocal
-/// for a power of 128 bits or fewer, and by long division past them, off the hot path and out of
-/// line.
+/// rounded away, for a power past `10^19`: by the run-time reciprocal for a power of 128 bits or
+/// fewer, and by long division past them, off the hot path and out of line.
 #[cold]
 #[inline(never)]
 const fn divide_pow10_by_long_division(
@@ -802,6 +839,7 @@ const impl<U: [const] Narrow> Double<U> for U256 {
 #[expect(clippy::arithmetic_side_effects, reason = "the reference model's own arithmetic")]
 mod tests {
     use proptest::prelude::*;
+    use proptest::sample::select;
     use rstest::rstest;
 
     use super::{Double, U256, Word, rounded, rounded_zero, rounds_up};
@@ -889,6 +927,19 @@ mod tests {
             let back = quotient.checked_mul(divisor).and_then(|product| product.checked_add(remainder));
             prop_assert_eq!(back, Some(wide(high, low)));
             prop_assert!(remainder < divisor);
+        }
+
+        #[test]
+        fn a_wide_value_divides_by_a_power_as_long_division_does(
+            high: u128, low: u128, k in 0_u8..=77, negative: bool, mode in select(Rounding::MODES),
+        ) {
+            // Every quotient, past 128 bits as well as within them, and every power the widest
+            // word holds, against the reference's long division and `rounded`.
+            let (value, power) = (wide(high, low), U256::pow10(k).expect("at most 10^77"));
+            let (quotient, remainder) = value.div_rem(power);
+            let table = mode.table();
+            let expected = (rounded(quotient, remainder, power, negative, table), remainder == U256::ZERO);
+            prop_assert_eq!(value.divide_pow10_round(k, negative, table), Some(expected));
         }
 
         #[test]

@@ -436,6 +436,14 @@ const fn scale_down<I: [const] Magnitude + [const] Int>(a: I, k: u8, table: u16)
 const fn mul_down<I: [const] Magnitude + [const] Int>(a: I, b: I, k: u8, table: u16) -> Outcome<I> {
     let ((negative_a, a), (negative_b, b)) = (a.split(), b.split());
     let negative = negative_a != negative_b;
+    if let Some(magnitude) = a.narrow_mul_down(b, k, negative, table) {
+        // Below the top bit, so in range of either sign.
+        return Outcome {
+            wrapped: I::wrapping_join(negative, magnitude),
+            overflowed: false,
+            negative,
+        };
+    }
     settled(exact!(I, mul_down(negative, a, b, k, table)), negative)
 }
 
@@ -871,6 +879,13 @@ mod tests {
         let big = 10_i128.pow(25);
         assert_eq!(big.mul_down(big, 18, TRUNC).checked(), Some(10_i128.pow(32)), "10^50 / 10^18");
         assert_eq!(big.mul_down(big, 10, TRUNC).checked(), None, "10^40 is past an i128");
+        let top = 10_i128.pow(38);
+        assert_eq!(
+            top.mul_down(top, 76, TRUNC).checked(),
+            Some(1),
+            "10^76 / 10^76, past a u128's powers"
+        );
+        assert_eq!(top.mul_down(top, 77, TRUNC).checked(), Some(0), "10^76 / 10^77");
         assert_eq!(
             i128::MIN.mul_down(1, 0, TRUNC).checked(),
             Some(i128::MIN),
