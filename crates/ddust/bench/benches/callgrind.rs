@@ -20,8 +20,8 @@
 use core::hint::black_box;
 
 use ddust_bench::contender::{
-    Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, Format, FromF64, MulExact,
-    MulRound as _, Parse, PreparedDivRound, RescaleRound as _, ToF64 as _, ddust,
+    Buffer, CheckedAdd as _, Compare as _, Contender, DivRound as _, DivRoundPrepared, Format,
+    FromF64, MulExact, MulRound as _, Parse, RescaleRound as _, ToF64 as _, ddust,
 };
 use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::oracle;
@@ -59,7 +59,7 @@ fn dividends_and_divisors<C: Contender>() -> (Vec<C::Value>, Vec<C::Value>) {
 }
 
 /// Dividends, and their one divisor prepared, once for each.
-fn dividends_and_prepared<C: PreparedDivRound>() -> (Vec<C::Value>, Vec<C::Prepared>) {
+fn dividends_and_prepared<C: DivRoundPrepared>() -> (Vec<C::Value>, Vec<C::Prepared>) {
     let set = input::dividends_and_one_divisor(C::WIDTH, Predictability::Unpredictable);
     let (dividends, divisors) = pairs::<C>(&set);
     let prepared = divisors.first().and_then(C::prepare);
@@ -156,6 +156,20 @@ macro_rules! kernel {
             pairs
         }
     };
+    ($name:ident : $contender:ty,prepared $setup:ident, $operation:expr) => {
+        #[library_benchmark]
+        #[bench::values(setup = $setup::<$contender>)]
+        fn $name(
+            (dividends, divisors): (
+                Vec<<$contender as Contender>::Value>,
+                Vec<<$contender as DivRoundPrepared>::Prepared>,
+            ),
+        ) -> (Vec<<$contender as Contender>::Value>, Vec<<$contender as DivRoundPrepared>::Prepared>)
+        {
+            black_box(over_pairs(&dividends, &divisors, $operation));
+            (dividends, divisors)
+        }
+    };
     ($name:ident : $contender:ty,each $setup:ident, $operation:expr) => {
         #[library_benchmark]
         #[bench::values(setup = $setup::<$contender>)]
@@ -233,26 +247,8 @@ fn from_f64_wide(doubles: Vec<f64>) -> Vec<f64> {
     doubles
 }
 
-/// Divides each dividend by one divisor, prepared: a library benchmark of `C`'s, named `$name`.
-macro_rules! prepared {
-    ($name:ident : $contender:ty) => {
-        #[library_benchmark]
-        #[bench::values(setup = dividends_and_prepared::<$contender>)]
-        fn $name(
-            (dividends, divisors): (
-                Vec<<$contender as Contender>::Value>,
-                Vec<<$contender as PreparedDivRound>::Prepared>,
-            ),
-        ) -> (Vec<<$contender as Contender>::Value>, Vec<<$contender as PreparedDivRound>::Prepared>)
-        {
-            black_box(over_pairs(&dividends, &divisors, <$contender>::checked_div_round_prepared));
-            (dividends, divisors)
-        }
-    };
-}
-
-prepared!(div_round_prepared_narrow: ddust::Narrow);
-prepared!(div_round_prepared_wide: ddust::Wide);
+kernel!(div_round_prepared_narrow: ddust::Narrow, prepared dividends_and_prepared, ddust::Narrow::checked_div_round_prepared);
+kernel!(div_round_prepared_wide: ddust::Wide, prepared dividends_and_prepared, ddust::Wide::checked_div_round_prepared);
 
 // Multiplies each price by its quantity, exactly.
 #[library_benchmark]

@@ -266,9 +266,9 @@ pub const trait Int:
     type Prepared: Copy + Debug;
     /// `self` prepared as the divisor of dividends scaled by `10^k`, or `None` for zero.
     #[doc(hidden)]
-    fn prepare(self, k: u8) -> Option<Self::Prepared>;
-    /// `self × 10^k / divisor`, rounded by `table`, by a divisor [`prepare`](Self::prepare) made
-    /// at `k`.
+    fn prepare_divisor(self, k: u8) -> Option<Self::Prepared>;
+    /// `self × 10^k / divisor`, rounded by `table`, by a divisor
+    /// [`prepare_divisor`](Self::prepare_divisor) made at `k`.
     #[doc(hidden)]
     fn div_prepared(self, divisor: Self::Prepared, table: u16) -> Outcome<Self>;
     /// `self × b / c`, rounded by `table`, for a `c` that is not zero.
@@ -504,7 +504,7 @@ const fn div_up<I: [const] Magnitude + [const] Int>(a: I, k: u8, b: I, table: u1
 /// each class starts at, exact for every `a` and `b` of the magnitude's word, as their product is
 /// below `2^n` (Lemire, Kaser and Kurz, "Faster remainder by direct computation", 2019, lemma 1).
 #[inline]
-const fn prepare<I: [const] Magnitude + [const] Int>(
+const fn prepare_divisor<I: [const] Magnitude + [const] Int>(
     b: I, k: u8,
 ) -> Option<Prepared<I::Unsigned, I::Double>> {
     let (negative, b) = b.split();
@@ -526,8 +526,8 @@ const fn prepare<I: [const] Magnitude + [const] Int>(
     Some(Prepared { negative, whole, whole_past, multiplier, thresholds })
 }
 
-/// `a × 10^k / b`, rounded, by `b` [`prepare`]d at `k`: two products and a comparison, where
-/// [`div_up`] divides.
+/// `a × 10^k / b`, rounded, by `b` [prepared](prepare_divisor) at `k`: two products and a
+/// comparison, where [`div_up`] divides.
 #[inline(always)]
 #[expect(
     clippy::inline_always,
@@ -732,7 +732,7 @@ macro_rules! int {
             fn div_down(self, rhs: Self, k: u8, table: u16) -> Outcome<Self> { div_down(self, rhs, k, table) }
             type Prepared = Prepared<$unsigned, $double>;
             #[inline]
-            fn prepare(self, k: u8) -> Option<Self::Prepared> { prepare(self, k) }
+            fn prepare_divisor(self, k: u8) -> Option<Self::Prepared> { prepare_divisor(self, k) }
             #[inline(always)]
             fn div_prepared(self, divisor: Self::Prepared, table: u16) -> Outcome<Self> {
                 div_prepared(self, divisor, table)

@@ -102,7 +102,7 @@ pub trait DivRound: Contender {
 }
 
 /// A rounded quotient by a divisor prepared once for many: ddust's `Divisor`.
-pub trait PreparedDivRound: DivRound {
+pub trait DivRoundPrepared: DivRound {
     /// A divisor prepared.
     type Prepared: Copy;
 
@@ -316,10 +316,10 @@ pub fn format_by_display<T: fmt::Display>(value: &T, buffer: &mut Buffer) {
 /// `$function` is one token tree handed to every call, as the function to run for the contender.
 ///
 /// The operations: `add`, `compare` and `mul_round`, which every crate has; `div_round` and
-/// `format`, which the binary `fixed` lacks; `prepared_div_round`, by a prepared divisor, which only
-/// ddust has; `rescale_round`, which `fixnum` lacks too; `parse`, which the integer floors lack; the
-/// conversions `to_f64` and `from_f64`, which the `f64` floor does not need; and `mul_exact`, the
-/// price-times-quantity product, a row of its own types.
+/// `format`, which the binary `fixed` lacks; `div_round_prepared`, by a prepared divisor, which
+/// only ddust has; `rescale_round`, which `fixnum` lacks too; `parse`, which the integer floors
+/// lack; the conversions `to_f64` and `from_f64`, which the `f64` floor does not need; and
+/// `mul_exact`, the price-times-quantity product, a row of its own types.
 #[macro_export]
 macro_rules! for_each_contender {
     (add, $apply:ident, $function:tt) => {
@@ -343,7 +343,7 @@ macro_rules! for_each_contender {
         $crate::for_each_contender!(format, $apply, $function);
         $crate::for_each_contender!(@modes $apply $function);
     };
-    (prepared_div_round, $apply:ident, $function:tt) => {
+    (div_round_prepared, $apply:ident, $function:tt) => {
         $crate::for_each_contender!(@each $apply $function [ddust::Narrow ddust::Wide]);
         $crate::for_each_contender!(@modes $apply $function);
     };

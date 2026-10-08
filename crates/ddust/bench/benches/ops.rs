@@ -13,8 +13,8 @@ use core::hint::black_box;
 use std::io;
 
 use ddust_bench::contender::{
-    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, MulExact, MulRound, Parse,
-    PreparedDivRound, RescaleRound, ToF64,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, MulExact,
+    MulRound, Parse, RescaleRound, ToF64,
 };
 use ddust_bench::input::{self, Pairs, Predictability};
 use ddust_bench::{Harness, for_each_contender};
@@ -38,8 +38,8 @@ fn run(harness: &mut Harness) -> io::Result<()> {
         for_each_contender!(mul_exact, bench, mul_exact);
         for_each_contender!(mul_round, bench, mul_round);
         for_each_contender!(div_round, bench, div_round);
-        for_each_contender!(div_round, bench, div_round_one);
-        for_each_contender!(prepared_div_round, bench, div_round_prepared);
+        for_each_contender!(div_round, bench, div_round_one_divisor);
+        for_each_contender!(div_round_prepared, bench, div_round_prepared);
         for_each_contender!(rescale_round, bench, rescale_round);
         for_each_contender!(parse, bench, parse);
         for_each_contender!(format, bench, format);
@@ -55,8 +55,8 @@ fn run(harness: &mut Harness) -> io::Result<()> {
         for_each_contender!(add, bench, add_chain);
         for_each_contender!(mul_round, bench, mul_round_chain);
         for_each_contender!(div_round, bench, div_round_chain);
-        for_each_contender!(div_round, bench, div_round_one_chain);
-        for_each_contender!(prepared_div_round, bench, div_round_prepared_chain);
+        for_each_contender!(div_round, bench, div_round_one_divisor_chain);
+        for_each_contender!(div_round_prepared, bench, div_round_prepared_chain);
     }
     Ok(())
 }
@@ -204,12 +204,12 @@ fn div_round<C: DivRound>(harness: &mut Harness, predictability: Predictability)
 }
 
 /// The quotient at one scale, rounded, of each dividend by one divisor.
-fn div_round_one<C: DivRound>(
+fn div_round_one_divisor<C: DivRound>(
     harness: &mut Harness, predictability: Predictability,
 ) -> io::Result<()> {
     throughput::<C, _>(
         harness,
-        &name::<C>("div-round-one", predictability),
+        &name::<C>("div-round-one-divisor", predictability),
         || input::dividends_and_one_divisor(C::WIDTH, predictability),
         C::checked_div_round,
     )
@@ -217,7 +217,7 @@ fn div_round_one<C: DivRound>(
 
 /// The quotient at one scale, rounded, of each dividend by one divisor prepared once, before the
 /// timing.
-fn div_round_prepared<C: PreparedDivRound>(
+fn div_round_prepared<C: DivRoundPrepared>(
     harness: &mut Harness, predictability: Predictability,
 ) -> io::Result<()> {
     let set = input::dividends_and_one_divisor(C::WIDTH, predictability);
@@ -231,24 +231,24 @@ fn div_round_prepared<C: PreparedDivRound>(
 }
 
 /// The set's divisor, prepared.
-fn prepared<C: PreparedDivRound>(set: &Pairs) -> Option<C::Prepared> {
+fn prepared<C: DivRoundPrepared>(set: &Pairs) -> Option<C::Prepared> {
     set.right.first().and_then(|&steps| C::from_steps(steps)).as_ref().and_then(C::prepare)
 }
 
 /// The quotient at one scale, rounded, of each dividend by one divisor, as a chain.
-fn div_round_one_chain<C: DivRound>(
+fn div_round_one_divisor_chain<C: DivRound>(
     harness: &mut Harness, predictability: Predictability,
 ) -> io::Result<()> {
     latency::<C>(
         harness,
-        &name::<C>("div-round-one-chain", predictability),
+        &name::<C>("div-round-one-divisor-chain", predictability),
         || input::dividends_and_one_divisor(C::WIDTH, predictability),
         C::checked_div_round,
     )
 }
 
 /// The quotient at one scale, rounded, of each dividend by one divisor prepared once, as a chain.
-fn div_round_prepared_chain<C: PreparedDivRound>(
+fn div_round_prepared_chain<C: DivRoundPrepared>(
     harness: &mut Harness, predictability: Predictability,
 ) -> io::Result<()> {
     let set = input::dividends_and_one_divisor(C::WIDTH, predictability);

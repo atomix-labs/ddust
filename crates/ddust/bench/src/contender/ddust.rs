@@ -6,8 +6,8 @@ use ddust::scale::Sum;
 use ddust::{Decimal, Divisor, Fixed};
 
 use super::{
-    Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, PreparedDivRound, RescaleRound, ToF64, low_byte,
+    Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, Kind,
+    MulExact, MulRound, Parse, RescaleRound, ToF64, low_byte,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -77,7 +77,7 @@ macro_rules! ddust_rounded {
         }
 
         /// A `Divisor`, prepared once, and `checked_div_round` by it.
-        impl PreparedDivRound for $type {
+        impl DivRoundPrepared for $type {
             type Prepared = Divisor<$integer, Fixed<$decimals>>;
 
             fn prepare(b: &Self::Value) -> Option<Self::Prepared> {

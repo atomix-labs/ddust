@@ -11,8 +11,8 @@ mod tests {
     use core::fmt::{Debug, Display};
 
     use ddust_bench::contender::{
-        Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact,
-        MulRound, Parse, PreparedDivRound, RescaleRound, ToF64,
+        Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, Kind,
+        MulExact, MulRound, Parse, RescaleRound, ToF64,
     };
     use ddust_bench::input::{self, Predictability, Width};
     use ddust_bench::{for_each_contender, oracle};
@@ -159,7 +159,7 @@ mod tests {
         tally.verdict("div-round", C::NAME, C::WIDTH, C::KIND, C::EXACT, failures);
     }
 
-    fn prepared_div_round<C: PreparedDivRound>(failures: &mut Vec<String>) {
+    fn div_round_prepared<C: DivRoundPrepared>(failures: &mut Vec<String>) {
         let decimals = C::WIDTH.decimals();
         let mut tally = Tally::default();
         for predictability in Predictability::ALL {
@@ -300,7 +300,7 @@ mod tests {
     every!(every_order_agrees: compare by compare);
     every!(every_rounded_product_agrees: mul_round by mul_round);
     every!(every_rounded_quotient_agrees: div_round by div_round);
-    every!(every_prepared_quotient_agrees: prepared_div_round by prepared_div_round);
+    every!(every_prepared_quotient_agrees: div_round_prepared by div_round_prepared);
     every!(every_value_to_cents_agrees: rescale_round by rescale_round);
     every!(every_text_reads_as_the_oracle_does: parse by parse);
     every!(every_text_written_reads_back: format by format);

@@ -3,7 +3,7 @@
 //! twin; past the range the other panics with overflow checks on, and wraps otherwise.
 
 use crate::decimal::Decimal;
-use crate::divisor::DivideBy;
+use crate::divisor::DivisorOf;
 use crate::int::{Int, Operation, Outcome};
 use crate::round::{Ceil, Floor, RoundingMode, Trunc};
 use crate::scale::Scale;
@@ -169,10 +169,10 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
         S: [const] Scale,
-        D: [const] DivideBy<I>,
+        D: [const] DivisorOf<I>,
         R: [const] RoundingMode,
     {
-        match rhs.divide_round(self.steps(), mode.table()) {
+        match D::divide_round(self.steps(), rhs, mode.table()) {
             Some(steps) => Self::from_steps(steps.operator(Operation::Divide), self.scale()),
             None => divided_by_zero(),
         }
@@ -196,10 +196,10 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     where
         I: [const] Int,
         S: [const] Scale,
-        D: [const] DivideBy<I>,
+        D: [const] DivisorOf<I>,
         R: [const] RoundingMode,
     {
-        match rhs.divide_round(self.steps(), mode.table()) {
+        match D::divide_round(self.steps(), rhs, mode.table()) {
             Some(outcome) => match outcome.checked() {
                 Some(steps) => Some(Self::from_steps(steps, self.scale())),
                 None => None,

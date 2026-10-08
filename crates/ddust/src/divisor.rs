@@ -1,4 +1,4 @@
-//! A divisor prepared once, for many divisions by it: [`Divisor`], and [`DivideBy`], what
+//! A divisor prepared once, for many divisions by it: [`Divisor`], and [`DivisorOf`], what
 //! [`div_round`](Decimal::div_round) takes, a decimal or a prepared divisor.
 
 use core::hash::{Hash, Hasher};
@@ -86,7 +86,7 @@ impl<I: Int, S: Scale> Divisor<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match value.steps().prepare(value.decimals()) {
+        match value.steps().prepare_divisor(value.decimals()) {
             Some(prepared) => Some(Self { value, prepared }),
             None => None,
         }
@@ -100,14 +100,14 @@ impl<I: Int, S: Scale> Divisor<I, S> {
     }
 }
 
-/// The seal on [`DivideBy`].
+/// The seal on [`DivisorOf`].
 mod sealed {
     use crate::decimal::Decimal;
     use crate::divisor::Divisor;
     use crate::int::Int;
     use crate::scale::Scale;
 
-    /// Seals [`DivideBy`](super::DivideBy): a decimal and a prepared divisor are all there are.
+    /// Seals [`DivisorOf`](super::DivisorOf): a decimal and a prepared divisor are all there are.
     pub trait Sealed {}
 
     impl<I, S> Sealed for Decimal<I, S> {}
@@ -129,36 +129,36 @@ mod sealed {
 /// assert_eq!(total.div_round(count, Trunc), dec!(33.33), "by a decimal");
 /// assert_eq!(total.div_round(by_count, Trunc), dec!(33.33), "by a prepared divisor");
 /// ```
-pub const trait DivideBy<I: Int>: sealed::Sealed + Copy {
-    /// `dividend × 10^k / self`, rounded by `table`, `k` being the divisor's decimals; `None` for a
-    /// zero divisor.
+pub const trait DivisorOf<I: Int>: sealed::Sealed + Copy {
+    /// `dividend × 10^k / divisor`, rounded by `table`, `k` being the divisor's decimals; `None`
+    /// for a zero divisor.
     #[doc(hidden)]
-    fn divide_round(self, dividend: I, table: u16) -> Option<Outcome<I>>;
+    fn divide_round(dividend: I, divisor: Self, table: u16) -> Option<Outcome<I>>;
 }
 
-const impl<I: [const] Int, T: [const] Scale> DivideBy<I> for Decimal<I, T> {
+const impl<I: [const] Int, T: [const] Scale> DivisorOf<I> for Decimal<I, T> {
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "as `Int::div_up`'s: out of line, a binary that rounds by two modes passes the table at run time"
     )]
-    fn divide_round(self, dividend: I, table: u16) -> Option<Outcome<I>> {
-        let divisor = self.steps();
-        if divisor == I::ZERO {
+    fn divide_round(dividend: I, divisor: Self, table: u16) -> Option<Outcome<I>> {
+        let steps = divisor.steps();
+        if steps == I::ZERO {
             return None;
         }
-        Some(dividend.div_up(self.decimals(), divisor, table))
+        Some(dividend.div_up(divisor.decimals(), steps, table))
     }
 }
 
-const impl<I: [const] Int, T: Scale> DivideBy<I> for Divisor<I, T> {
+const impl<I: [const] Int, T: Scale> DivisorOf<I> for Divisor<I, T> {
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "as `Int::div_up`'s: out of line, a binary that rounds by two modes passes the table at run time"
     )]
-    fn divide_round(self, dividend: I, table: u16) -> Option<Outcome<I>> {
-        Some(dividend.div_prepared(self.prepared, table))
+    fn divide_round(dividend: I, divisor: Self, table: u16) -> Option<Outcome<I>> {
+        Some(dividend.div_prepared(divisor.prepared, table))
     }
 }
 
@@ -178,7 +178,7 @@ mod tests {
     /// value, whether it overflowed, and its value held at the range's end.
     fn check<I: Int>(a: I, b: I, k: u8, mode: Rounding) -> Result<(), TestCaseError> {
         let table = mode.table();
-        let Some(prepared) = b.prepare(k) else {
+        let Some(prepared) = b.prepare_divisor(k) else {
             prop_assert_eq!(b, I::ZERO, "only zero is refused");
             return Ok(());
         };
