@@ -879,6 +879,13 @@ mod tests {
         let big = 10_i128.pow(25);
         assert_eq!(big.mul_down(big, 18, TRUNC).checked(), Some(10_i128.pow(32)), "10^50 / 10^18");
         assert_eq!(big.mul_down(big, 10, TRUNC).checked(), None, "10^40 is past an i128");
+        let top = 10_i128.pow(38);
+        assert_eq!(
+            top.mul_down(top, 76, TRUNC).checked(),
+            Some(1),
+            "10^76 / 10^76, past a u128's powers"
+        );
+        assert_eq!(top.mul_down(top, 77, TRUNC).checked(), Some(0), "10^76 / 10^77");
         assert_eq!(
             i128::MIN.mul_down(1, 0, TRUNC).checked(),
             Some(i128::MIN),

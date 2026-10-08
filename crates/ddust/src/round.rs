@@ -82,8 +82,8 @@ macro_rules! modes {
         }
 
         impl Rounding {
-            /// Every mode, for the values the test integrations choose from.
-            #[cfg(any(feature = "arbitrary", feature = "proptest"))]
+            /// Every mode, for the values the test integrations and the crate's tests choose from.
+            #[cfg(any(test, feature = "arbitrary", feature = "proptest"))]
             pub(crate) const MODES: &[Self] = &[$(Self::$name),*];
         }
 

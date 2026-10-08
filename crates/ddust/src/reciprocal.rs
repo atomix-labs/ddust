@@ -61,9 +61,11 @@ const fn product(a: u64, b: u64) -> u128 {
 }
 
 /// `(u2:u1:u0) / divisor` and the remainder, for a `divisor` whose top bit is set and `u2` below
-/// it, so the quotient fits two words: both at once by the divisor's two-word inverse, four
-/// products that do not wait on one another and one correction (GMP's `mpn_div_qr_1n_pi2`, the
-/// step of "Improved division by invariant integers" for three words).
+/// it, so the quotient fits two words.
+///
+/// Both words at once by the divisor's two-word inverse, four products that do not wait on one
+/// another and one correction (GMP's `mpn_div_qr_1n_pi2`, the step of "Improved division by
+/// invariant integers" for three words).
 #[inline]
 const fn divide_three_by_one(
     u2: u64, u1: u64, u0: u64, divisor: u64, inverse_high: u64, inverse_low: u64,
@@ -106,8 +108,7 @@ const RECIPROCALS: [Reciprocal; 20] = {
     table
 };
 
-/// The low word of the two-word inverse of `10^k`, shifted as in [`RECIPROCALS`], for `k` in
-/// `0..=19`.
+/// The low word of `10^k`'s two-word inverse, shifted as in [`RECIPROCALS`], for `k` in `0..=19`.
 #[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
 const INVERSES_LOW: [u64; 20] = {
     let mut table = [0_u64; 20];
@@ -253,12 +254,13 @@ pub(crate) const fn divide_u128_past_a_word(numerator: u128, k: u8) -> Option<(u
     Some(((u128::from(q1) << 64) | u128::from(q0), remainder >> shift, divisor >> shift))
 }
 
-/// `numerator / 10^k` and the remainder, for a numerator below 2^127, or `None` unless `k` is from
-/// 1 to 19: a multiply-high by `m = ⌊2^(128 + l) / 10^k⌋ + 1 − 2^128`, `l` being `⌈log2 10^k⌉`,
-/// and a shift, `⌊(n + ⌊n × m / 2^128⌋) / 2^l⌋`, exact for every numerator below 2^128
-/// (Granlund and Montgomery, "Division by invariant integers using multiplication", 1994,
-/// theorem 4.2); below 2^127 the sum fits a `u128`. `m` is the shifted power's two-word inverse,
-/// and one.
+/// `numerator / 10^k` and the remainder, for a numerator below 2^127, or `None` unless `k`
+/// is from 1 to 19.
+///
+/// A multiply-high by `m = ⌊2^(128 + l) / 10^k⌋ + 1 − 2^128`, `l` being `⌈log2 10^k⌉`, and a
+/// shift, `⌊(n + ⌊n × m / 2^128⌋) / 2^l⌋`, exact for every numerator below 2^128 (Granlund and
+/// Montgomery, "Division by invariant integers using multiplication", 1994, theorem 4.2); below
+/// 2^127 the sum fits a `u128`. `m` is one more than the shifted power's two-word inverse.
 #[inline]
 #[expect(
     clippy::indexing_slicing,
@@ -291,8 +293,8 @@ pub(crate) const fn divide_u127(numerator: u128, k: u8) -> Option<(u128, u64)> {
 )]
 #[expect(
     clippy::inline_always,
-    reason = "out of line, LLVM loses the constant `k`, and a product keeps the division past `10^19`, \
-              its call and a stack frame"
+    reason = "out of line, LLVM loses the constant `k`, and a wide rounded product keeps the long \
+              division for a power past `10^19`: a call, and a stack frame on every product"
 )]
 pub(crate) const fn divide_u256(
     high_half: u128, low_half: u128, k: u8,
@@ -313,8 +315,8 @@ pub(crate) const fn divide_u256(
     Some((quotient_high, quotient_low, remainder, power))
 }
 
-/// `(high:low) / 10^k` and the remainder, for a `high` word below the power, so the quotient fits
-/// 128 bits, by the power's reciprocal and the low word of its two-word inverse.
+/// `(high_word:low_half) / 10^k` and the remainder, for a `high_word` below the power, so the
+/// quotient fits 128 bits, by the power's reciprocal and the low word of its two-word inverse.
 #[inline]
 const fn divide_below_power(
     high_word: u64, low_half: u128, reciprocal: Reciprocal, inverse_low: u64,
@@ -604,8 +606,19 @@ mod tests {
     use proptest::prelude::*;
     use rstest::rstest;
 
-    use super::{INVERSES_LOW, RECIPROCALS, divide_u128, divide_u128_by_short_power, divide_u256};
+    use super::{
+        INVERSES_LOW, RECIPROCALS, divide_u127, divide_u128, divide_u128_by_short_power,
+        divide_u128_past_a_word, divide_u256,
+    };
     use crate::word::U256;
+
+    /// A remainder at an edge of its range: zero, one, or one below the power.
+    #[derive(Debug, Clone, Copy)]
+    enum Edge {
+        Zero,
+        One,
+        Top,
+    }
 
     /// `10^k`.
     fn power(k: u8) -> u128 {
@@ -683,7 +696,11 @@ mod tests {
             Some((0, u128::MAX, 0, power)),
             "(2^128 − 1) × 10^18 / 10^18"
         );
-        assert_eq!(divide_u256(10_u128.pow(18), 0, 18), Some((1, 0, 0, power)), "2^128");
+        assert_eq!(
+            divide_u256(10_u128.pow(18), 0, 18),
+            Some((1, 0, 0, power)),
+            "a quotient of 2^128"
+        );
         assert_eq!(
             divide_u256(u128::MAX, u128::MAX, 19).map(|(high, _, _, _)| high),
             Some(u128::MAX / 10_u128.pow(19)),
@@ -698,15 +715,15 @@ mod tests {
         #[values(0, 1, 9, 18, 19)] k: u8,
         #[values(0, 1, u128::from(u64::MAX), 1 << 64, u128::MAX >> 1, u128::MAX - 1, u128::MAX)]
         quotient: u128,
-        #[values(0, 1, 2)] remainder_from_the_top: u8,
+        #[values(Edge::Zero, Edge::One, Edge::Top)] edge: Edge,
     ) {
-        // q × 10^k + r with r at 0, 1 and the divisor's top: where the step's two corrections
-        // run, the one about half the time and the rare one.
+        // q × 10^k + r with r at 0, 1 and 10^k − 1: where the step's two corrections run, the one
+        // taken about half the time and the rare one.
         let d = power(k);
-        let remainder = match remainder_from_the_top {
-            0 => 0,
-            1 => 1 % d,
-            _ => d - 1,
+        let remainder = match edge {
+            Edge::Zero => 0,
+            Edge::One => 1 % d,
+            Edge::Top => d - 1,
         };
         let (high, low) = U256::widening(quotient, d).halves();
         let (low, carry) = low.overflowing_add(remainder);
@@ -739,11 +756,11 @@ mod tests {
             // 10^19 × 2^64 is past the top bit, outside the domain.
             for n in edges.into_iter().filter(|&n| n <= top) {
                 let expected = Some((n / d, u64::try_from(n % d).unwrap_or(0)));
-                assert_eq!(super::divide_u127(n, k), expected, "{n} / 10^{k}");
+                assert_eq!(divide_u127(n, k), expected, "{n} / 10^{k}");
             }
         }
-        assert_eq!(super::divide_u127(7, 0), None, "10^0 has no multiplier in a word");
-        assert_eq!(super::divide_u127(7, 20), None, "10^20 is past a word");
+        assert_eq!(divide_u127(7, 0), None, "10^0's multiplier is past two words");
+        assert_eq!(divide_u127(7, 20), None, "10^20 is past a word");
     }
 
     #[test]
@@ -804,14 +821,14 @@ mod tests {
         fn a_numerator_below_the_top_bit_divides_as_division_does(n in 0_u128..1 << 127, k in 1_u8..=19) {
             let d = power(k);
             let expected = Some((n / d, u64::try_from(n % d).unwrap_or(0)));
-            prop_assert_eq!(super::divide_u127(n, k), expected);
+            prop_assert_eq!(divide_u127(n, k), expected);
         }
 
         #[test]
         fn a_quotient_past_a_word_divides_as_division_does(n: u128, k in 0_u8..=19) {
             let d = power(k);
             let expected = Some((n / d, u64::try_from(n % d).unwrap_or(0)));
-            prop_assert_eq!(super::divide_u128_past_a_word(n, k).map(|(q, r, _)| (q, r)), expected);
+            prop_assert_eq!(divide_u128_past_a_word(n, k).map(|(q, r, _)| (q, r)), expected);
         }
 
         #[test]

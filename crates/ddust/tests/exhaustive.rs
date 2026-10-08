@@ -1,7 +1,7 @@
 //! Every pair of 8-bit values, signed and unsigned, through every operation and every rounding
 //! mode, against an exact reference: integer arithmetic in an `i128`, and each mode by its
-//! definition rather than its table; and random pairs at 32 and 64 bits, where an `i128` is still
-//! exact.
+//! definition rather than its table; random pairs at 32 and 64 bits, where an `i128` is still
+//! exact; and random 128-bit pairs whose product an `i128` holds, either side of 2^126.
 
 #[cfg(test)]
 #[expect(clippy::arithmetic_side_effects, reason = "the reference's own arithmetic, in an i128")]
@@ -390,8 +390,8 @@ mod tests {
             left.checked_mul_round_to(right, scale(to), mode).map(Decimal::steps),
             reference(x * y)
         );
-        // The magnitudes' product is below 2^127, and scaled up it may pass an `i128` but not a
-        // `u128`.
+        // The magnitudes' product is below 2^127; scaled up, it may pass an `i128` and still fit a
+        // `u128`, so the reference scales it in a `u128`.
         let (ux, uy) = (x.unsigned_abs(), y.unsigned_abs());
         let expected = if a + b >= to {
             let Ok(exact) = i128::try_from(ux * uy) else {

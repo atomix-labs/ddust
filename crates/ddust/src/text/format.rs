@@ -402,7 +402,7 @@ pub(crate) fn write_ascii_narrow(
 fn write_ascii_split(
     negative: bool, magnitude: u128, decimals: u8, out: &mut [u8],
 ) -> Option<usize> {
-    let (_, integer, fraction, _) = reciprocal::divide_u256(0, magnitude, decimals)?;
+    let (integer, fraction, _) = reciprocal::divide_u128_past_a_word(magnitude, decimals)?;
     let position = if negative && magnitude != 0 {
         *out.first_mut()? = b'-';
         1

@@ -183,8 +183,9 @@ pub(crate) const trait Word: Copy + [const] Ord {
 
     /// `self × other / 10^k`, [`rounded`] by `table` for a result of sign `negative`, in this word,
     /// when the product and its rounding fit below the word's top bit, and so are in range of
-    /// either sign; `None` when they may not, for the double word to compute. A word whose double
-    /// divides as fast as it does leaves every product to the double.
+    /// either sign; `None` when they may not, for the double word to compute.
+    ///
+    /// A word whose double divides as fast as it does leaves every product to the double.
     #[inline]
     fn narrow_mul_down(self, _other: Self, _k: u8, _negative: bool, _table: u16) -> Option<Self> {
         None
@@ -293,12 +294,12 @@ macro_rules! word {
 }
 
 word!(u8, u16, u32, u64, u128 {
-    // Operands whose leading zeros add to 130 multiply below 2^126, and a bias below 10^19 keeps
-    // the sum below 2^127: one multiply-high divides it whatever the quotient's size, and the
-    // result is in range of either sign. Where the double's path branches on the product's size,
-    // the quotient's and the sign, this branches once, on the operands' size, which operands of
-    // mixed sizes and signs predict. Measured: a wide rounded product on mixed operands takes
-    // 7.46 ns, not 9.23, and on large ones 10.43, not 9.65.
+    // Operands whose leading zeros add to 130 or more multiply below 2^126, and a bias below 10^19
+    // keeps the sum below 2^127: one multiply-high divides it whatever the quotient's size, and the
+    // result is in range of either sign, joined with no branch on it. Its one branch is on the
+    // operands' size, which operands of mixed sizes predict; the double's path branches on the
+    // result's sign too, which signs mixed at random mispredict half the time. Measured: a wide
+    // rounded product on mixed operands takes 7.46 ns, not 9.23, and on large ones 10.43, not 9.65.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -741,16 +742,20 @@ const impl Word for U256 {
     // A power of one word divides any value by one path: the high half's quotient when it is at
     // least the power, then one step for that of its remainder and the low half. A mode that reads
     // no parity rounds by a bias added first, as the narrow word's does, and any other by the
-    // remainder, as does a bias that would pass 2^256. One path keeps the product small enough to
-    // inline, where a path for each size of quotient did not.
+    // remainder, as does a value the bias would carry past 2^256. A wide rounded product takes 205
+    // instructions by one path and 376 by a path for each size of quotient, at the same speed.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
         reason = "measured: out of line, a binary that rounds by two modes passes the table at run time, and a rounded product on mixed inputs takes 8.8 ns narrow, not 4.0, and 17.7 wide on predictable ones, not 10.6"
     )]
     fn divide_pow10_round(self, k: u8, negative: bool, table: u16) -> Option<(Self, bool)> {
-        let Some(power) = pow10_u128(k) else { return None };
-        let biased = match parity_free_bias(table, negative, power) {
+        // A power past 10^38 has no bias in a `u128`, and divides by long division below.
+        let bias = match pow10_u128(k) {
+            Some(power) => parity_free_bias(table, negative, power),
+            None => None,
+        };
+        let biased = match bias {
             Some(bias) => match self.checked_add(Self::from_u128(bias)) {
                 Some(biased) => Some((biased, bias)),
                 None => None,
@@ -838,19 +843,6 @@ mod tests {
     use super::{Double, U256, Word, rounded, rounded_zero, rounds_up};
     use crate::round::{Rounding, RoundingMode};
 
-    /// Every mode.
-    const MODES: [Rounding; 9] = [
-        Rounding::Floor,
-        Rounding::Ceil,
-        Rounding::Trunc,
-        Rounding::Expand,
-        Rounding::HalfFloor,
-        Rounding::HalfCeil,
-        Rounding::HalfTrunc,
-        Rounding::HalfExpand,
-        Rounding::HalfEven,
-    ];
-
     /// A 256-bit word from its two halves.
     const fn wide(high: u128, low: u128) -> U256 {
         U256 { high, low }
@@ -937,12 +929,11 @@ mod tests {
 
         #[test]
         fn a_wide_value_divides_by_a_power_as_long_division_does(
-            high: u128, low: u128, k in 0_u8..=38, negative: bool,
-            mode in select(MODES.to_vec()),
+            high: u128, low: u128, k in 0_u8..=77, negative: bool, mode in select(Rounding::MODES),
         ) {
-            // Every quotient, past 128 bits as well as within them, against the reference's long
-            // division and `rounded`.
-            let (value, power) = (wide(high, low), U256::pow10(k).expect("at most 10^38"));
+            // Every quotient, past 128 bits as well as within them, and every power the widest
+            // word holds, against the reference's long division and `rounded`.
+            let (value, power) = (wide(high, low), U256::pow10(k).expect("at most 10^77"));
             let (quotient, remainder) = value.div_rem(power);
             let table = mode.table();
             let expected = (rounded(quotient, remainder, power, negative, table), remainder == U256::ZERO);
