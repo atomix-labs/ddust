@@ -69,7 +69,9 @@ jobs:
           restore-keys: callgrind-${{ runner.os }}-${{ runner.arch }}-
       # A kernel whose instructions rise more than 1% over main's fails the job.
       - run: cargo bench --locked --bench callgrind
-      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      # main saves its counts even when the job fails on a rise: the rise is merged, and the next
+      # pull request compares with main as it is, not with the counts before it.
+      - if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: crates/ddust/bench/target/gungraun
