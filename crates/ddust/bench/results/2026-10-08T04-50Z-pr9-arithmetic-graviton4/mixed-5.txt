@@ -1,0 +1,51 @@
+per operation                                                                   ns   cycles    instr   IPC branches  br-miss L1i-miss L1d-miss fe-stall be-stall   GHz spread
+mixed/narrow/predictable/i64                                                0.4843    1.356     6.61  4.87    0.601   0.0002   0.0000   0.0000    0.001    0.196  2.80   1.3%
+mixed/narrow/predictable/f64                                                0.4859    1.360     5.61  4.12    0.201   0.0002   0.0000   0.0000    0.001    0.657  2.80   1.5%
+mixed/narrow/predictable/ddust D64<8>                                       2.6417    7.392    37.31  5.05    4.246   0.0043   0.0001   0.0002    0.023    2.077  2.80   1.3%
+mixed/narrow/predictable/bigdecimal 0.4.11                                927.1823 2593.527 10824.80  4.17 2016.610   6.8373   0.2975   0.3471   79.318  733.961  2.80   1.2%
+mixed/narrow/predictable/decimal-rs 0.2.0                                  51.7673  144.867   360.99  2.49   32.733   0.2844   0.0035   0.0237    1.199   79.075  2.80   1.4%
+mixed/narrow/predictable/fastnum 0.7.5 D64                                 35.4927   99.329   263.26  2.65   47.546   0.5122   0.0031   0.0407    3.028   44.772  2.80   1.4%
+mixed/narrow/predictable/fin_decimal 0.4.0 Decimal<8>                       3.4250    9.579    40.00  4.18    5.601   0.0135   0.0001   0.0002    0.062    3.262  2.80   2.4%
+mixed/narrow/predictable/fixdec 0.1.0 D64                                   2.2405    6.273    29.31  4.67    3.548   0.0076   0.0001   0.0001    0.044    1.831  2.80   1.8%
+mixed/narrow/predictable/nexus-decimal 1.2.2 <i64, 8>                       2.5262    7.067    32.01  4.53    3.847   0.0051   0.0001   0.0002    0.032    2.261  2.80   1.2%
+mixed/narrow/predictable/primitive_fixed_point_decimal 1.5.0 <i64, 8>       3.5673    9.984    43.11  4.32    5.046   0.0120   0.0001   0.0002    0.067    3.187  2.80   1.2%
+mixed/narrow/predictable/rust_decimal 1.43.0                               32.4954   90.944   266.75  2.93   35.248   0.3192   0.0018   0.0115    1.725   38.409  2.80   2.2%
+mixed/wide/predictable/i128                                                 3.5520    9.938    48.73  4.90    4.592   0.0032   0.0001   0.0028    0.022    2.314  2.80   1.2%
+mixed/wide/predictable/f64                                                  0.4861    1.361     5.61  4.12    0.201   0.0002   0.0000   0.0000    0.001    0.658  2.80   1.3%
+mixed/wide/predictable/ddust D128<18>                                       9.7635   27.315    86.81  3.18    5.001   0.0170   0.0003   0.0048    0.053   12.982  2.80   1.5%
+mixed/wide/predictable/bigdecimal 0.4.11                                 3041.0502 8506.422 45091.36  5.30 8914.255   6.3393   0.9578   0.5260   95.350  130.518  2.80   0.7%
+mixed/wide/predictable/decimal-rs 0.2.0                                    74.9855  209.863   485.95  2.32   45.542   0.5916   0.0047   0.0243    2.363  119.568  2.80   1.4%
+mixed/wide/predictable/fastnum 0.7.5 D128                                  79.3947  222.050   575.03  2.59   87.831   1.0695   0.0138   0.0525    6.171   81.991  2.80   3.3%
+mixed/wide/predictable/fin_decimal 0.4.0 Decimal128<18>                    10.9070   30.484   101.03  3.31   13.413   0.0586   0.0004   0.0052    0.230   12.833  2.79   9.4%
+mixed/wide/predictable/nexus-decimal 1.2.2 <i128, 18>                      12.1535   34.021   113.85  3.35   11.659   0.1205   0.0005   0.0045    0.528   13.049  2.80   4.6%
+mixed/wide/predictable/primitive_fixed_point_decimal 1.5.0 <i128, 18>      13.9811   39.140   148.61  3.80   12.601   0.0002   0.0005   0.0053    0.002   16.349  2.80   1.9%
+mixed/wide/predictable/rust_decimal 1.43.0                                 45.4207  126.961   279.52  2.20   40.642   0.6204   0.0028   0.0141    3.397   63.005  2.80   3.0%
+mixed/narrow/predictable/ddust D64<8> Trunc                                 2.2198    6.209    32.11  5.17    3.846   0.0031   0.0001   0.0001    0.013    1.405  2.80   1.4%
+mixed/narrow/predictable/ddust D64<8> HalfExpand                            2.3987    6.715    34.31  5.11    3.846   0.0039   0.0001   0.0001    0.018    1.498  2.80   1.3%
+mixed/wide/predictable/ddust D128<18> Trunc                                 9.2471   25.873    81.81  3.16    5.201   0.0075   0.0004   0.0041    0.025   12.721  2.80   1.3%
+mixed/wide/predictable/ddust D128<18> HalfExpand                            9.4699   26.494    85.61  3.23    5.001   0.0040   0.0003   0.0044    0.016   12.008  2.80   1.2%
+mixed/narrow/unpredictable/i64                                              0.4698    1.315     6.60  5.02    0.600   0.0000   0.0000   0.0004    0.000    0.176  2.80   3.3%
+mixed/narrow/unpredictable/f64                                              0.4839    1.354     5.60  4.14    0.200   0.0000   0.0000   0.0569    0.000    0.654  2.80   2.9%
+mixed/narrow/unpredictable/ddust D64<8>                                     2.7500    7.696    29.55  3.84    3.357   0.1231   0.0001   0.0596    0.818    1.050  2.80   2.6%
+mixed/narrow/unpredictable/bigdecimal 0.4.11                              928.4162 2596.570 10316.39  3.97 1911.219   7.2974   0.1341   0.4113   81.762  784.544  2.80   0.4%
+mixed/narrow/unpredictable/decimal-rs 0.2.0                                50.8975  142.316   313.83  2.21   26.981   0.8636   0.0010   0.2358    4.005   72.254  2.80   0.6%
+mixed/narrow/unpredictable/fastnum 0.7.5 D64                               31.0153   86.707   199.70  2.30   40.199   1.3731   0.0014   0.1555    7.543   25.971  2.80   0.6%
+mixed/narrow/unpredictable/fin_decimal 0.4.0 Decimal<8>                     4.8122   13.460    31.54  2.34    4.966   0.2996   0.0002   0.0347    1.292    2.188  2.80   4.1%
+mixed/narrow/unpredictable/fixdec 0.1.0 D64                                 3.1954    8.944    24.59  2.75    3.173   0.2450   0.0002   0.0336    1.294    0.831  2.80   5.7%
+mixed/narrow/unpredictable/nexus-decimal 1.2.2 <i64, 8>                     3.3727    9.442    27.27  2.89    3.404   0.2492   0.0002   0.0338    1.204    1.030  2.80   5.0%
+mixed/narrow/unpredictable/primitive_fixed_point_decimal 1.5.0 <i64, 8>     3.6172   10.118    25.29  2.50    3.162   0.4033   0.0002   0.0331    1.894    0.772  2.80   4.9%
+mixed/narrow/unpredictable/rust_decimal 1.43.0                             34.9858   97.840   255.45  2.61   34.282   1.1064   0.0007   0.1770    6.109   32.495  2.80   0.6%
+mixed/wide/unpredictable/i128                                               3.5040    9.808    34.98  3.57    3.464   0.2438   0.0002   0.1193    1.046    0.575  2.80   6.5%
+mixed/wide/unpredictable/f64                                                0.4779    1.337     5.60  4.19    0.200   0.0000   0.0000   0.0302    0.000    0.637  2.80   2.9%
+mixed/wide/unpredictable/ddust D128<18>                                     7.2340   20.230    61.82  3.06    4.059   0.3309   0.0003   0.1153    1.895    4.945  2.80   2.1%
+mixed/wide/unpredictable/bigdecimal 0.4.11                               2051.9514 5738.939 28329.55  4.94 5546.076  11.6386   0.5763   0.8020  135.327  404.509  2.80   0.2%
+mixed/wide/unpredictable/decimal-rs 0.2.0                                  53.1774  148.630   319.91  2.15   27.318   1.0917   0.0011   0.2441    5.013   74.978  2.79   0.6%
+mixed/wide/unpredictable/fastnum 0.7.5 D128                                59.9464  167.601   392.38  2.34   66.463   2.3412   0.0033   0.2654   13.297   42.507  2.80   0.4%
+mixed/wide/unpredictable/fin_decimal 0.4.0 Decimal128<18>                   9.7686   27.315    68.24  2.50    9.377   0.5616   0.0002   0.1382    2.447    5.956  2.80   1.4%
+mixed/wide/unpredictable/nexus-decimal 1.2.2 <i128, 18>                     8.4684   23.678    68.61  2.90    7.565   0.5543   0.0003   0.1153    2.851    4.094  2.80   2.0%
+mixed/wide/unpredictable/primitive_fixed_point_decimal 1.5.0 <i128, 18>     8.4068   23.508    70.42  3.00    6.100   0.5383   0.0003   0.1171    2.817    5.082  2.80   1.8%
+mixed/wide/unpredictable/rust_decimal 1.43.0                               42.1653  117.901   287.89  2.44   39.421   1.6151   0.0008   0.1725    9.150   35.903  2.80   0.5%
+mixed/narrow/unpredictable/ddust D64<8> Trunc                               2.4173    6.758    24.86  3.68    3.127   0.1222   0.0001   0.0327    0.781    0.748  2.80   3.6%
+mixed/narrow/unpredictable/ddust D64<8> HalfExpand                          2.5728    7.197    27.74  3.85    3.127   0.1189   0.0001   0.0324    0.804    0.782  2.80   3.1%
+mixed/wide/unpredictable/ddust D128<18> Trunc                               6.4919   18.163    54.74  3.01    4.090   0.3323   0.0003   0.1147    1.989    3.753  2.80   2.5%
+mixed/wide/unpredictable/ddust D128<18> HalfExpand                          6.9222   19.357    59.47  3.07    4.059   0.3284   0.0003   0.1155    1.944    4.649  2.80   2.1%

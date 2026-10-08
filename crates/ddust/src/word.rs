@@ -298,8 +298,9 @@ word!(u8, u16, u32, u64, u128 {
     // keeps the sum below 2^127: one multiply-high divides it whatever the quotient's size, and the
     // result is in range of either sign, joined with no branch on it. Its one branch is on the
     // operands' size, which operands of mixed sizes predict; the double's path branches on the
-    // result's sign too, which signs mixed at random mispredict half the time. Measured: a wide
-    // rounded product on mixed operands takes 7.46 ns, not 9.23, and on large ones 10.43, not 9.65.
+    // result's sign too, which signs mixed at random mispredict half the time. Measured, in
+    // `bench/results/2026-10-08T04-50Z-pr9-arithmetic-graviton4` against PR 8's run: a wide rounded
+    // product on mixed operands takes 7.21 ns half up, not 9.44, and on large ones 10.11, not 10.18.
     #[inline(always)]
     #[expect(
         clippy::inline_always,
@@ -742,8 +743,9 @@ const impl Word for U256 {
     // A power of one word divides any value by one path: the high half's quotient when it is at
     // least the power, then one step for that of its remainder and the low half. A mode that reads
     // no parity rounds by a bias added first, as the narrow word's does, and any other by the
-    // remainder, as does a value the bias would carry past 2^256. A wide rounded product takes 205
-    // instructions by one path and 376 by a path for each size of quotient, at the same speed.
+    // remainder, as does a value the bias would carry past 2^256. With this one path and its fast
+    // path beside it, a wide rounded product takes 189 to 215 instructions by mode, where PR 8's,
+    // with neither, took 191 to 301 (each run's `assembly.txt` in `bench/results/`).
     #[inline(always)]
     #[expect(
         clippy::inline_always,
