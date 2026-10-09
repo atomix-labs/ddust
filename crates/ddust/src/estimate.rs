@@ -1,8 +1,10 @@
-//! A quotient `a × 10^k / b` from a double's estimate, corrected exactly: one pipelined `fdiv`
-//! where the integer divider takes a cycle for every few bits of quotient, and no reciprocal at
-//! run time. An estimate is proved never to exceed the quotient and to fall short of it by little
-//! enough that one comparison, or one step and a comparison, finishes it; whatever the proof does
-//! not cover returns `None`, to the double word's division.
+//! A quotient `a × 10^k / b` from a double's estimate, corrected exactly.
+//!
+//! It costs one pipelined `fdiv`, where the integer divider takes a cycle for every few bits of
+//! quotient, and no integer reciprocal at run time, which the double word's division computes. An
+//! estimate is proved never to exceed the quotient and to fall short of it by little enough that
+//! one comparison, or one step and a comparison, finishes it; whatever the proof does not cover
+//! returns `None`, to the double word's division.
 //!
 //! The narrow estimate's five roundings of a double, each a factor `1 + δ` with `|δ| ≤ u = 2^-53`,
 //! and a divisor raised by `1 + 2^-49`, keep it below `n / b` by a factor between `1 − 21u` and
@@ -20,8 +22,8 @@ const HALF_WORD: f64 = 4_294_967_296.0;
 const WORD: f64 = HALF_WORD * HALF_WORD;
 /// `2^-64`.
 const PER_WORD: f64 = 1.0 / WORD;
-/// `(1 − 2^-49) × 2^64`, over a wide divisor's top word: its reciprocal, lowered so that no estimate
-/// passes the quotient.
+/// `(1 − 2^-49) × 2^64`, over a wide divisor's top word: its reciprocal, lowered so that no
+/// estimate passes the quotient.
 const LOWERED: f64 = (1.0 - 1.0 / 562_949_953_421_312.0) * WORD;
 /// `10^k × 2^-96` for `k` up to 19, each exact: a wide numerator's top word scaled to the estimate.
 #[expect(clippy::indexing_slicing, reason = "k below both tables' lengths")]
@@ -37,7 +39,11 @@ const POW10_PER_96: [f64; 20] = {
 
 /// `x` as the nearest double: the one rounding of an operand the estimate's bound counts.
 #[inline]
-#[expect(clippy::as_conversions, clippy::cast_precision_loss, reason = "a rounding the bound counts")]
+#[expect(
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    reason = "a rounding the bound counts"
+)]
 const fn double(x: u64) -> f64 {
     x as f64
 }
@@ -60,16 +66,18 @@ const fn high(x: u128) -> u64 {
     u64::low_bits(x >> 64)
 }
 
-/// `a × 10^k / b`, rounded by `table` for a quotient of sign `negative`, for `k` at most 14 and `b`
+/// `a × 10^k / b`, rounded by `table` for a result of sign `negative`, for `k` at most 14 and `b`
 /// at most `2^63`: `None` for any other, or a quotient past 64 bits.
 ///
-/// `n < 2^64 × 10^14 < 2^111`, so the estimate's shortfall leaves a remainder
+/// `n = a × 10^k < 2^64 × 10^14 < 2^111`, so the shortfall of the estimate `q1` leaves a remainder
 /// `r1 = n − q1 × b < 21u × n + b < 2^64`: `n`'s low word less `q1 × b`, wrapping. The quotient is
 /// then `q1` or `q1 + 1` while it is below `2^48.6`; past that, [`div_up_far`] divides `r1`.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
 #[expect(clippy::indexing_slicing, reason = "k is at most 14, within the table's 23")]
-pub(crate) const fn div_up_narrow(a: u64, k: u8, b: u64, negative: bool, table: u16) -> Option<u64> {
+pub(crate) const fn div_up_narrow(
+    a: u64, k: u8, b: u64, negative: bool, table: u16,
+) -> Option<u64> {
     if k > 14 || b > 1 << 63 {
         return None;
     }
@@ -93,7 +101,9 @@ pub(crate) const fn div_up_narrow(a: u64, k: u8, b: u64, negative: bool, table: 
 /// than one: the estimate and the remainder `r1` it leaves, divided once more.
 #[cold]
 #[inline(never)]
-const fn div_up_far(estimate: u64, remainder: u64, b: u64, negative: bool, table: u16) -> Option<u64> {
+const fn div_up_far(
+    estimate: u64, remainder: u64, b: u64, negative: bool, table: u16,
+) -> Option<u64> {
     let (Some(more), Some(rest)) = (remainder.checked_div(b), remainder.checked_rem(b)) else {
         return None;
     };
@@ -101,19 +111,21 @@ const fn div_up_far(estimate: u64, remainder: u64, b: u64, negative: bool, table
     quotient.checked_add(u64::from(rounds_up(rest, b, quotient & 1 == 1, negative, table)))
 }
 
-/// `a × 10^k / b`, rounded by `table` for a quotient of sign `negative`, for `k` at most 19 and `b`
+/// `a × 10^k / b`, rounded by `table` for a result of sign `negative`, for `k` at most 19 and `b`
 /// below `2^127`, by two estimates and one correction: `None` for any other, never for a quotient
 /// below `2^96`, and always past `2^96 × (1 + 24u)`, where the first estimate saturates.
 ///
-/// The first estimate is the quotient's top bits, `q1 = 2^32 × ⌊x × r⌋` from the numerator's and
-/// the divisor's top words, `r` the one `fdiv`; it leaves an exact remainder `r1 < 2^47.53 × b`
-/// while `q < 2^96`, in three words. The second, `⌊r1 × r / 2^64⌋`, leaves less than `1.52 × b`:
-/// one conditional subtraction. `q1` is a multiple of `2^32`, so the quotient's parity is the
-/// second's and the correction's, read before the sum.
+/// The first estimate is the quotient's top bits, `q1 = 2^32 × ⌊x × r⌋`: `x = n / 2^160` from
+/// `a`'s words and `r = 2^128 / b`, lowered, from `b`'s, the one `fdiv`. It leaves an exact
+/// remainder `r1 < 2^47.53 × b` while `q < 2^96`, in three words. The second, `⌊r1 × r / 2^64⌋`,
+/// leaves less than `1.52 × b`: one conditional subtraction. `q1` is a multiple of `2^32`, so the
+/// quotient's parity is the second's and the correction's, read before the sum.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
 #[expect(clippy::indexing_slicing, reason = "k is at most 19, within both tables")]
-pub(crate) const fn div_up_wide(a: u128, k: u8, b: u128, negative: bool, table: u16) -> Option<u128> {
+pub(crate) const fn div_up_wide(
+    a: u128, k: u8, b: u128, negative: bool, table: u16,
+) -> Option<u128> {
     if k > 19 || b >= 1 << 127 {
         return None;
     }
@@ -191,7 +203,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::a_quotient_far_past_the_select(u64::MAX >> 1, 0, 3)]
+    #[case::a_quotient_past_one_correction(u64::MAX >> 1, 0, 3)]
     #[case::the_largest_divisor(u64::MAX, 14, 1 << 63)]
     #[case::a_quotient_past_the_word((1 << 63) - 1, 4, 7)]
     #[case::eighteen_nines_over_eleven(999_999_999_999_999_999, 1, 11)]

@@ -1,7 +1,7 @@
 //! The unsigned words the kernels compute in: an integer's magnitude, and a word twice its width
 //! that holds the exact result of an operation on two magnitudes before it is narrowed back.
 
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(estimate)]
 use crate::estimate;
 use crate::reciprocal;
 
@@ -224,9 +224,11 @@ pub(crate) const trait Word: Copy + [const] Ord {
         None
     }
 
-    /// `self × 10^k / other`, rounded by `table` for a quotient of sign `negative`, in this word,
-    /// or `None` to leave it to the double word: on aarch64 with NEON, by an `f64` estimate
-    /// corrected exactly, and elsewhere always `None`.
+    /// `self × 10^k / other`, [`rounded`] by `table` for a result of sign `negative`, in this word,
+    /// or `None` to leave it to the double word.
+    ///
+    /// A `u64` or a `u128` divides by an `f64` estimate, corrected exactly, on aarch64 with NEON;
+    /// any other word, or target, leaves every quotient to the double.
     #[inline]
     fn narrow_div_up(self, _k: u8, _other: Self, _negative: bool, _table: u16) -> Option<Self> {
         None
@@ -342,14 +344,14 @@ macro_rules! word {
 }
 
 word!(u8, u16, u32, u64 {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(estimate)]
     #[inline(always)]
     #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
     fn narrow_div_up(self, k: u8, other: Self, negative: bool, table: u16) -> Option<Self> {
         estimate::div_up_narrow(self, k, other, negative, table)
     }
 }, u128 {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(estimate)]
     #[inline(always)]
     #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
     fn narrow_div_up(self, k: u8, other: Self, negative: bool, table: u16) -> Option<Self> {
