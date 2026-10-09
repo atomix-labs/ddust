@@ -10,7 +10,14 @@ use core::ops::Range;
 use super::swar;
 
 #[cfg(lanes)]
-mod vector;
+mod lanes;
+#[cfg(lanes)]
+mod read;
+#[cfg(lanes)]
+mod write;
+
+#[cfg(lanes)]
+use self::lanes::Lanes;
 
 /// The magnitude at `decimals` of `text`, `[digits][.digits]` with no sign, as [`swar::read_plain`]
 /// reads it: by the vector reader where the build has one or the CPU does, and by the SWAR reader
@@ -25,10 +32,10 @@ mod vector;
 )]
 pub(crate) fn read_plain(text: &[u8], decimals: u8) -> Option<u128> {
     cfg_select! {
-        lanes = "built" => vector::read(vector::Lanes::BUILT, text, decimals),
-        lanes = "checked" => vector::Lanes::checked().map_or_else(
+        lanes = "built" => read::read(Lanes::BUILT, text, decimals),
+        lanes = "checked" => Lanes::checked().map_or_else(
             || swar::read_plain(text, decimals),
-            |lanes| vector::read_checked(lanes, text, decimals),
+            |lanes| read::read_checked(lanes, text, decimals),
         ),
         _ => swar::read_plain(text, decimals),
     }
@@ -44,13 +51,67 @@ pub(crate) fn read_plain(text: &[u8], decimals: u8) -> Option<u128> {
 )]
 pub(crate) fn read_plain_in(buffer: &[u8], digits: Range<usize>, decimals: u8) -> Option<u128> {
     cfg_select! {
-        lanes = "built" => vector::read_in(vector::Lanes::BUILT, buffer, digits, decimals),
-        lanes = "checked" => match vector::Lanes::checked() {
-            Some(lanes) => vector::read_in_checked(lanes, buffer, digits, decimals),
+        lanes = "built" => read::read_in(Lanes::BUILT, buffer, digits, decimals),
+        lanes = "checked" => match Lanes::checked() {
+            Some(lanes) => read::read_in_checked(lanes, buffer, digits, decimals),
             None => swar::read_plain(buffer.get(digits)?, decimals),
         },
         _ => swar::read_plain(buffer.get(digits)?, decimals),
     }
+}
+
+/// Writes the steps `magnitude` at `decimals`, a `-` first when `negative`, into `out`, as the
+/// shortest exact decimal: by the vector writer where the build has a vector unit or the CPU does,
+/// for at most 30 decimals. `None` where the CPU has none, or where `out` is too short.
+#[cfg(lanes)]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "inline, a static scale's decimals fold into the writer's rows"
+)]
+pub(crate) fn write_narrow(
+    negative: bool, magnitude: u64, decimals: u8, out: &mut [u8],
+) -> Option<usize> {
+    cfg_select! {
+        lanes = "built" => write::narrow(Lanes::BUILT, negative, magnitude, decimals, out),
+        _ => Lanes::checked()
+            .and_then(|lanes| write::narrow_checked(lanes, negative, magnitude, decimals, out)),
+    }
+}
+
+/// [`write_narrow`] for steps past a word: `None` too for steps of `10^31` or more.
+#[cfg(lanes)]
+#[inline(always)]
+#[expect(
+    clippy::inline_always,
+    reason = "inline, a static scale's decimals fold into the writer's rows"
+)]
+pub(crate) fn write_wide(
+    negative: bool, magnitude: u128, decimals: u8, out: &mut [u8],
+) -> Option<usize> {
+    cfg_select! {
+        lanes = "built" => write::wide(Lanes::BUILT, negative, magnitude, decimals, out),
+        _ => Lanes::checked()
+            .and_then(|lanes| write::wide_checked(lanes, negative, magnitude, decimals, out)),
+    }
+}
+
+/// Nothing, on a build with no vector unit: the eight-byte writer writes there.
+#[cfg(not(lanes))]
+#[inline]
+pub(crate) const fn write_narrow(
+    _negative: bool, _magnitude: u64, _decimals: u8, _out: &mut [u8],
+) -> Option<usize> {
+    None
+}
+
+/// Nothing, on a build with no vector unit: the eight-byte writer writes there.
+#[cfg(not(lanes))]
+#[inline]
+pub(crate) const fn write_wide(
+    _negative: bool, _magnitude: u128, _decimals: u8, _out: &mut [u8],
+) -> Option<usize> {
+    None
 }
 
 /// The plain shape [`read_plain`] leaves to the SWAR reader where the vector reader read first:
@@ -61,7 +122,7 @@ pub(crate) fn read_plain_in(buffer: &[u8], digits: Range<usize>, decimals: u8) -
 pub(crate) fn read_rest(text: &[u8], decimals: u8) -> Option<u128> {
     cfg_select! {
         lanes = "built" => swar::read_plain(text, decimals),
-        _ => vector::Lanes::checked().and_then(|_vector| swar::read_plain(text, decimals)),
+        _ => Lanes::checked().and_then(|_vector| swar::read_plain(text, decimals)),
     }
 }
 

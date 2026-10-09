@@ -3,7 +3,8 @@
 use core::fmt::Write as _;
 use core::{fmt, str};
 
-use super::swar::{GROUP, ZEROS};
+use super::simd::{write_narrow, write_wide};
+use super::swar::{GROUP, ZEROS, digits8};
 use crate::decimal::Decimal;
 use crate::int::Int;
 use crate::reciprocal;
@@ -21,17 +22,6 @@ const EIGHT_BYTE_ROOM: usize = 48;
 #[inline]
 fn u64_pow10(k: u8) -> Option<u64> {
     pow10_u128(k).and_then(|power| u64::try_from(power).ok())
-}
-
-/// The eight digits of `n`, below `10^8`, as byte values, the most significant in the lowest
-/// byte: two multiply-shifts per halving, not a division per digit.
-#[expect(clippy::arithmetic_side_effects, reason = "n is below 10^8: every step stays in range")]
-const fn digits8(n: u64) -> u64 {
-    let x = (n / 10_000) | ((n % 10_000) << 32);
-    let q = ((x * 10_486) >> 20) & 0x0000_007F_0000_007F;
-    let y = q | ((x - q * 100) << 16);
-    let q = ((y * 103) >> 10) & 0x000F_000F_000F_000F;
-    q | ((y - q * 10) << 8)
 }
 
 /// How many significant digits `n`, below `10^8`, has; zero has none.
@@ -441,6 +431,36 @@ fn write_ascii_wide(
     Some(written.len())
 }
 
+/// [`Decimal::write_ascii`] where the vector writer does not write: eight bytes at a time through
+/// the stack, then the text alone copied out, or through a [`Text`]. Out of line, so that the
+/// vector writer's path keeps no frame.
+#[inline(never)]
+fn write_ascii_eight(
+    negative: bool, magnitude: u128, decimals: u8, out: &mut [u8],
+) -> Option<usize> {
+    match u64::try_from(magnitude) {
+        // Stored eight bytes at a time, past the text, so through the stack: `out` is written
+        // with the text alone, and nothing past it.
+        Ok(narrow) if decimals <= 19 => {
+            let mut room = [0; EIGHT_BYTE_ROOM];
+            let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
+            out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
+            Some(len)
+        },
+        Err(_past_a_word) if decimals <= 19 => {
+            let mut room = [0; EIGHT_BYTE_ROOM];
+            match write_ascii_split(negative, magnitude, decimals, &mut room) {
+                Some(len) => {
+                    out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
+                    Some(len)
+                },
+                None => write_ascii_wide(negative, magnitude, decimals, out),
+            }
+        },
+        Ok(_) | Err(_) => write_ascii_wide(negative, magnitude, decimals, out),
+    }
+}
+
 /// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one
 /// is asked: by the eight-digit writers at up to 19 decimals when no precision is asked, the
 /// narrow one for a `u64` and the split one past it, through a [`Text`] otherwise.
@@ -448,14 +468,15 @@ fn write<I: Int>(
     f: &mut fmt::Formatter<'_>, steps: I, decimals: u8, precision: Option<usize>,
 ) -> fmt::Result {
     let (negative, magnitude) = steps.sign_and_magnitude();
-    if decimals <= 19 && precision.is_none() {
+    if precision.is_none() {
         let plain = f.width().is_none() && !f.sign_plus();
+        let signed = negative && plain;
         let mut bytes = [0; EIGHT_BYTE_ROOM];
         let written = match u64::try_from(magnitude) {
-            Ok(narrow) => write_ascii_narrow(negative && plain, narrow, decimals, &mut bytes),
-            Err(_past_a_word) => {
-                write_ascii_split(negative && plain, magnitude, decimals, &mut bytes)
-            },
+            Ok(narrow) => write_narrow(signed, narrow, decimals, &mut bytes)
+                .or_else(|| write_ascii_narrow(signed, narrow, decimals, &mut bytes)),
+            Err(_past_a_word) => write_wide(signed, magnitude, decimals, &mut bytes)
+                .or_else(|| write_ascii_split(signed, magnitude, decimals, &mut bytes)),
         };
         if let Some(text) =
             written.and_then(|len| bytes.get(..len)).and_then(|text| str::from_utf8(text).ok())
@@ -539,27 +560,14 @@ impl<I: Int, S: Scale> Decimal<I, S> {
     pub fn write_ascii(self, out: &mut [u8]) -> Option<usize> {
         let (negative, magnitude) = self.steps().sign_and_magnitude();
         let decimals = self.decimals();
-        match u64::try_from(magnitude) {
-            // Stored eight bytes at a time, past the text, so through the stack: `out` is written
-            // with the text alone, and nothing past it.
-            Ok(narrow) if decimals <= 19 => {
-                let mut room = [0; EIGHT_BYTE_ROOM];
-                let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
-                out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
-                Some(len)
-            },
-            Err(_past_a_word) if decimals <= 19 => {
-                let mut room = [0; EIGHT_BYTE_ROOM];
-                match write_ascii_split(negative, magnitude, decimals, &mut room) {
-                    Some(len) => {
-                        out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
-                        Some(len)
-                    },
-                    None => write_ascii_wide(negative, magnitude, decimals, out),
-                }
-            },
-            Ok(_) | Err(_) => write_ascii_wide(negative, magnitude, decimals, out),
+        let written = match u64::try_from(magnitude) {
+            Ok(narrow) => write_narrow(negative, narrow, decimals, out),
+            Err(_past_a_word) => write_wide(negative, magnitude, decimals, out),
+        };
+        if written.is_some() {
+            return written;
         }
+        write_ascii_eight(negative, magnitude, decimals, out)
     }
 }
 
@@ -765,6 +773,35 @@ mod tests {
                 let integer = magnitude.checked_div(10_u128.pow(u32::from(decimals))).unwrap_or(0);
                 prop_assert!((integer >> 64) >= 10_u128.pow(16), "{}", text.as_str());
             }
+        }
+
+        #[test]
+        fn the_vector_writer_agrees_with_the_general_one(
+            raw: u128, bits in 1_u32..=128, decimals in 0_u8..=38, negative: bool, room in 0_usize..=48,
+        ) {
+            // Narrow and wide, at every scale: what the vector writer writes is the general
+            // writer's text, nothing past it is touched, and a buffer too short for it is refused.
+            let magnitude = raw.unbounded_shr(128_u32.wrapping_sub(bits));
+            let mut text = super::Text::new();
+            if negative && magnitude != 0 {
+                text.push(b"-");
+            }
+            let _no_zeros = text.push_decimal_unpadded(magnitude, decimals, None);
+            let mut out = [b'#'; 48];
+            let written = match u64::try_from(magnitude) {
+                Ok(narrow) => super::write_narrow(negative, narrow, decimals, &mut out[..room]),
+                Err(_past_a_word) => super::write_wide(negative, magnitude, decimals, &mut out[..room]),
+            };
+            let expected = text.as_str();
+            match written {
+                Some(len) => prop_assert_eq!(str::from_utf8(&out[..len]).expect("ASCII"), expected),
+                None => prop_assert!(
+                    expected.len() > room || cfg!(not(lanes)) || decimals > 30 || magnitude >= 10_u128.pow(31),
+                    "{} left in {} bytes", expected, room
+                ),
+            }
+            let len = written.unwrap_or(0);
+            prop_assert!(out[len..].iter().all(|&byte| byte == b'#'), "{} passed its text", expected);
         }
 
         #[test]
