@@ -431,36 +431,6 @@ fn write_ascii_wide(
     Some(written.len())
 }
 
-/// [`Decimal::write_ascii`] where the vector writer does not write: eight bytes at a time through
-/// the stack, then the text alone copied out, or through a [`Text`]. Out of line, so that the
-/// vector writer's path keeps no frame.
-#[inline(never)]
-fn write_ascii_eight(
-    negative: bool, magnitude: u128, decimals: u8, out: &mut [u8],
-) -> Option<usize> {
-    match u64::try_from(magnitude) {
-        // Stored eight bytes at a time, past the text, so through the stack: `out` is written
-        // with the text alone, and nothing past it.
-        Ok(narrow) if decimals <= 19 => {
-            let mut room = [0; EIGHT_BYTE_ROOM];
-            let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
-            out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
-            Some(len)
-        },
-        Err(_past_a_word) if decimals <= 19 => {
-            let mut room = [0; EIGHT_BYTE_ROOM];
-            match write_ascii_split(negative, magnitude, decimals, &mut room) {
-                Some(len) => {
-                    out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
-                    Some(len)
-                },
-                None => write_ascii_wide(negative, magnitude, decimals, out),
-            }
-        },
-        Ok(_) | Err(_) => write_ascii_wide(negative, magnitude, decimals, out),
-    }
-}
-
 /// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one
 /// is asked: by the eight-digit writers at up to 19 decimals when no precision is asked, the
 /// narrow one for a `u64` and the split one past it, through a [`Text`] otherwise.
@@ -567,7 +537,27 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         if written.is_some() {
             return written;
         }
-        write_ascii_eight(negative, magnitude, decimals, out)
+        match u64::try_from(magnitude) {
+            // Stored eight bytes at a time, past the text, so through the stack: `out` is written
+            // with the text alone, and nothing past it.
+            Ok(narrow) if decimals <= 19 => {
+                let mut room = [0; EIGHT_BYTE_ROOM];
+                let len = write_ascii_narrow(negative, narrow, decimals, &mut room)?;
+                out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
+                Some(len)
+            },
+            Err(_past_a_word) if decimals <= 19 => {
+                let mut room = [0; EIGHT_BYTE_ROOM];
+                match write_ascii_split(negative, magnitude, decimals, &mut room) {
+                    Some(len) => {
+                        out.get_mut(..len)?.copy_from_slice(room.get(..len)?);
+                        Some(len)
+                    },
+                    None => write_ascii_wide(negative, magnitude, decimals, out),
+                }
+            },
+            Ok(_) | Err(_) => write_ascii_wide(negative, magnitude, decimals, out),
+        }
     }
 }
 
