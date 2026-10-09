@@ -101,6 +101,8 @@ mod convert;
 mod decimal;
 mod divisor;
 mod errors;
+#[cfg(estimate)]
+mod estimate;
 mod float;
 mod int;
 mod interop;

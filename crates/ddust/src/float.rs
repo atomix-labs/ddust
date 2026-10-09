@@ -12,7 +12,7 @@ use crate::{kernel, reciprocal};
 
 /// `10^k` for `k` in `0..=22`: every power of ten an `f64` holds exactly.
 #[expect(clippy::indexing_slicing, reason = "a const loop within the table's own length")]
-const POW10_F64: [f64; 23] = {
+pub(crate) const POW10_F64: [f64; 23] = {
     let mut table = [1.0; 23];
     let mut k = 1;
     while k < table.len() {
