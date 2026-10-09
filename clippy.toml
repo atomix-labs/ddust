@@ -4,3 +4,7 @@ allow-indexing-slicing-in-tests = true
 allow-panic-in-tests            = true
 allow-print-in-tests            = true
 allow-unwrap-in-tests           = true
+
+# A vector's lanes wrap on `+`, `-` and `*`, as their instructions do; the readers use no `/` or `%`,
+# which panic on a zero lane.
+arithmetic-side-effects-allowed = ["core::simd::Simd"]

@@ -1,8 +1,8 @@
 //! What every parser target checks of one decimal type over any bytes.
 
-/// Checks one type over `$data`: `from_ascii` against `FromStr`, a read in place, a read at the
-/// front and the rounding reads; `write_ascii` and `Display` against each other and read back; and
-/// the scale a run-time decimal reads from its spelling.
+/// Checks one type over `$data`: `from_ascii` against `FromStr`, the general reader, a read in
+/// place, a read at the front and the rounding reads; `write_ascii` and `Display` against each
+/// other and read back; and the scale a run-time decimal reads from its spelling.
 #[macro_export]
 macro_rules! check {
     ($data:expr, $ty:ty) => {{
@@ -13,9 +13,15 @@ macro_rules! check {
         if let Ok(text) = core::str::from_utf8(data) {
             assert_eq!(text.parse::<$ty>(), value, "a &str reads as its bytes: {text:?}");
         }
-        // Eight bytes before the number and twenty-four after, so a short one is read by the
-        // window, and digits, points and signs around it, which the window must leave out.
-        let (before, after): (&[u8], &[u8]) = (b"99999.9-", b"9.99999999999999999-9.99");
+        // The general reader, which reads an exponent, as an oracle for the vector reader and the
+        // SWAR one: `e0` changes no number.
+        if !data.is_empty() && !data.iter().any(|byte| matches!(byte, b'e' | b'E')) {
+            let exponent = [data, b"e0"].concat();
+            assert_eq!(<$ty>::from_ascii(&exponent, Fixed), value, "the general reader reads {data:?} alike");
+        }
+        // Sixteen bytes before the number and twenty-four after, so one of up to 32 bytes is read
+        // from the buffer, and digits, points and signs around it, which the read must leave out.
+        let (before, after): (&[u8], &[u8]) = (b"9.99999999-99.9-", b"9.99999999999999999-9.99");
         let mut buffer = before.to_vec();
         buffer.extend_from_slice(data);
         buffer.extend_from_slice(after);

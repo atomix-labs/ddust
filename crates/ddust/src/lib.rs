@@ -72,10 +72,11 @@
 //! | `serde` | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose the form at a field |
 //! | `zerocopy-08` | zerocopy 0.8's `FromBytes` and `IntoBytes` for a decimal of a `Fixed` scale, [`D8`] to [`UD128`], read from and written as its steps' bytes; `KnownLayout` and `Immutable` for every decimal; and `IntoBytes` and `Unaligned` for `Dynamic`, to write its byte, and for `Fixed`, which has none |
 //!
-//! Text is read with NEON on every aarch64 target but the soft-float ones, and with SSSE3 on an
-//! `x86_64` build for a CPU that has it, `-C target-cpu=x86-64-v2` or newer, with no check at run
-//! time; elsewhere eight bytes at a time in a 64-bit word, as on a soft-float target, which has no
-//! vector registers for `runtime-dispatch` to use.
+//! Text of up to 32 bytes is read in 32 vector lanes at once, with NEON on every little-endian
+//! aarch64 target but the soft-float ones, and with SSSE3 on an `x86_64` build for a CPU that has
+//! it, `-C target-cpu=x86-64-v2` or newer, with no check at run time; elsewhere, and past 32 bytes,
+//! eight bytes at a time in a 64-bit word, as on a soft-float target, which has no vector registers
+//! for `runtime-dispatch` to use.
 
 #![no_std]
 // Const traits: the arithmetic, the rounding and the literal parser are `const fn` over every
@@ -87,6 +88,9 @@
 #![feature(cfg_overflow_checks)]
 // `mul_add` and `floor` in a `const fn`, for `from_f64`'s exact residual where an FMA is hardware.
 #![feature(core_float_math)]
+// The vector reader, written once in `core::simd` for NEON and SSSE3, on a build with either: the
+// `lanes` cfg `build.rs` sets.
+#![cfg_attr(lanes, feature(portable_simd))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(test)]
