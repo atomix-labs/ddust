@@ -101,6 +101,8 @@ mod convert;
 mod decimal;
 mod divisor;
 mod errors;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+mod estimate;
 mod float;
 mod int;
 mod interop;

@@ -1,6 +1,8 @@
 //! The unsigned words the kernels compute in: an integer's magnitude, and a word twice its width
 //! that holds the exact result of an operation on two magnitudes before it is narrowed back.
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use crate::estimate;
 use crate::reciprocal;
 
 /// `10^k` for `k` in `0..=38`: every power a `u128` holds, and so every power a scale needs.
@@ -221,6 +223,14 @@ pub(crate) const trait Word: Copy + [const] Ord {
     fn narrow_mul_down(self, _other: Self, _k: u8, _negative: bool, _table: u16) -> Option<Self> {
         None
     }
+
+    /// `self × 10^k / other`, rounded by `table` for a quotient of sign `negative`, in this word,
+    /// or `None` to leave it to the double word: on aarch64 with NEON, by an `f64` estimate
+    /// corrected exactly, and elsewhere always `None`.
+    #[inline]
+    fn narrow_div_up(self, _k: u8, _other: Self, _negative: bool, _table: u16) -> Option<Self> {
+        None
+    }
 }
 
 /// A primitive word, which every magnitude is: it converts to and from a `u128`.
@@ -331,7 +341,21 @@ macro_rules! word {
     )*};
 }
 
-word!(u8, u16, u32, u64, u128 {
+word!(u8, u16, u32, u64 {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[inline(always)]
+    #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
+    fn narrow_div_up(self, k: u8, other: Self, negative: bool, table: u16) -> Option<Self> {
+        estimate::div_up_narrow(self, k, other, negative, table)
+    }
+}, u128 {
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[inline(always)]
+    #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
+    fn narrow_div_up(self, k: u8, other: Self, negative: bool, table: u16) -> Option<Self> {
+        estimate::div_up_wide(self, k, other, negative, table)
+    }
+
     // Operands whose leading zeros add to 130 or more multiply below 2^126, and a bias below 10^19
     // keeps the sum below 2^127: one multiply-high divides it whatever the quotient's size, and the
     // result is in range of either sign, joined with no branch on it. Its one branch is on the
