@@ -131,7 +131,9 @@ pub(crate) const fn div_up_wide(
     }
     let Some(power) = pow10_u128(k) else { return None };
     // n = a × 10^k, in three words: below 2^128 × 10^19 < 2^192. By hand, from the halves: as
-    // `carrying_mul`, a wide quotient measured 5% slower (15.67 ns against 14.90, half to even).
+    // `carrying_mul`, a wide quotient took 15.65 ns, half to even, against this form's 14.89
+    // (`bench/results/2026-10-09T03-12Z-pr12-carrying-mul-graviton4` and
+    // `…T03-15Z-pr12-division-…`).
     let power = u128::from(u64::low_bits(power));
     let low = u128::from(u64::low_bits(a)).wrapping_mul(power);
     let upper = u128::from(high(a)).wrapping_mul(power).wrapping_add(low >> 64);
