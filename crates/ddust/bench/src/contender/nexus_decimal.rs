@@ -10,7 +10,7 @@ use nexus_decimal::Decimal;
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
-    RescaleRound, ToF64, cents, low_byte,
+    RescaleRound, ToF64, cents, folded_byte,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -37,7 +37,7 @@ macro_rules! nexus {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.to_raw().cast_unsigned()))
+                folded_byte(u128::from(value.to_raw().cast_unsigned()))
             }
         }
 

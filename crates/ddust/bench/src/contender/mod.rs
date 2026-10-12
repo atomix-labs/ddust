@@ -59,8 +59,8 @@ pub trait Contender {
     /// them, or that a floor holds only approximately.
     fn to_steps(value: &Self::Value) -> Option<i128>;
 
-    /// A few low bits of `value`, cheap to read, which a latency chain mixes into the index of its
-    /// next operands, so each operation waits for the one before.
+    /// A byte of `value`, cheap to read and dependent on all of it, which a latency chain mixes
+    /// into the index of its next operands, so each operation waits for the one before.
     fn fingerprint(value: &Self::Value) -> usize;
 }
 
@@ -291,10 +291,13 @@ pub fn steps_of(digits: i128, scale: i64, decimals: u8) -> Option<i128> {
     if digits.checked_rem(drop)? == 0 { digits.checked_div(drop) } else { None }
 }
 
-/// The low byte of `bits`, as a latency chain's fingerprint.
+/// A byte of `bits` that depends on both its 64-bit halves: a latency chain's fingerprint.
+///
+/// An operation the compiler inlines into the chain then computes its whole result, where a byte
+/// of one half would let it skip the other.
 #[must_use]
-pub fn low_byte(bits: u128) -> usize {
-    usize::from(bits.to_le_bytes().first().copied().unwrap_or(0))
+pub fn folded_byte(bits: u128) -> usize {
+    usize::from((bits ^ (bits >> 64_u32)).to_le_bytes().first().copied().unwrap_or(0))
 }
 
 /// `value` written by `Display` into `buffer`, which a [`Format`] calls for a crate with no faster

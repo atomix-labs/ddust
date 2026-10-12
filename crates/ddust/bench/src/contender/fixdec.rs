@@ -9,7 +9,7 @@ use fixdec::D64;
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
-    RescaleRound, ToF64, cents, format_by_display, low_byte,
+    RescaleRound, ToF64, cents, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -33,7 +33,7 @@ impl Contender for Narrow {
     }
 
     fn fingerprint(value: &Self::Value) -> usize {
-        low_byte(u128::from(value.to_raw().cast_unsigned()))
+        folded_byte(u128::from(value.to_raw().cast_unsigned()))
     }
 }
 

@@ -12,7 +12,7 @@
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, format_by_display, low_byte,
+    Parse, RescaleRound, ToF64, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -39,7 +39,7 @@ macro_rules! integer {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.cast_unsigned()))
+                folded_byte(u128::from(value.cast_unsigned()))
             }
         }
 
@@ -137,7 +137,7 @@ macro_rules! float {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.to_bits()))
+                folded_byte(u128::from(value.to_bits()))
             }
         }
 

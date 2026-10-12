@@ -14,7 +14,7 @@ use rust_decimal::{Decimal, RoundingStrategy};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, format_by_display, low_byte,
+    Parse, RescaleRound, ToF64, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -48,7 +48,7 @@ macro_rules! rust_decimal {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(value.mantissa().cast_unsigned())
+                folded_byte(value.mantissa().cast_unsigned())
             }
         }
 
