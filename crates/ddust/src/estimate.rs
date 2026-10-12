@@ -69,9 +69,11 @@ const fn high(x: u128) -> u64 {
 /// `a × 10^k / b`, rounded by `table` for a result of sign `negative`, for `k` at most 14 and `b`
 /// at most `2^63`: `None` for any other, or a quotient past 64 bits.
 ///
-/// `n = a × 10^k < 2^64 × 10^14 < 2^111`, so the shortfall of the estimate `q1` leaves a remainder
-/// `r1 = n − q1 × b < 21u × n + b < 2^64`: `n`'s low word less `q1 × b`, wrapping. The quotient is
-/// then `q1` or `q1 + 1` while it is below `2^48.6`; past that, [`div_up_far`] divides `r1`.
+/// An `n = a × 10^k` within a word is divided by the integer divider, whose latency is short for
+/// the small quotient such an `n` gives. Past a word, `n < 2^64 × 10^14 < 2^111`, so the shortfall
+/// of the estimate `q1` leaves a remainder `r1 = n − q1 × b < 21u × n + b < 2^64`: `n`'s low word
+/// less `q1 × b`, wrapping. The quotient is then `q1` or `q1 + 1` while it is below `2^48.6`; past
+/// that, [`div_up_far`] divides `r1`.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the quotient, where the mode's table folds")]
 #[expect(clippy::indexing_slicing, reason = "k is at most 14, within the table's 23")]
@@ -85,6 +87,21 @@ pub(crate) const fn div_up_narrow(
     let n = u128::from(a).wrapping_mul(power);
     if high(n) >= b {
         return None;
+    }
+    // Within a word, one `udiv`: a chain of quotients on mixed operands waits on its latency, short
+    // for a small quotient, where the estimate's is not.
+    if high(n) == 0 {
+        let n = u64::low_bits(n);
+        let (Some(quotient), Some(rest)) = (n.checked_div(b), n.checked_rem(b)) else {
+            return None;
+        };
+        return quotient.checked_add(u64::from(rounds_up(
+            rest,
+            b,
+            quotient & 1 == 1,
+            negative,
+            table,
+        )));
     }
     let estimate = whole(double(a) * POW10_F64[usize::from(k)] / (double(b) * MARGIN));
     let remainder = u64::low_bits(n).wrapping_sub(estimate.wrapping_mul(b));
