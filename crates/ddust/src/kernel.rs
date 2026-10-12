@@ -132,6 +132,9 @@ pub(crate) const fn mul_up<U: [const] Narrow, D: [const] Double<U>>(
 pub(crate) const fn div_up<U: [const] Narrow, D: [const] Double<U>>(
     negative: bool, a: U, k: u8, b: U, table: u16,
 ) -> Option<Exact<D>> {
+    if let Some(quotient) = a.narrow_div_up(k, b, negative, table) {
+        return Some(Exact::new(negative, D::from_narrow(quotient)));
+    }
     let divisor = D::from_narrow(b);
     let (first, rest) = (if k > 38 { 38 } else { k }, k.saturating_sub(38));
     let numerator = match D::pow10(first) {
