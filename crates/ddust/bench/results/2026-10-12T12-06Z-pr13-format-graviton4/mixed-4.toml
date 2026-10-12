@@ -1,0 +1,754 @@
+backend         = "perf_event_open through perf-event2 0.7.4, user space only, perf's generic events; sets [cycles, instructions, branch-misses] [cycles, l1i-misses, l1d-misses] [cycles, stalled-cycles-frontend, stalled-cycles-backend] [cycles, branches, instructions]"
+warm-up-ms      = 200
+sample-us       = 2000
+samples-per-set = 25
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/i64"
+operations              = 5120
+calls                   = 795
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.484645, low = 0.484145, high = 0.490003 }
+cycles                  = { median = 1.3562, low = 1.35568, high = 1.35669 }
+instructions            = { median = 6.60924, low = 6.60924, high = 6.60924 }
+branches                = { median = 0.600988, low = 0.600988, high = 0.600988 }
+branch-misses           = { median = 0.000207105, low = 0.000204894, high = 0.000211036 }
+l1i-misses              = { median = 0.00000687893, low = 0.00000540487, high = 0.0000140035 }
+l1d-misses              = { median = 0.0000390625, low = 0.0000294811, high = 0.0000540487 }
+stalled-cycles-frontend = { median = 0.00114387, low = 0.00112028, high = 0.00118563 }
+stalled-cycles-backend  = { median = 0.194316, low = 0.192916, high = 0.19615 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/f64"
+operations              = 5120
+calls                   = 793
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.486124, low = 0.485044, high = 0.491498 }
+cycles                  = { median = 1.36054, low = 1.35794, high = 1.36321 }
+instructions            = { median = 5.60826, low = 5.60826, high = 5.60826 }
+branches                = { median = 0.200793, low = 0.200793, high = 0.200793 }
+branch-misses           = { median = 0.000196298, low = 0.000195805, high = 0.000197037 }
+l1i-misses              = { median = 0.00000664998, low = 0.00000492591, high = 0.00000960553 }
+l1d-misses              = { median = 0.0000386684, low = 0.0000302944, high = 0.0000529536 }
+stalled-cycles-frontend = { median = 0.00140709, low = 0.00136694, high = 0.0014359 }
+stalled-cycles-backend  = { median = 0.657572, low = 0.654919, high = 0.65833 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/ddust D64<8>"
+operations              = 5120
+calls                   = 222
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.75092, low = 1.74965, high = 1.76799 }
+cycles                  = { median = 4.90125, low = 4.89893, high = 4.9031 }
+instructions            = { median = 24.2137, low = 24.2137, high = 24.2137 }
+branches                = { median = 2.60102, low = 2.60102, high = 2.60102 }
+branch-misses           = { median = 0.000200591, low = 0.000198832, high = 0.00020587 }
+l1i-misses              = { median = 0.0000343117, low = 0.0000281532, high = 0.000061585 }
+l1d-misses              = { median = 0.000113492, low = 0.000065984, high = 0.0001654 }
+stalled-cycles-frontend = { median = 0.00109357, low = 0.00104079, high = 0.00122906 }
+stalled-cycles-backend  = { median = 1.42167, low = 1.41208, high = 1.42609 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/bigdecimal 0.4.11"
+operations              = 5120
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 924.994, low = 923.464, high = 932.672 }
+cycles                  = { median = 2587.54, low = 2584.61, high = 2595.49 }
+instructions            = { median = 10824.8, low = 10822.3, high = 10838.3 }
+branches                = { median = 2016.61, low = 2016.08, high = 2017.24 }
+branch-misses           = { median = 6.83164, low = 6.775, high = 6.95879 }
+l1i-misses              = { median = 0.298828, low = 0.254297, high = 0.404492 }
+l1d-misses              = { median = 0.381641, low = 0.353906, high = 0.426953 }
+stalled-cycles-frontend = { median = 80.2131, low = 79.5246, high = 80.9111 }
+stalled-cycles-backend  = { median = 721.735, low = 720.081, high = 723.323 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/decimal-rs 0.2.0"
+operations              = 5120
+calls                   = 7
+multiplexed-samples     = 0
+nanoseconds             = { median = 51.9303, low = 51.8409, high = 52.5637 }
+cycles                  = { median = 145.311, low = 145.134, high = 145.577 }
+instructions            = { median = 360.991, low = 360.991, high = 360.991 }
+branches                = { median = 32.7333, low = 32.7333, high = 32.7333 }
+branch-misses           = { median = 0.307143, low = 0.302176, high = 0.314118 }
+l1i-misses              = { median = 0.00337612, low = 0.00281808, high = 0.00636161 }
+l1d-misses              = { median = 0.0238281, low = 0.0119699, high = 0.0376116 }
+stalled-cycles-frontend = { median = 1.24358, low = 1.21657, high = 1.30045 }
+stalled-cycles-backend  = { median = 79.5192, low = 78.4171, high = 79.7092 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/fastnum 0.7.5 D64"
+operations              = 5120
+calls                   = 10
+multiplexed-samples     = 0
+nanoseconds             = { median = 35.496, low = 35.3478, high = 36.6885 }
+cycles                  = { median = 99.3331, low = 98.9808, high = 101.97 }
+instructions            = { median = 263.263, low = 263.263, high = 263.263 }
+branches                = { median = 47.5458, low = 47.5458, high = 47.5458 }
+branch-misses           = { median = 0.470801, low = 0.460742, high = 0.588125 }
+l1i-misses              = { median = 0.00316406, low = 0.00259766, high = 0.00636719 }
+l1d-misses              = { median = 0.0376758, low = 0.0353516, high = 0.0851758 }
+stalled-cycles-frontend = { median = 2.81998, low = 2.74762, high = 3.44197 }
+stalled-cycles-backend  = { median = 45.7865, low = 44.883, high = 46.1184 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/fin_decimal 0.4.0 Decimal<8>"
+operations              = 5120
+calls                   = 100
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.27534, low = 3.2703, high = 3.32158 }
+cycles                  = { median = 9.17014, low = 9.15697, high = 9.1765 }
+instructions            = { median = 39.9983, low = 39.9983, high = 39.9983 }
+branches                = { median = 5.60107, low = 5.60107, high = 5.60107 }
+branch-misses           = { median = 0.000597656, low = 0.000208984, high = 0.000693359 }
+l1i-misses              = { median = 0.0000957031, low = 0.0000859375, high = 0.0001875 }
+l1d-misses              = { median = 0.000244141, low = 0.000164063, high = 0.000326172 }
+stalled-cycles-frontend = { median = 0.00312109, low = 0.00116211, high = 0.00383594 }
+stalled-cycles-backend  = { median = 3.20553, low = 3.18892, high = 3.20943 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/fixdec 0.1.0 D64"
+operations              = 5120
+calls                   = 161
+multiplexed-samples     = 0
+nanoseconds             = { median = 2.33869, low = 2.31208, high = 2.37739 }
+cycles                  = { median = 6.53834, low = 6.47246, high = 6.62902 }
+instructions            = { median = 29.3147, low = 29.3147, high = 29.3147 }
+branches                = { median = 3.54791, low = 3.54791, high = 3.54791 }
+branch-misses           = { median = 0.0181689, low = 0.0162255, high = 0.0209591 }
+l1i-misses              = { median = 0.0000630823, low = 0.0000570167, high = 0.000103115 }
+l1d-misses              = { median = 0.000160132, low = 0.000118886, high = 0.000226854 }
+stalled-cycles-frontend = { median = 0.106297, low = 0.0920662, high = 0.117994 }
+stalled-cycles-backend  = { median = 1.80527, low = 1.699, high = 1.83487 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/nexus-decimal 1.2.2 <i64, 8>"
+operations              = 5120
+calls                   = 150
+multiplexed-samples     = 0
+nanoseconds             = { median = 2.55814, low = 2.55389, high = 2.58452 }
+cycles                  = { median = 7.15511, low = 7.15131, high = 7.16985 }
+instructions            = { median = 32.011, low = 32.011, high = 32.0111 }
+branches                = { median = 3.84713, low = 3.84713, high = 3.84713 }
+branch-misses           = { median = 0.00900651, low = 0.00899479, high = 0.00980339 }
+l1i-misses              = { median = 0.0000638021, low = 0.0000546875, high = 0.000119792 }
+l1d-misses              = { median = 0.000169271, low = 0.000106771, high = 0.00025651 }
+stalled-cycles-frontend = { median = 0.0553685, low = 0.0546523, high = 0.0591185 }
+stalled-cycles-backend  = { median = 2.25884, low = 2.25687, high = 2.26568 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/primitive_fixed_point_decimal 1.5.0 <i64, 8>"
+operations              = 5120
+calls                   = 108
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.59223, low = 3.58471, high = 3.63121 }
+cycles                  = { median = 10.0522, low = 10.0378, high = 10.063 }
+instructions            = { median = 43.1075, low = 43.1075, high = 43.1075 }
+branches                = { median = 5.04559, low = 5.04559, high = 5.04559 }
+branch-misses           = { median = 0.0148311, low = 0.0143446, high = 0.0153411 }
+l1i-misses              = { median = 0.000101273, low = 0.0000940394, high = 0.000188079 }
+l1d-misses              = { median = 0.000235098, low = 0.0000741464, high = 0.000327329 }
+stalled-cycles-frontend = { median = 0.0847078, low = 0.0821434, high = 0.0879919 }
+stalled-cycles-backend  = { median = 3.18268, low = 3.17457, high = 3.19229 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/rust_decimal 1.43.0"
+operations              = 5120
+calls                   = 11
+multiplexed-samples     = 0
+nanoseconds             = { median = 33.5652, low = 32.6881, high = 34.0104 }
+cycles                  = { median = 93.9808, low = 91.5286, high = 94.1788 }
+instructions            = { median = 266.75, low = 266.75, high = 266.75 }
+branches                = { median = 35.2475, low = 35.2475, high = 35.2475 }
+branch-misses           = { median = 0.44565, low = 0.349663, high = 0.454954 }
+l1i-misses              = { median = 0.00181108, low = 0.00161577, high = 0.00314276 }
+l1d-misses              = { median = 0.0108842, low = 0.00712003, high = 0.0155007 }
+stalled-cycles-frontend = { median = 2.38805, low = 1.85835, high = 2.43287 }
+stalled-cycles-backend  = { median = 38.2888, low = 38.1386, high = 38.4873 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/i128"
+operations              = 5120
+calls                   = 109
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.54904, low = 3.54648, high = 3.58616 }
+cycles                  = { median = 9.93554, low = 9.93074, high = 9.93989 }
+instructions            = { median = 48.7258, low = 48.7258, high = 48.7258 }
+branches                = { median = 4.59227, low = 4.59227, high = 4.59227 }
+branch-misses           = { median = 0.00294223, low = 0.00293865, high = 0.00294581 }
+l1i-misses              = { median = 0.0000770499, low = 0.0000645069, high = 0.000146932 }
+l1d-misses              = { median = 0.00264657, low = 0.00228641, high = 0.00282755 }
+stalled-cycles-frontend = { median = 0.0205024, low = 0.0199953, high = 0.0207049 }
+stalled-cycles-backend  = { median = 2.31289, low = 2.30288, high = 2.31985 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/f64"
+operations              = 5120
+calls                   = 792
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.486298, low = 0.485368, high = 0.491332 }
+cycles                  = { median = 1.36098, low = 1.35899, high = 1.36566 }
+instructions            = { median = 5.60826, low = 5.60826, high = 5.60826 }
+branches                = { median = 0.200793, low = 0.200793, high = 0.200793 }
+branch-misses           = { median = 0.000196299, low = 0.000196299, high = 0.000197285 }
+l1i-misses              = { median = 0.00000616517, low = 0.00000517874, high = 0.0000128235 }
+l1d-misses              = { median = 0.0000320589, low = 0.0000244141, high = 0.0000525272 }
+stalled-cycles-frontend = { median = 0.00140443, low = 0.00136004, high = 0.00143574 }
+stalled-cycles-backend  = { median = 0.657805, low = 0.655995, high = 0.66265 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/ddust D128<18>"
+operations              = 5120
+calls                   = 61
+multiplexed-samples     = 0
+nanoseconds             = { median = 6.32127, low = 6.29821, high = 6.38187 }
+cycles                  = { median = 17.6961, low = 17.6361, high = 17.7054 }
+instructions            = { median = 60.0162, low = 60.0162, high = 60.0162 }
+branches                = { median = 4.20113, low = 4.20113, high = 4.20113 }
+branch-misses           = { median = 0.000403432, low = 0.000211322, high = 0.000409836 }
+l1i-misses              = { median = 0.000195313, low = 0.000163294, high = 0.000409836 }
+l1d-misses              = { median = 0.00440894, low = 0.00345479, high = 0.00525102 }
+stalled-cycles-frontend = { median = 0.00221247, low = 0.00114946, high = 0.0027696 }
+stalled-cycles-backend  = { median = 7.43235, low = 7.14993, high = 7.44865 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/bigdecimal 0.4.11"
+operations              = 5120
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 3050.92, low = 3043.42, high = 3063.13 }
+cycles                  = { median = 8535.99, low = 8514.68, high = 8545 }
+instructions            = { median = 45091.4, low = 45044.1, high = 45100.5 }
+branches                = { median = 8914.25, low = 8914.22, high = 8925.11 }
+branch-misses           = { median = 6.34941, low = 5.90664, high = 6.48574 }
+l1i-misses              = { median = 1.41172, low = 1.0752, high = 1.61719 }
+l1d-misses              = { median = 0.514453, low = 0.402344, high = 0.627539 }
+stalled-cycles-frontend = { median = 91.3199, low = 87.2076, high = 93.4391 }
+stalled-cycles-backend  = { median = 125.568, low = 121.296, high = 127.181 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/decimal-rs 0.2.0"
+operations              = 5120
+calls                   = 5
+multiplexed-samples     = 0
+nanoseconds             = { median = 74.7124, low = 74.603, high = 75.4791 }
+cycles                  = { median = 209.083, low = 208.9, high = 209.271 }
+instructions            = { median = 485.951, low = 485.951, high = 485.951 }
+branches                = { median = 45.5417, low = 45.5417, high = 45.5417 }
+branch-misses           = { median = 0.524961, low = 0.520312, high = 0.532305 }
+l1i-misses              = { median = 0.00527344, low = 0.00464844, high = 0.00824219 }
+l1d-misses              = { median = 0.0337891, low = 0.0230859, high = 0.0491016 }
+stalled-cycles-frontend = { median = 2.06, low = 2.00066, high = 2.12852 }
+stalled-cycles-backend  = { median = 119.805, low = 119.248, high = 120.285 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/fastnum 0.7.5 D128"
+operations              = 5120
+calls                   = 4
+multiplexed-samples     = 0
+nanoseconds             = { median = 79.527, low = 79.3098, high = 81.2942 }
+cycles                  = { median = 222.52, low = 222.083, high = 225.776 }
+instructions            = { median = 575.03, low = 575.03, high = 575.03 }
+branches                = { median = 87.8312, low = 87.8312, high = 87.8312 }
+branch-misses           = { median = 1.09482, low = 1.073, high = 1.22393 }
+l1i-misses              = { median = 0.0140625, low = 0.0128418, high = 0.026709 }
+l1d-misses              = { median = 0.0607422, low = 0.0381348, high = 0.0890625 }
+stalled-cycles-frontend = { median = 6.2958, low = 6.15024, high = 6.93008 }
+stalled-cycles-backend  = { median = 81.8627, low = 81.3663, high = 82.0167 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/fin_decimal 0.4.0 Decimal128<18>"
+operations              = 5120
+calls                   = 32
+multiplexed-samples     = 0
+nanoseconds             = { median = 10.88, low = 10.8269, high = 11.0966 }
+cycles                  = { median = 30.4159, low = 30.3172, high = 31.0724 }
+instructions            = { median = 101.031, low = 101.031, high = 101.031 }
+branches                = { median = 13.4132, low = 13.4132, high = 13.4132 }
+branch-misses           = { median = 0.0617798, low = 0.0587646, high = 0.0813232 }
+l1i-misses              = { median = 0.000396729, low = 0.000341797, high = 0.00078125 }
+l1d-misses              = { median = 0.00543823, low = 0.00408936, high = 0.0158325 }
+stalled-cycles-frontend = { median = 0.259003, low = 0.243225, high = 0.283801 }
+stalled-cycles-backend  = { median = 12.7423, low = 12.6673, high = 12.823 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/nexus-decimal 1.2.2 <i128, 18>"
+operations              = 5120
+calls                   = 31
+multiplexed-samples     = 0
+nanoseconds             = { median = 11.6452, low = 11.6094, high = 12.2497 }
+cycles                  = { median = 32.5799, low = 32.5069, high = 34.0611 }
+instructions            = { median = 113.855, low = 113.855, high = 113.855 }
+branches                = { median = 11.6595, low = 11.6595, high = 11.6595 }
+branch-misses           = { median = 0.0604461, low = 0.0580141, high = 0.115058 }
+l1i-misses              = { median = 0.000441028, low = 0.000371724, high = 0.000825353 }
+l1d-misses              = { median = 0.00512853, low = 0.00435988, high = 0.00608619 }
+stalled-cycles-frontend = { median = 0.261933, low = 0.249918, high = 0.320961 }
+stalled-cycles-backend  = { median = 13.1506, low = 12.8969, high = 13.1825 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/primitive_fixed_point_decimal 1.5.0 <i128, 18>"
+operations              = 5120
+calls                   = 27
+multiplexed-samples     = 0
+nanoseconds             = { median = 13.9853, low = 13.9227, high = 14.1475 }
+cycles                  = { median = 39.1348, low = 38.9859, high = 39.2624 }
+instructions            = { median = 148.612, low = 148.612, high = 148.612 }
+branches                = { median = 12.6013, low = 12.6013, high = 12.6013 }
+branch-misses           = { median = 0.000238715, low = 0.000224248, high = 0.000253183 }
+l1i-misses              = { median = 0.000535301, low = 0.000491898, high = 0.000672743 }
+l1d-misses              = { median = 0.00506366, low = 0.00398582, high = 0.0190032 }
+stalled-cycles-frontend = { median = 0.00253183, low = 0.00219907, high = 0.00374711 }
+stalled-cycles-backend  = { median = 15.5382, low = 15.2734, high = 15.8085 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/rust_decimal 1.43.0"
+operations              = 5120
+calls                   = 8
+multiplexed-samples     = 0
+nanoseconds             = { median = 46.9443, low = 46.7653, high = 47.4646 }
+cycles                  = { median = 131.394, low = 130.95, high = 131.695 }
+instructions            = { median = 279.516, low = 279.516, high = 279.516 }
+branches                = { median = 40.6418, low = 40.6418, high = 40.6418 }
+branch-misses           = { median = 0.869507, low = 0.863818, high = 0.88335 }
+l1i-misses              = { median = 0.00275879, low = 0.00234375, high = 0.00463867 }
+l1d-misses              = { median = 0.0140625, low = 0.00895996, high = 0.0188965 }
+stalled-cycles-frontend = { median = 4.69192, low = 4.58127, high = 4.76343 }
+stalled-cycles-backend  = { median = 60.708, low = 60.121, high = 61.035 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/ddust D64<8> Trunc"
+operations              = 5120
+calls                   = 342
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.134, low = 1.12989, high = 1.15851 }
+cycles                  = { median = 3.17301, low = 3.16387, high = 3.17781 }
+instructions            = { median = 17.0165, low = 17.0165, high = 17.0165 }
+branches                = { median = 2.001, low = 2.001, high = 2.001 }
+branch-misses           = { median = 0.000198168, low = 0.000196455, high = 0.000201023 }
+l1i-misses              = { median = 0.0000199881, low = 0.0000165616, high = 0.0000416895 }
+l1d-misses              = { median = 0.000063962, low = 0.0000376919, high = 0.0000919454 }
+stalled-cycles-frontend = { median = 0.00118501, low = 0.0011102, high = 0.00125525 }
+stalled-cycles-backend  = { median = 0.89219, low = 0.877215, high = 0.898215 }
+
+[[measurement]]
+name                    = "mixed/narrow/predictable/ddust D64<8> HalfExpand"
+operations              = 5120
+calls                   = 274
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.41742, low = 1.41619, high = 1.43325 }
+cycles                  = { median = 3.96704, low = 3.96556, high = 3.96945 }
+instructions            = { median = 20.2154, low = 20.2154, high = 20.2154 }
+branches                = { median = 2.20101, low = 2.20101, high = 2.20101 }
+branch-misses           = { median = 0.000198877, low = 0.000198164, high = 0.000202441 }
+l1i-misses              = { median = 0.0000278, low = 0.0000213846, high = 0.0000605896 }
+l1d-misses              = { median = 0.0000741332, low = 0.0000342153, high = 0.0001112 }
+stalled-cycles-frontend = { median = 0.00140212, low = 0.00121464, high = 0.00150547 }
+stalled-cycles-backend  = { median = 1.07052, low = 1.06459, high = 1.07382 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/ddust D128<18> Trunc"
+operations              = 5120
+calls                   = 74
+multiplexed-samples     = 0
+nanoseconds             = { median = 5.20905, low = 5.20405, high = 5.27102 }
+cycles                  = { median = 14.5765, low = 14.5716, high = 14.582 }
+instructions            = { median = 52.6166, low = 52.6166, high = 52.6166 }
+branches                = { median = 4.2011, low = 4.2011, high = 4.2011 }
+branch-misses           = { median = 0.000213788, low = 0.000211149, high = 0.000232264 }
+l1i-misses              = { median = 0.000168919, low = 0.000126689, high = 0.000285051 }
+l1d-misses              = { median = 0.00382179, low = 0.00341269, high = 0.00431799 }
+stalled-cycles-frontend = { median = 0.0012405, low = 0.00109533, high = 0.00186075 }
+stalled-cycles-backend  = { median = 5.79114, low = 5.77801, high = 5.80316 }
+
+[[measurement]]
+name                    = "mixed/wide/predictable/ddust D128<18> HalfExpand"
+operations              = 5120
+calls                   = 65
+multiplexed-samples     = 0
+nanoseconds             = { median = 5.96154, low = 5.9552, high = 6.0318 }
+cycles                  = { median = 16.6847, low = 16.6755, high = 16.6952 }
+instructions            = { median = 58.8161, low = 58.8161, high = 58.8161 }
+branches                = { median = 4.00112, low = 4.00112, high = 4.00112 }
+branch-misses           = { median = 0.000216346, low = 0.000213341, high = 0.000228365 }
+l1i-misses              = { median = 0.000165264, low = 0.00015024, high = 0.000345553 }
+l1d-misses              = { median = 0.00387921, low = 0.00352764, high = 0.0044381 }
+stalled-cycles-frontend = { median = 0.00119591, low = 0.000988582, high = 0.00143329 }
+stalled-cycles-backend  = { median = 6.5187, low = 6.50424, high = 6.52693 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/i64"
+operations              = 327680
+calls                   = 12
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.469766, low = 0.469345, high = 0.480748 }
+cycles                  = { median = 1.31507, low = 1.31439, high = 1.31626 }
+instructions            = { median = 6.6002, low = 6.6002, high = 6.6002 }
+branches                = { median = 0.600027, low = 0.600027, high = 0.600027 }
+branch-misses           = { median = 0.00000457764, low = 0.00000406901, high = 0.00000635783 }
+l1i-misses              = { median = 0.00000915527, low = 0.00000686646, high = 0.0000178019 }
+l1d-misses              = { median = 0.000473531, low = 0.00043869, high = 0.000811513 }
+stalled-cycles-frontend = { median = 0.0000752767, low = 0.0000559489, high = 0.000204722 }
+stalled-cycles-backend  = { median = 0.175285, low = 0.172254, high = 0.177307 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/f64"
+operations              = 327680
+calls                   = 12
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.484367, low = 0.481746, high = 0.495611 }
+cycles                  = { median = 1.35518, low = 1.34835, high = 1.36421 }
+instructions            = { median = 5.60019, low = 5.60019, high = 5.60019 }
+branches                = { median = 0.200024, low = 0.200024, high = 0.200024 }
+branch-misses           = { median = 0.00000686646, low = 0.00000661214, high = 0.00000762939 }
+l1i-misses              = { median = 0.00000839233, low = 0.00000635783, high = 0.00000991821 }
+l1d-misses              = { median = 0.0577113, low = 0.0562167, high = 0.0589498 }
+stalled-cycles-frontend = { median = 0.000171661, low = 0.000114441, high = 0.000270081 }
+stalled-cycles-backend  = { median = 0.655078, low = 0.649869, high = 0.659676 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/ddust D64<8>"
+operations              = 327680
+calls                   = 3
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.78227, low = 1.77835, high = 1.83601 }
+cycles                  = { median = 4.98474, low = 4.97987, high = 5.0265 }
+instructions            = { median = 22.1001, low = 22.1001, high = 22.1001 }
+branches                = { median = 2.28636, low = 2.28636, high = 2.28636 }
+branch-misses           = { median = 0.0336721, low = 0.0335581, high = 0.0355337 }
+l1i-misses              = { median = 0.0000518799, low = 0.0000457764, high = 0.000111898 }
+l1d-misses              = { median = 0.0584045, low = 0.0579966, high = 0.0592916 }
+stalled-cycles-frontend = { median = 0.231026, low = 0.229741, high = 0.241332 }
+stalled-cycles-backend  = { median = 0.908793, low = 0.906794, high = 0.911578 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/bigdecimal 0.4.11"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 929.397, low = 927.487, high = 930.151 }
+cycles                  = { median = 2599.38, low = 2594.56, high = 2600.98 }
+instructions            = { median = 10316.4, low = 10306.1, high = 10316.5 }
+branches                = { median = 1911.22, low = 1909.06, high = 1911.23 }
+branch-misses           = { median = 7.26216, low = 7.24329, high = 7.28121 }
+l1i-misses              = { median = 0.083606, low = 0.0596863, high = 0.128729 }
+l1d-misses              = { median = 0.414877, low = 0.39252, high = 0.429767 }
+stalled-cycles-frontend = { median = 81.3387, low = 81.0544, high = 81.9785 }
+stalled-cycles-backend  = { median = 783.814, low = 782.104, high = 784.711 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/decimal-rs 0.2.0"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 50.7788, low = 50.733, high = 51.0019 }
+cycles                  = { median = 142.019, low = 141.926, high = 142.161 }
+instructions            = { median = 313.831, low = 313.831, high = 313.831 }
+branches                = { median = 26.9805, low = 26.9805, high = 26.9805 }
+branch-misses           = { median = 0.895117, low = 0.871289, high = 0.903833 }
+l1i-misses              = { median = 0.000872803, low = 0.000778198, high = 0.00171509 }
+l1d-misses              = { median = 0.229791, low = 0.227045, high = 0.231369 }
+stalled-cycles-frontend = { median = 4.09424, low = 3.97636, high = 4.17354 }
+stalled-cycles-backend  = { median = 71.9156, low = 71.4254, high = 72.5546 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/fastnum 0.7.5 D64"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 31.2329, low = 31.19, high = 31.385 }
+cycles                  = { median = 87.3335, low = 87.2661, high = 87.4722 }
+instructions            = { median = 199.699, low = 199.699, high = 199.699 }
+branches                = { median = 40.1993, low = 40.1993, high = 40.1993 }
+branch-misses           = { median = 1.37318, low = 1.37135, high = 1.37542 }
+l1i-misses              = { median = 0.00135193, low = 0.00119324, high = 0.00204163 }
+l1d-misses              = { median = 0.153592, low = 0.15231, high = 0.154807 }
+stalled-cycles-frontend = { median = 7.45637, low = 7.43574, high = 7.48536 }
+stalled-cycles-backend  = { median = 27.0029, low = 26.8712, high = 27.0352 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/fin_decimal 0.4.0 Decimal<8>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 4.86303, low = 4.84258, high = 5.00675 }
+cycles                  = { median = 13.602, low = 13.5611, high = 13.6684 }
+instructions            = { median = 31.5392, low = 31.5392, high = 31.5392 }
+branches                = { median = 4.96581, low = 4.96581, high = 4.96581 }
+branch-misses           = { median = 0.305664, low = 0.304523, high = 0.306427 }
+l1i-misses              = { median = 0.000158691, low = 0.000131226, high = 0.000320435 }
+l1d-misses              = { median = 0.0346527, low = 0.0340179, high = 0.0357666 }
+stalled-cycles-frontend = { median = 1.32052, low = 1.31575, high = 1.32825 }
+stalled-cycles-backend  = { median = 2.20474, low = 2.19024, high = 2.21978 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/fixdec 0.1.0 D64"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.20782, low = 3.19868, high = 3.38063 }
+cycles                  = { median = 8.97708, low = 8.95691, high = 9.02019 }
+instructions            = { median = 24.5929, low = 24.5929, high = 24.5929 }
+branches                = { median = 3.1729, low = 3.1729, high = 3.1729 }
+branch-misses           = { median = 0.246155, low = 0.245657, high = 0.246899 }
+l1i-misses              = { median = 0.000146484, low = 0.000128174, high = 0.000192261 }
+l1d-misses              = { median = 0.0333801, low = 0.0314972, high = 0.033786 }
+stalled-cycles-frontend = { median = 1.30299, low = 1.29446, high = 1.3153 }
+stalled-cycles-backend  = { median = 0.833502, low = 0.783105, high = 0.852344 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/nexus-decimal 1.2.2 <i64, 8>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.37884, low = 3.36977, high = 3.55849 }
+cycles                  = { median = 9.45628, low = 9.4328, high = 9.47782 }
+instructions            = { median = 27.2721, low = 27.2721, high = 27.2721 }
+branches                = { median = 3.40399, low = 3.40399, high = 3.40399 }
+branch-misses           = { median = 0.250436, low = 0.249573, high = 0.251129 }
+l1i-misses              = { median = 0.000152588, low = 0.000131226, high = 0.000366211 }
+l1d-misses              = { median = 0.0333771, low = 0.0322449, high = 0.0340088 }
+stalled-cycles-frontend = { median = 1.21449, low = 1.19954, high = 1.22933 }
+stalled-cycles-backend  = { median = 1.03147, low = 1.0234, high = 1.04299 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/primitive_fixed_point_decimal 1.5.0 <i64, 8>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.62023, low = 3.60228, high = 3.80854 }
+cycles                  = { median = 10.1273, low = 10.0872, high = 10.1946 }
+instructions            = { median = 25.2881, low = 25.2881, high = 25.2881 }
+branches                = { median = 3.16204, low = 3.16204, high = 3.16204 }
+branch-misses           = { median = 0.404416, low = 0.401721, high = 0.40755 }
+l1i-misses              = { median = 0.000170898, low = 0.000146484, high = 0.000424194 }
+l1d-misses              = { median = 0.0328278, low = 0.0322296, high = 0.0333557 }
+stalled-cycles-frontend = { median = 1.89405, low = 1.87829, high = 1.90273 }
+stalled-cycles-backend  = { median = 0.768246, low = 0.761221, high = 0.778577 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/rust_decimal 1.43.0"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 34.9329, low = 34.8602, high = 35.0642 }
+cycles                  = { median = 97.6674, low = 97.5533, high = 97.9112 }
+instructions            = { median = 255.452, low = 255.452, high = 255.452 }
+branches                = { median = 34.2821, low = 34.2821, high = 34.2821 }
+branch-misses           = { median = 1.1062, low = 1.10228, high = 1.11085 }
+l1i-misses              = { median = 0.000653076, low = 0.000531006, high = 0.00090332 }
+l1d-misses              = { median = 0.147794, low = 0.146573, high = 0.148843 }
+stalled-cycles-frontend = { median = 6.0845, low = 6.04038, high = 6.11039 }
+stalled-cycles-backend  = { median = 32.7184, low = 32.3704, high = 32.8498 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/i128"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 3.46886, low = 3.46504, high = 3.66321 }
+cycles                  = { median = 9.71133, low = 9.699, high = 9.72265 }
+instructions            = { median = 34.9847, low = 34.9847, high = 34.9847 }
+branches                = { median = 3.4638, low = 3.4638, high = 3.4638 }
+branch-misses           = { median = 0.23913, low = 0.238623, high = 0.240042 }
+l1i-misses              = { median = 0.000143433, low = 0.00012207, high = 0.000363159 }
+l1d-misses              = { median = 0.118637, low = 0.117908, high = 0.120306 }
+stalled-cycles-frontend = { median = 1.03045, low = 1.02763, high = 1.03351 }
+stalled-cycles-backend  = { median = 0.567184, low = 0.561407, high = 0.573486 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/f64"
+operations              = 327680
+calls                   = 12
+multiplexed-samples     = 0
+nanoseconds             = { median = 0.478088, low = 0.475926, high = 0.489619 }
+cycles                  = { median = 1.33749, low = 1.33048, high = 1.34364 }
+instructions            = { median = 5.60019, low = 5.60019, high = 5.60019 }
+branches                = { median = 0.200024, low = 0.200024, high = 0.200024 }
+branch-misses           = { median = 0.00000686646, low = 0.00000534058, high = 0.00000762939 }
+l1i-misses              = { median = 0.00000712077, low = 0.00000508626, high = 0.0000104268 }
+l1d-misses              = { median = 0.0299711, low = 0.0298093, high = 0.0301875 }
+stalled-cycles-frontend = { median = 0.000182343, low = 0.0000658671, high = 0.000290934 }
+stalled-cycles-backend  = { median = 0.638012, low = 0.634146, high = 0.642436 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/ddust D128<18>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 5.68634, low = 5.68075, high = 5.83254 }
+cycles                  = { median = 15.9176, low = 15.9082, high = 15.9279 }
+instructions            = { median = 49.6853, low = 49.6853, high = 49.6853 }
+branches                = { median = 2.68748, low = 2.68748, high = 2.68748 }
+branch-misses           = { median = 0.143765, low = 0.143143, high = 0.144278 }
+l1i-misses              = { median = 0.00022583, low = 0.000180054, high = 0.000442505 }
+l1d-misses              = { median = 0.109756, low = 0.108606, high = 0.111859 }
+stalled-cycles-frontend = { median = 1.2636, low = 1.25984, high = 1.26976 }
+stalled-cycles-backend  = { median = 5.23747, low = 5.21296, high = 5.25765 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/bigdecimal 0.4.11"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 2055.1, low = 2053.97, high = 2056.58 }
+cycles                  = { median = 5747.47, low = 5745.43, high = 5749.64 }
+instructions            = { median = 28329.5, low = 28326.5, high = 28331.1 }
+branches                = { median = 5546.08, low = 5545.85, high = 5546.44 }
+branch-misses           = { median = 11.8892, low = 11.8338, high = 12.1134 }
+l1i-misses              = { median = 1.13316, low = 1.10129, high = 1.22729 }
+l1d-misses              = { median = 0.797888, low = 0.766733, high = 0.943326 }
+stalled-cycles-frontend = { median = 128.606, low = 127.37, high = 130.818 }
+stalled-cycles-backend  = { median = 395.223, low = 393.632, high = 396.211 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/decimal-rs 0.2.0"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 53.1417, low = 53.0683, high = 53.4044 }
+cycles                  = { median = 148.586, low = 148.463, high = 148.81 }
+instructions            = { median = 319.905, low = 319.905, high = 319.905 }
+branches                = { median = 27.3184, low = 27.3184, high = 27.3184 }
+branch-misses           = { median = 1.08856, low = 1.08579, high = 1.09752 }
+l1i-misses              = { median = 0.000769043, low = 0.000646973, high = 0.0015625 }
+l1d-misses              = { median = 0.24079, low = 0.23844, high = 0.241708 }
+stalled-cycles-frontend = { median = 4.88374, low = 4.85541, high = 4.94311 }
+stalled-cycles-backend  = { median = 75.0353, low = 74.6212, high = 75.1971 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/fastnum 0.7.5 D128"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 59.9109, low = 59.8223, high = 60.1041 }
+cycles                  = { median = 167.532, low = 167.354, high = 167.795 }
+instructions            = { median = 392.376, low = 392.376, high = 392.376 }
+branches                = { median = 66.4626, low = 66.4626, high = 66.4626 }
+branch-misses           = { median = 2.34315, low = 2.33253, high = 2.35698 }
+l1i-misses              = { median = 0.00340881, low = 0.00273132, high = 0.00543213 }
+l1d-misses              = { median = 0.26936, low = 0.267606, high = 0.279623 }
+stalled-cycles-frontend = { median = 13.2556, low = 13.2226, high = 13.3295 }
+stalled-cycles-backend  = { median = 42.2677, low = 42.1816, high = 42.3676 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/fin_decimal 0.4.0 Decimal128<18>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 9.76303, low = 9.73765, high = 9.89217 }
+cycles                  = { median = 27.299, low = 27.2448, high = 27.3656 }
+instructions            = { median = 68.2402, low = 68.2402, high = 68.2402 }
+branches                = { median = 9.37749, low = 9.37749, high = 9.37749 }
+branch-misses           = { median = 0.564182, low = 0.561819, high = 0.569891 }
+l1i-misses              = { median = 0.000250244, low = 0.000195313, high = 0.000384521 }
+l1d-misses              = { median = 0.131635, low = 0.129953, high = 0.134827 }
+stalled-cycles-frontend = { median = 2.45187, low = 2.43654, high = 2.47534 }
+stalled-cycles-backend  = { median = 5.94346, low = 5.86696, high = 6.00743 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/nexus-decimal 1.2.2 <i128, 18>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 8.47675, low = 8.44688, high = 8.6154 }
+cycles                  = { median = 23.691, low = 23.6535, high = 23.7879 }
+instructions            = { median = 68.6115, low = 68.6115, high = 68.6115 }
+branches                = { median = 7.5647, low = 7.5647, high = 7.5647 }
+branch-misses           = { median = 0.556418, low = 0.553897, high = 0.563831 }
+l1i-misses              = { median = 0.000253296, low = 0.000219727, high = 0.000396729 }
+l1d-misses              = { median = 0.11517, low = 0.114151, high = 0.116702 }
+stalled-cycles-frontend = { median = 2.86337, low = 2.84608, high = 2.89503 }
+stalled-cycles-backend  = { median = 4.08253, low = 4.05473, high = 4.09203 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/primitive_fixed_point_decimal 1.5.0 <i128, 18>"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 8.41006, low = 8.38965, high = 8.53806 }
+cycles                  = { median = 23.522, low = 23.4857, high = 23.629 }
+instructions            = { median = 70.4154, low = 70.4154, high = 70.4154 }
+branches                = { median = 6.09999, low = 6.09999, high = 6.09999 }
+branch-misses           = { median = 0.535342, low = 0.5328, high = 0.542276 }
+l1i-misses              = { median = 0.000296021, low = 0.000247192, high = 0.000546265 }
+l1d-misses              = { median = 0.116724, low = 0.115744, high = 0.119067 }
+stalled-cycles-frontend = { median = 2.81544, low = 2.80398, high = 2.843 }
+stalled-cycles-backend  = { median = 4.94422, low = 4.79424, high = 4.99155 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/rust_decimal 1.43.0"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 42.0587, low = 41.9963, high = 42.1959 }
+cycles                  = { median = 117.62, low = 117.488, high = 117.73 }
+instructions            = { median = 287.89, low = 287.89, high = 287.89 }
+branches                = { median = 39.4208, low = 39.4208, high = 39.4208 }
+branch-misses           = { median = 1.61669, low = 1.61215, high = 1.62142 }
+l1i-misses              = { median = 0.000750732, low = 0.000628662, high = 0.00122986 }
+l1d-misses              = { median = 0.157843, low = 0.155432, high = 0.159695 }
+stalled-cycles-frontend = { median = 9.03528, low = 9.00328, high = 9.08523 }
+stalled-cycles-backend  = { median = 35.9079, low = 35.8032, high = 35.9757 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/ddust D64<8> Trunc"
+operations              = 327680
+calls                   = 4
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.28032, low = 1.27634, high = 1.31777 }
+cycles                  = { median = 3.58066, low = 3.57405, high = 3.5919 }
+instructions            = { median = 16.1758, low = 16.1758, high = 16.1758 }
+branches                = { median = 1.86523, low = 1.86523, high = 1.86523 }
+branch-misses           = { median = 0.0340302, low = 0.0339409, high = 0.034594 }
+l1i-misses              = { median = 0.0000350952, low = 0.000025177, high = 0.0000793457 }
+l1d-misses              = { median = 0.0315605, low = 0.031208, high = 0.0318604 }
+stalled-cycles-frontend = { median = 0.168405, low = 0.166507, high = 0.17057 }
+stalled-cycles-backend  = { median = 0.646138, low = 0.644048, high = 0.649557 }
+
+[[measurement]]
+name                    = "mixed/narrow/unpredictable/ddust D64<8> HalfExpand"
+operations              = 327680
+calls                   = 3
+multiplexed-samples     = 0
+nanoseconds             = { median = 1.55934, low = 1.55469, high = 1.61443 }
+cycles                  = { median = 4.36252, low = 4.35403, high = 4.37639 }
+instructions            = { median = 18.8587, low = 18.8587, high = 18.8587 }
+branches                = { median = 2.05641, low = 2.05641, high = 2.05641 }
+branch-misses           = { median = 0.0330404, low = 0.0329742, high = 0.0331919 }
+l1i-misses              = { median = 0.0000528971, low = 0.0000447591, high = 0.0000874837 }
+l1d-misses              = { median = 0.0313009, low = 0.0309845, high = 0.031723 }
+stalled-cycles-frontend = { median = 0.176317, low = 0.17542, high = 0.178673 }
+stalled-cycles-backend  = { median = 0.97633, low = 0.966732, high = 0.98452 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/ddust D128<18> Trunc"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 4.71291, low = 4.70619, high = 4.88302 }
+cycles                  = { median = 13.1955, low = 13.1787, high = 13.2068 }
+instructions            = { median = 42.7428, low = 42.7428, high = 42.7428 }
+branches                = { median = 2.58724, low = 2.58724, high = 2.58724 }
+branch-misses           = { median = 0.145322, low = 0.144724, high = 0.145938 }
+l1i-misses              = { median = 0.00020752, low = 0.000161743, high = 0.000341797 }
+l1d-misses              = { median = 0.108887, low = 0.108194, high = 0.110101 }
+stalled-cycles-frontend = { median = 1.18629, low = 1.17549, high = 1.1914 }
+stalled-cycles-backend  = { median = 3.88052, low = 3.86155, high = 3.90092 }
+
+[[measurement]]
+name                    = "mixed/wide/unpredictable/ddust D128<18> HalfExpand"
+operations              = 327680
+calls                   = 1
+multiplexed-samples     = 0
+nanoseconds             = { median = 5.27566, low = 5.26829, high = 5.42089 }
+cycles                  = { median = 14.7681, low = 14.7531, high = 14.7809 }
+instructions            = { median = 47.0982, low = 47.0982, high = 47.0982 }
+branches                = { median = 2.58771, low = 2.58771, high = 2.58772 }
+branch-misses           = { median = 0.14411, low = 0.143411, high = 0.144669 }
+l1i-misses              = { median = 0.000189209, low = 0.000158691, high = 0.000405884 }
+l1d-misses              = { median = 0.109402, low = 0.108844, high = 0.110907 }
+stalled-cycles-frontend = { median = 1.34441, low = 1.32542, high = 1.35146 }
+stalled-cycles-backend  = { median = 4.56298, low = 4.53193, high = 4.57285 }

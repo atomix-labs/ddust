@@ -56,8 +56,8 @@ static ROWS: [[u8; 112]; 31] = {
 
 /// How many decimal digits `x` has, none for zero: from its bit length, and one comparison.
 ///
-/// By hand: as `u64::checked_ilog10`, a narrow value wrote in 12.25 ns,
-/// not this form's 9.8 (`bench/results/2026-10-09T04-50Z-pr13-ilog10-graviton4`).
+/// By hand: as `u64::checked_ilog10`, a narrow value wrote in 12.25 ns, not this form's 9.83: in
+/// `bench/results/`, `2026-10-09T04-50Z-pr13-ilog10-graviton4` and `…T12-06Z-pr13-format…`.
 #[inline]
 #[expect(
     clippy::as_conversions,
