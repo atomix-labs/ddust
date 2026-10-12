@@ -86,6 +86,21 @@ pub(crate) const fn div_up_narrow(
     if high(n) >= b {
         return None;
     }
+    // A numerator within a word: one 64-bit division, whose latency is short for a small quotient,
+    // where the estimate's `fdiv` is not; a chain of quotients on mixed operands waits on it.
+    if high(n) == 0 {
+        let n = u64::low_bits(n);
+        let (Some(quotient), Some(rest)) = (n.checked_div(b), n.checked_rem(b)) else {
+            return None;
+        };
+        return quotient.checked_add(u64::from(rounds_up(
+            rest,
+            b,
+            quotient & 1 == 1,
+            negative,
+            table,
+        )));
+    }
     let estimate = whole(double(a) * POW10_F64[usize::from(k)] / (double(b) * MARGIN));
     let remainder = u64::low_bits(n).wrapping_sub(estimate.wrapping_mul(b));
     let over = remainder >= b;
