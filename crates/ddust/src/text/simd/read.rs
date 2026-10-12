@@ -2,7 +2,8 @@
 //! digits put in their steps' places by one lookup whose indices the point and the scale give, and
 //! read as a number by multiplies in the lanes.
 //!
-//! The lookup is the one instruction `core::simd` leaves to each vector unit, through [`Lanes`].
+//! The lookup is left to each vector unit, through [`Lanes`], as `core::simd` lowers it well on one
+//! alone.
 
 use core::ops::Range;
 use core::simd::prelude::*;

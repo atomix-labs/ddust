@@ -433,7 +433,7 @@ fn write_ascii_wide(
 }
 
 /// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one
-/// is asked: when none is, by the vector writer, then by the eight-digit writers at up to 19
+/// is asked: when none is, by the vector writer, else by the eight-digit writers at up to 19
 /// decimals, the narrow one for a `u64` and the split one past it; through a [`Text`] otherwise.
 fn write<I: Int>(
     f: &mut fmt::Formatter<'_>, steps: I, decimals: u8, precision: Option<usize>,
@@ -746,7 +746,12 @@ mod tests {
         30,
         Some("0.000000000018446744073709551615")
     )]
-    #[case::a_digit_in_the_lane_after_the_point(false, 10_u128.pow(31) - 1, 30, Some("9.999999999999999999999999999999"))]
+    #[case::a_digit_in_the_lane_after_the_point(
+        false,
+        9_999_999_999_999_999_999_999_999_999_999,
+        30,
+        Some("9.999999999999999999999999999999")
+    )]
     #[case::the_first_wide_step(false, 1_u128 << 64, 0, Some("18446744073709551616"))]
     #[case::zero_has_no_sign(true, 0, 3, Some("0"))]
     #[case::past_thirty_decimals(false, 1, 31, None)]
@@ -817,7 +822,7 @@ mod tests {
                 Some(len) => prop_assert_eq!(str::from_utf8(&out[..len]).expect("ASCII"), expected),
                 None => prop_assert!(
                     expected.len() > room || cfg!(not(lanes)) || decimals > 30 || magnitude >= 10_u128.pow(31),
-                    "{} left in {} bytes", expected, room
+                    "{} refused in {} bytes", expected, room
                 ),
             }
             let len = written.unwrap_or(0);

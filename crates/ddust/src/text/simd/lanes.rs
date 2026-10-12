@@ -102,8 +102,8 @@ impl Lanes {
     }
 
     /// The 16 digits of `value`, below `10^16`, as ASCII, the most significant first, and one past
-    /// the last lane that holds a nonzero digit, zero for none: Dougall Johnson's NEON kernel,
-    /// whose doubling multiply-highs halve a group of digits in one instruction each.
+    /// the last lane that holds a nonzero digit, zero for none: Dougall Johnson's NEON kernel, in
+    /// which a doubling multiply-high takes each halving's quotient in one instruction.
     #[cfg(target_arch = "aarch64")]
     #[inline(always)]
     #[expect(clippy::inline_always, reason = "inline in the writer, where its value is ready")]
@@ -135,8 +135,8 @@ impl Lanes {
         reason = "groups below 10^8: every step stays in range"
     )]
     pub(super) fn digits16(self, value: u64) -> (u8x16, u8) {
-        // Each group of eight as [first four | last four << 32], by `(n << 32) − q × (10^4 × 2^32 −
-        // 1)`.
+        // Each group of eight as [first four | last four << 32], by
+        // `(n << 32) − q × (10^4 × 2^32 − 1)`.
         let halves = |n: u64| {
             let q = (n * 109_951_163) >> 40;
             (n << 32) - q * ((10_000 << 32) - 1)

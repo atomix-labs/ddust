@@ -13,15 +13,16 @@ use crate::word::pow10_u128;
 /// `10^16`: the steps' two halves of 16 digits.
 const SIXTEEN: u64 = 10_000_000_000_000_000;
 
-/// Eight `'0'`s but a point in the first: the top half's first eight lanes, a leading zero of every
-/// value the writer takes, holding the point the rows look up.
+/// Eight `'0'`s but a point in the first: the top half's first eight lanes, whose first, a leading
+/// zero of every value the writer takes, holds the point the rows look up.
 const POINTED_ZEROS: u64 = (ZEROS & !0xFF) | 0x2E;
 
 /// For each scale `D` up to 30, the lane in the 32 digits of each place of the unsigned text, at
 /// `48 + v` for the place `v` past the point: `v + 32 − D` before it, `v + 31 − D` after it, lane
-/// 0, which holds the point, at it, and 255, which a lookup reads as zero, past the digits. Lane 0
-/// is a leading zero while the integer starts at lane `32 − D − n` or later, `n` its digits: for
-/// every value below `10^31`, up to 30 decimals.
+/// 0, which holds the point, at it, and 255, which a lookup reads as zero, past the digits.
+///
+/// Lane 0 is a leading zero while the integer, `n` digits from lane `32 − D − n`, starts at lane 1
+/// or later: for every value below `10^31`, up to 30 decimals.
 #[expect(
     clippy::indexing_slicing,
     clippy::as_conversions,
@@ -53,9 +54,10 @@ static ROWS: [[u8; 112]; 31] = {
     rows
 };
 
-/// How many decimal digits `x` has, none for zero: from its bit length, and one comparison. By
-/// hand: as `u64::checked_ilog10`, a narrow value wrote in 12.25 ns, not this form's 9.8
-/// (`bench/results/2026-10-09T04-50Z-pr13-ilog10-graviton4`).
+/// How many decimal digits `x` has, none for zero: from its bit length, and one comparison.
+///
+/// By hand: as `u64::checked_ilog10`, a narrow value wrote in 12.25 ns,
+/// not this form's 9.8 (`bench/results/2026-10-09T04-50Z-pr13-ilog10-graviton4`).
 #[inline]
 #[expect(
     clippy::as_conversions,
@@ -77,8 +79,9 @@ const fn digit_count(x: u64) -> u8 {
 /// digit's lane, and `count` digits long, at `decimals`, a `-` first when `negative`, into `out`:
 /// the length written, or `None` past 30 decimals or where `out` is too short.
 ///
-/// The text is stored in windows of 8 bytes for a narrow value and 16 for a wide one, at its
-/// start, its middle and its end, so that none passes it.
+/// The text is stored in three windows, at its start, its middle and its end, so that none passes
+/// it: of 16 bytes for a wide value or a text past 24 bytes, of 8 for any other; a text shorter
+/// than its window in two of 8 or of 4 bytes, or in one.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the SSSE3 kernel, or its lookups are calls")]
 #[expect(clippy::arithmetic_side_effects, reason = "counts of at most 48 places, and 30 decimals")]
@@ -104,18 +107,18 @@ fn write<const WIDE: bool>(
     *out.first_mut()? = b'-';
     let text = out.get_mut(sign..)?;
     let digits: u8x32 = simd_swizzle!(top.0, bottom.0, JOIN);
-    // The unsigned text's `width` bytes from place `at`.
-    let mut store = |at: usize, width: usize| -> Option<()> {
-        let start = at + 48 - integer;
+    // The unsigned text's `width` bytes from `place`.
+    let mut store = |place: usize, width: usize| -> Option<()> {
+        let start = place + 48 - integer;
         let index = u8x16::from_array(row.get(start..start + 16)?.try_into().ok()?);
         let window = lanes.lookup32(digits, index.resize::<32>(u8::MAX)).extract::<0, 16>();
-        text.get_mut(at..at + width)?.copy_from_slice(window.as_array().get(..width)?);
+        text.get_mut(place..place + width)?.copy_from_slice(window.as_array().get(..width)?);
         Some(())
     };
     let width = if WIDE || unsigned > 24 { 16 } else { 8 };
     if unsigned >= width {
-        for at in [0, (unsigned - width).min(width), unsigned - width] {
-            store(at, width)?;
+        for place in [0, (unsigned - width).min(width), unsigned - width] {
+            store(place, width)?;
         }
     } else if unsigned >= 8 {
         store(0, 8)?;
@@ -130,8 +133,8 @@ fn write<const WIDE: bool>(
 }
 
 /// Writes the steps `magnitude` at `decimals`, a `-` first when `negative`, into `out`: as
-/// [`write`](fn@write) does, the top half, below 1845, by the SWAR writer, and the bottom by the
-/// unit.
+/// [`write`](fn@write) does, the top half, below 1845, by the SWAR writer, and
+/// the bottom by the unit.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the SSSE3 kernel, or its lookups are calls")]
 pub(super) fn narrow(

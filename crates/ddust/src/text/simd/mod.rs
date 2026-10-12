@@ -1,10 +1,11 @@
-//! The vector reader and writer, written once in `core::simd`, and the SWAR reader the reader is
-//! held to: each reads a text as the other does, where both read it, as the tests and the fuzz
-//! targets check. The writer writes the general writer's text, as its property checks.
+//! The vector reader and writer, written once in `core::simd`, and the SWAR reader the vector
+//! reader is held to: each reader reads a text as the other does, where both read it, as the tests
+//! and the fuzz targets check; the writer writes the general writer's text, as its property checks.
 //!
-//! The vector reader reads on NEON, on every little-endian aarch64 target that has it, all but the
-//! soft-float ones, and on SSSE3, on an `x86_64` build for a CPU that has it or one the
-//! `runtime-dispatch` feature checks. Where there is no vector unit, the SWAR reader reads.
+//! Both run on NEON, on every little-endian aarch64 target that has it, all but the soft-float
+//! ones, and on SSSE3, on an `x86_64` build for a CPU that has it or one the `runtime-dispatch`
+//! feature checks. Where there is no vector unit, the SWAR reader reads, and the eight-byte writer
+//! writes.
 
 use core::ops::Range;
 
@@ -62,8 +63,9 @@ pub(crate) fn read_plain_in(buffer: &[u8], digits: Range<usize>, decimals: u8) -
 }
 
 /// Writes the steps `magnitude` at `decimals`, a `-` first when `negative`, into `out`, as the
-/// shortest exact decimal: by the vector writer where the build has a vector unit or the CPU does,
-/// for at most 30 decimals. `None` where the CPU has none, or where `out` is too short.
+/// shortest exact decimal: by the vector writer where the build has a vector unit or the CPU does.
+///
+/// `None` past 30 decimals, where the CPU has no vector unit, or where `out` is too short.
 #[cfg(lanes)]
 #[inline(always)]
 #[expect(
@@ -123,7 +125,7 @@ pub(crate) const fn write_wide(
 pub(crate) fn read_rest(text: &[u8], decimals: u8) -> Option<u128> {
     cfg_select! {
         lanes = "built" => swar::read_plain(text, decimals),
-        _ => Lanes::checked().and_then(|_vector| swar::read_plain(text, decimals)),
+        _ => Lanes::checked().and_then(|_lanes| swar::read_plain(text, decimals)),
     }
 }
 
