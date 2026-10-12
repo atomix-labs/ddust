@@ -109,12 +109,12 @@ impl Lanes {
     #[expect(clippy::inline_always, reason = "inline in the writer, where its value is ready")]
     #[expect(
         unsafe_code,
-        reason = "calls the NEON kernel from code without its `#[target_feature]`: sound, since \
-                  this function's `cfg` requires NEON"
+        reason = "calls the NEON kernel from code compiled without its `#[target_feature]`"
     )]
-    #[expect(clippy::unused_self, reason = "the proof NEON's kernel needs is the build's own")]
+    #[expect(clippy::unused_self, reason = "the proof NEON's kernel needs, which its SAFETY reads")]
     pub(super) fn digits16(self, value: u64) -> (u8x16, u8) {
-        // SAFETY: NEON is enabled, as `lanes` on aarch64 requires.
+        // SAFETY: by the INVARIANT of `Lanes` the CPU has NEON, all `neon_digits16` needs: on
+        // aarch64 `BUILT` is its one maker, and its `cfg` requires `target_feature = "neon"`.
         let (digits, nibbles) = unsafe { neon_digits16(value) };
         let last = 16_u32.wrapping_sub(nibbles.leading_zeros() / 4);
         (digits, u8::try_from(last).unwrap_or(0))

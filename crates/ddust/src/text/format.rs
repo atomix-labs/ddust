@@ -1,4 +1,5 @@
-//! Writing a decimal: its shortest exact digits, eight at a time, into a stack buffer.
+//! Writing a decimal: its shortest exact digits, by the vector writer where the build or the CPU
+//! has one, else eight at a time into a stack buffer.
 
 use core::fmt::Write as _;
 use core::{fmt, str};
@@ -432,8 +433,8 @@ fn write_ascii_wide(
 }
 
 /// Writes `steps` at `decimals`, padded as an integer is, with `precision` decimals when one
-/// is asked: by the eight-digit writers at up to 19 decimals when no precision is asked, the
-/// narrow one for a `u64` and the split one past it, through a [`Text`] otherwise.
+/// is asked: when none is, by the vector writer, then by the eight-digit writers at up to 19
+/// decimals, the narrow one for a `u64` and the split one past it; through a [`Text`] otherwise.
 fn write<I: Int>(
     f: &mut fmt::Formatter<'_>, steps: I, decimals: u8, precision: Option<usize>,
 ) -> fmt::Result {
@@ -734,6 +735,35 @@ mod tests {
             format!("{:.0e}", D64::<0>::from_steps(95, Fixed)),
             "1e2",
             "the carry moves the exponent"
+        );
+    }
+
+    #[cfg(lanes)]
+    #[rstest]
+    #[case::thirty_decimals_of_a_word(
+        false,
+        u128::from(u64::MAX),
+        30,
+        Some("0.000000000018446744073709551615")
+    )]
+    #[case::a_digit_in_the_lane_after_the_point(false, 10_u128.pow(31) - 1, 30, Some("9.999999999999999999999999999999"))]
+    #[case::the_first_wide_step(false, 1_u128 << 64, 0, Some("18446744073709551616"))]
+    #[case::zero_has_no_sign(true, 0, 3, Some("0"))]
+    #[case::past_thirty_decimals(false, 1, 31, None)]
+    #[case::steps_of_ten_to_the_thirty_one(false, 10_u128.pow(31), 0, None)]
+    fn the_vector_writer_writes_to_each_edge_of_its_domain(
+        #[case] negative: bool, #[case] magnitude: u128, #[case] decimals: u8,
+        #[case] text: Option<&str>,
+    ) {
+        let mut out = [0; MAX_ASCII_LEN];
+        let written = match u64::try_from(magnitude) {
+            Ok(narrow) => super::write_narrow(negative, narrow, decimals, &mut out),
+            Err(_past_a_word) => super::write_wide(negative, magnitude, decimals, &mut out),
+        };
+        assert_eq!(
+            written.map(|len| str::from_utf8(&out[..len])),
+            text.map(Ok),
+            "{magnitude} at {decimals}"
         );
     }
 

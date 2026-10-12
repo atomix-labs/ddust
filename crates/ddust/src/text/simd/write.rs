@@ -53,7 +53,9 @@ static ROWS: [[u8; 112]; 31] = {
     rows
 };
 
-/// How many decimal digits `x` has, at least one: from its bit length, and one comparison.
+/// How many decimal digits `x` has, none for zero: from its bit length, and one comparison. By
+/// hand: as `u64::checked_ilog10`, a narrow value wrote in 12.25 ns, not this form's 9.8
+/// (`bench/results/2026-10-09T04-50Z-pr13-ilog10-graviton4`).
 #[inline]
 #[expect(
     clippy::as_conversions,
@@ -128,7 +130,8 @@ fn write<const WIDE: bool>(
 }
 
 /// Writes the steps `magnitude` at `decimals`, a `-` first when `negative`, into `out`: as
-/// [`write`] does, the top half, below 1845, by the SWAR writer, and the bottom by the unit.
+/// [`write`](fn@write) does, the top half, below 1845, by the SWAR writer, and the bottom by the
+/// unit.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the SSSE3 kernel, or its lookups are calls")]
 pub(super) fn narrow(
@@ -144,8 +147,8 @@ pub(super) fn narrow(
 }
 
 /// Writes the steps `magnitude` at `decimals`, a `-` first when `negative`, into `out`: as
-/// [`write`] does, both halves by the unit; `None` too for steps of `10^31` or more, whose first
-/// lane is not the point's.
+/// [`write`](fn@write) does, both halves by the unit; `None` too for steps of `10^31` or more,
+/// whose first lane is not the point's.
 #[inline(always)]
 #[expect(clippy::inline_always, reason = "inline in the SSSE3 kernel, or its lookups are calls")]
 pub(super) fn wide(

@@ -1,5 +1,6 @@
-//! The vector reader, written once in `core::simd`, and the SWAR reader it is held to: each reads
-//! a text as the other does, where both read it, as the tests and the fuzz targets check.
+//! The vector reader and writer, written once in `core::simd`, and the SWAR reader the reader is
+//! held to: each reads a text as the other does, where both read it, as the tests and the fuzz
+//! targets check. The writer writes the general writer's text, as its property checks.
 //!
 //! The vector reader reads on NEON, on every little-endian aarch64 target that has it, all but the
 //! soft-float ones, and on SSSE3, on an `x86_64` build for a CPU that has it or one the
