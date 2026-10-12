@@ -20,8 +20,9 @@ pub const MAX_DECIMALS: u8 = 38;
 /// What gives a decimal its scale: how many decimals a step is.
 ///
 /// A scale the compiler knows is zero-sized, so a decimal of it is its integer alone, and two
-/// values of it never differ in scale. One known at run time is carried beside the integer, and
-/// [`LINES_UP`](Self::LINES_UP) says what happens when two of them differ.
+/// values of it never differ in scale, which the arithmetic may take from its size alone. One
+/// known at run time is carried beside the integer, and [`LINES_UP`](Self::LINES_UP) says what
+/// happens when two of them differ.
 ///
 /// # Examples
 /// ```
