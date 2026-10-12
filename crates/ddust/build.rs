@@ -1,8 +1,8 @@
 //! The `cfg`s the crate is built under, each named once.
 //!
-//! `lanes` is the vector reader's: `lanes = "built"` where the build has the lookup's instruction,
-//! NEON's `tbl` on a little-endian aarch64 target, whose order the lanes take, or SSSE3's `pshufb`
-//! on an `x86_64` one; `lanes = "checked"` on an `x86_64` build with SSE2 but not SSSE3 whose
+//! `lanes` is the vector reader's and writer's: `lanes = "built"` where the build has the unit's
+//! instructions, NEON on a little-endian aarch64 target, whose order the lanes take, or SSSE3 on an
+//! `x86_64` one; `lanes = "checked"` on an `x86_64` build with SSE2 but not SSSE3 whose
 //! `runtime-dispatch` feature checks the CPU for it; and `lanes` alone with either. `estimate`,
 //! under which a quotient is taken from an `f64` estimate, is set on aarch64 with NEON, whose
 //! `fdiv` is pipelined, the one target it is measured on.

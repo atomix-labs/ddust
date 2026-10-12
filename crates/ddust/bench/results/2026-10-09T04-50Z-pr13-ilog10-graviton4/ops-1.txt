@@ -1,0 +1,5 @@
+per operation                                                                   ns   cycles    instr   IPC branches  br-miss L1i-miss L1d-miss fe-stall be-stall   GHz spread
+format/narrow/predictable/ddust D64<8>                                     12.2600   34.321   134.02  3.90    5.003   0.0010   0.0002   0.0011    0.006   11.384  2.80   1.7%
+format/wide/predictable/ddust D128<18>                                     19.1949   53.721   221.02  4.11   10.003   0.0010   0.0004   0.0015    0.007   16.159  2.80   1.2%
+format/narrow/unpredictable/ddust D64<8>                                   12.2370   34.250   134.00  3.91    5.001   0.0005   0.0003   0.0808    0.003   11.394  2.80   2.7%
+format/wide/unpredictable/ddust D128<18>                                   20.4150   57.145   198.63  3.48    9.498   0.7821   0.0009   0.1336    4.517   11.859  2.80   3.4%

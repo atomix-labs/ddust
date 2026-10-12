@@ -29,6 +29,17 @@ pub(crate) const fn eight_digits(word: u64) -> u64 {
     (word & 0x0000_FFFF_0000_FFFF).wrapping_mul(42_949_672_960_001).wrapping_shr(32)
 }
 
+/// The eight digits of `n`, below `10^8`, as byte values, the most significant in the lowest
+/// byte: two multiply-shifts per halving, not a division per digit.
+#[expect(clippy::arithmetic_side_effects, reason = "n is below 10^8: every step stays in range")]
+pub(crate) const fn digits8(n: u64) -> u64 {
+    let x = (n / 10_000) | ((n % 10_000) << 32);
+    let q = ((x * 10_486) >> 20) & 0x0000_007F_0000_007F;
+    let y = q | ((x - q * 100) << 16);
+    let q = ((y * 103) >> 10) & 0x000F_000F_000F_000F;
+    q | ((y - q * 10) << 8)
+}
+
 /// The low `count` bytes set, for `count` from 0 to 8.
 #[inline]
 pub(crate) const fn low_bytes(count: usize) -> u64 {
