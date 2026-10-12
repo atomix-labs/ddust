@@ -828,8 +828,8 @@ canonical = "2fbca54f0c823af3704380d73ebe3c91bd3b65d8c17c96556910f8f4e0ae021d"
 policy = "merge"
 
 [files."docs/theme/logo.css"]
-exact = "013f54308415dc140e8529f91c20427f20a43234be5c67c7c8b9d549e5fde419"
-canonical = "013f54308415dc140e8529f91c20427f20a43234be5c67c7c8b9d549e5fde419"
+exact = "afe7428b2c36d2960c24d15ef2aa559c685e37663567e1f06b9b06f332a87fd2"
+canonical = "afe7428b2c36d2960c24d15ef2aa559c685e37663567e1f06b9b06f332a87fd2"
 
 [files."docs/theme/palette.css"]
 exact = "227f8ccee4b7ff2557ea8d5bc69432b76271b650c00a5fed0ae74f2b5bb38f05"
@@ -1115,8 +1115,8 @@ canonical = "97ae3bed43a289ecb77fd9f99ed84523563adf60c44f27a624f9f62308af2744"
 
 [parts."README.md".project]
 scope = "block"
-exact = "558813aff3e11f69d20c0df57f02df91b4ee7068ce773ca14615023c88fc1940"
-canonical = "558813aff3e11f69d20c0df57f02df91b4ee7068ce773ca14615023c88fc1940"
+exact = "e48d8cde4415d9f01ced5f5cc9a57928d44343d4600f72f552c06d9ef88dc326"
+canonical = "e48d8cde4415d9f01ced5f5cc9a57928d44343d4600f72f552c06d9ef88dc326"
 
 [parts."clippy.toml".rust-clippy]
 scope = "keys"
@@ -1136,8 +1136,8 @@ policy = "merge"
 
 [parts."docs/theme/head.hbs".mdbook]
 scope = "block"
-exact = "8ca25ca00cb908bd8c6b767b8218d4a7e0d1894d3a94ce27bfcd63838ecd69a8"
-canonical = "8ca25ca00cb908bd8c6b767b8218d4a7e0d1894d3a94ce27bfcd63838ecd69a8"
+exact = "15249b818d316baebe12e6d865150aec3b612d4bf0f6cba285b52b8ac17889d0"
+canonical = "15249b818d316baebe12e6d865150aec3b612d4bf0f6cba285b52b8ac17889d0"
 
 [parts."dprint.json".dprint]
 scope = "keys"

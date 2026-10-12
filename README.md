@@ -1,7 +1,12 @@
 <!-- >>> devset: project >>> -->
 <!-- dprint-ignore-start -->
 
-<h1 align="center">ddust</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atomix-labs/ddust/main/docs/src/media/logo-dark.svg">
+    <img alt="ddust" src="https://raw.githubusercontent.com/atomix-labs/ddust/main/docs/src/media/logo-light.svg" height="56">
+  </picture>
+</h1>
 
 <p align="center">Fixed-point decimals that leave no dust: exact, typed, as fast as the integers beneath them.</p>
 
