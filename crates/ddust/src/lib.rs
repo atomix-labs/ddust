@@ -68,13 +68,14 @@
 //! | `num-traits-02` | num-traits 0.2's `Zero`, `ConstZero`, `Bounded`, `Checked*`, `Saturating*` and `Wrapping*` traits, `FromPrimitive` and `ToPrimitive` |
 //! | `proptest` | proptest's `Arbitrary`, for property tests: any steps at any scale, and any rounding mode |
 //! | `rand-09` | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand_09::UniformDecimal` |
-//! | `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read with SSSE3 where the CPU has it |
+//! | `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read and written with SSSE3 where the CPU has it |
 //! | `serde` | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose the form at a field |
 //! | `zerocopy-08` | zerocopy 0.8's `FromBytes` and `IntoBytes` for a decimal of a `Fixed` scale, [`D8`] to [`UD128`], read from and written as its steps' bytes; `KnownLayout` and `Immutable` for every decimal; and `IntoBytes` and `Unaligned` for `Dynamic`, to write its byte, and for `Fixed`, which has none |
 //!
-//! Text of up to 32 bytes is read in 32 vector lanes at once, with NEON on every little-endian
-//! aarch64 target but the soft-float ones, and with SSSE3 on an `x86_64` build for a CPU that has
-//! it, `-C target-cpu=x86-64-v2` or newer, with no check at run time; elsewhere, and past 32 bytes,
+//! Text of up to 32 bytes is read in 32 vector lanes at once, and a value whose steps are below
+//! `10^31`, at up to 30 decimals, written in them: with NEON on every little-endian aarch64 target
+//! but the soft-float ones, and with SSSE3 on an `x86_64` build for a CPU that has it, `-C
+//! target-cpu=x86-64-v2` or newer, with no check at run time. Elsewhere, and for any other text,
 //! eight bytes at a time in a 64-bit word, as on a soft-float target, which has no vector registers
 //! for `runtime-dispatch` to use.
 
