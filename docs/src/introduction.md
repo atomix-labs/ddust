@@ -1,10 +1,10 @@
 # Introduction
 
-ddust is a Rust crate of fixed-point decimals. Its [`Decimal`][ddust::Decimal],
-a `Decimal<I, S>`, is a whole number of steps of $10^{-d}$, held in one of
-Rust's ten integers, at a scale the compiler knows or one carried at run time.
-It is for code in which a lost digit is a bug: prices, quantities, balances,
-fees and rates, and the messages and files that carry them as text.
+ddust is a Rust crate of fixed-point decimals. Its [`Decimal`], a `Decimal<I,
+S>`, is a whole number of steps of $10^{-d}$, held in one of Rust's ten
+integers, at a scale the compiler knows or one carried at run time. It is for
+code in which a lost digit is a bug: prices, quantities, balances, fees and
+rates, and the messages and files that carry them as text.
 
 A binary float cannot hold 0.1. A sum of prices in `f64` drifts, and writing one
 back as text means guessing which decimal it was. A decimal holds 0.1 exactly,
@@ -24,15 +24,14 @@ and ddust's keeps three promises:
 
 ## What It Holds
 
-- The decimal, [`Decimal`][ddust::Decimal], with an alias for each integer at a
-  static scale: [`D8`][ddust::D8] to [`D128`][ddust::D128] and
-  [`UD8`][ddust::UD8] to [`UD128`][ddust::UD128]. [`dec!`][ddust::dec] writes a
-  literal that is checked when the constant is evaluated.
+- The decimal, [`Decimal`], with an alias for each integer at a static scale:
+  [`D8`] to [`D128`] and [`UD8`] to [`UD128`]. [`dec!`] writes a literal that is
+  checked when the constant is evaluated.
 - Scales: [`Fixed<D>`][ddust::Fixed], known to the compiler and zero-sized, and
-  [`Dynamic`][ddust::Dynamic], carried at run time.
-- Rounding: nine modes in [`round`][ddust::round], each a zero-sized type, and
-  [`Rounding`][ddust::round::Rounding], a mode chosen at run time.
-  [`Divisor`][ddust::Divisor] prepares one divisor for many divisions.
+  [`Dynamic`], carried at run time.
+- Rounding: nine modes in [`round`], each a zero-sized type, and
+  [`Rounding`][ddust::round::Rounding], a mode chosen at run time. [`Divisor`]
+  prepares one divisor for many divisions.
 - Text: reading that is exact or refused, from a slice or in place inside a
   message, and writing through `Display` or into a byte buffer, with no
   formatter.

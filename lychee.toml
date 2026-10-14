@@ -6,3 +6,8 @@ exclude_path = [".devset"]
 # A slow or busy server gets a second chance, and a rate limit is no broken link.
 max_retries = 2
 accept      = ["200..=299", "429"]
+
+# ddust's items live in private modules and are documented where the crate root re-exports them.
+# rustdoc links one through a redirect page at its module's path, which carries the fragment over
+# in JavaScript, and offline holds none: the link is checked against the page it redirects to.
+remap = ['^(file://.*/api/ddust/)(?:decimal|divisor|errors|int|text)/(?:[a-z0-9_]+/)*([^/]+)$ $1$2']

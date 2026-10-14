@@ -2,9 +2,9 @@
 
 An operation that can lose a digit takes a rounding mode as its last argument,
 so it never rounds unless asked to. A mode is one of nine zero-sized types in
-[`round`][ddust::round], which the compiler resolves where the operation is
-inlined, or a [`Rounding`][ddust::round::Rounding], the same nine as a value
-chosen at run time.
+[`round`], which the compiler resolves where the operation is inlined, or a
+[`Rounding`][ddust::round::Rounding], the same nine as a value chosen at run
+time.
 
 ## The Nine Modes
 
@@ -32,21 +32,21 @@ ties.
 
 ## What Takes a Mode
 
-| Method                                                                                         | What it rounds                                                                  |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [`mul_round`][ddust::Decimal::mul_round]                                                       | a product, at this value's scale                                                |
-| [`mul_round_to`][ddust::Decimal::mul_round_to]                                                 | a product, at a scale named                                                     |
-| [`div_round`][ddust::Decimal::div_round]                                                       | a quotient by a decimal or a [`Divisor`][ddust::Divisor], at this value's scale |
-| [`div_round_to`][ddust::Decimal::div_round_to]                                                 | a quotient, at a scale named                                                    |
-| [`div_int_round`][ddust::Decimal::div_int_round]                                               | one of `n` equal parts                                                          |
-| [`mul_div_round`][ddust::Decimal::mul_div_round]                                               | `self × numerator / denominator`, rounded once                                  |
-| [`round_to`][ddust::Decimal::round_to]                                                         | to a multiple of a step: a tick, a lot, a coin                                  |
-| [`round`][ddust::Decimal::round]                                                               | to a whole number, at this value's scale                                        |
-| [`to_int`][ddust::Decimal::to_int]                                                             | to a whole number, as an integer                                                |
-| [`rescale_round`][ddust::Decimal::rescale_round]                                               | to another scale                                                                |
-| [`new_round`][ddust::Decimal::new_round], [`to_digits_round`][ddust::Decimal::to_digits_round] | digits, to and from a decimal                                                   |
-| [`from_ascii_round`][ddust::Decimal::from_ascii_round]                                         | text with more decimals than the scale                                          |
-| [`from_f64`][ddust::Decimal::from_f64]                                                         | a double                                                                        |
+| Method                                                                                         | What it rounds                                                  |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`mul_round`][ddust::Decimal::mul_round]                                                       | a product, at this value's scale                                |
+| [`mul_round_to`][ddust::Decimal::mul_round_to]                                                 | a product, at a scale named                                     |
+| [`div_round`][ddust::Decimal::div_round]                                                       | a quotient by a decimal or a [`Divisor`], at this value's scale |
+| [`div_round_to`][ddust::Decimal::div_round_to]                                                 | a quotient, at a scale named                                    |
+| [`div_int_round`][ddust::Decimal::div_int_round]                                               | one of `n` equal parts                                          |
+| [`mul_div_round`][ddust::Decimal::mul_div_round]                                               | `self × numerator / denominator`, rounded once                  |
+| [`round_to`][ddust::Decimal::round_to]                                                         | to a multiple of a step: a tick, a lot, a coin                  |
+| [`round`][ddust::Decimal::round]                                                               | to a whole number, at this value's scale                        |
+| [`to_int`][ddust::Decimal::to_int]                                                             | to a whole number, as an integer                                |
+| [`rescale_round`][ddust::Decimal::rescale_round]                                               | to another scale                                                |
+| [`new_round`][ddust::Decimal::new_round], [`to_digits_round`][ddust::Decimal::to_digits_round] | digits, to and from a decimal                                   |
+| [`from_ascii_round`][ddust::Decimal::from_ascii_round]                                         | text with more decimals than the scale                          |
+| [`from_f64`][ddust::Decimal::from_f64]                                                         | a double                                                        |
 
 Each of the arithmetic ones has a `checked_*` twin that returns `None` past the
 range, or for a zero divisor. [`trunc`][ddust::Decimal::trunc],
@@ -101,8 +101,8 @@ there are:
 
 ## Many Values by One Divisor
 
-A [`Divisor`][ddust::Divisor] is a divisor prepared once, for dividing many
-values by it: a book's notionals by one price, or amounts by one rate.
+A [`Divisor`] is a divisor prepared once, for dividing many values by it: a
+book's notionals by one price, or amounts by one rate.
 [`div_round`][ddust::Decimal::div_round] and
 [`checked_div_round`][ddust::Decimal::checked_div_round] take it where they take
 a decimal, and give the same quotients:

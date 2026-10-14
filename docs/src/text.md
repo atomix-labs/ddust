@@ -15,17 +15,16 @@ decimals are allowed; a non-zero digit there is refused, never rounded:
 {{#include ../../crates/ddust/tests/book/text.rs:parse}}
 ```
 
-A refusal is a [`ParseError`][ddust::ParseError], whose
-[`kind`][ddust::ParseError::kind] says why:
+A refusal is a [`ParseError`], whose [`kind`][ddust::ParseError::kind] says why:
 
-| [`ParseErrorKind`][ddust::ParseErrorKind] | The text                                              |
-| ----------------------------------------- | ----------------------------------------------------- |
-| `Empty`                                   | is empty                                              |
-| `InvalidDigit`                            | is not a number: a sign, digits, a point, an exponent |
-| `PosOverflow`                             | is above the decimal's range                          |
-| `NegOverflow`                             | is below it                                           |
-| `TooManyDecimals`                         | has a non-zero digit past the decimal's scale         |
-| `RangeOutsideBuffer`                      | was asked for at a range its buffer does not hold     |
+| [`ParseErrorKind`]   | The text                                              |
+| -------------------- | ----------------------------------------------------- |
+| `Empty`              | is empty                                              |
+| `InvalidDigit`       | is not a number: a sign, digits, a point, an exponent |
+| `PosOverflow`        | is above the decimal's range                          |
+| `NegOverflow`        | is below it                                           |
+| `TooManyDecimals`    | has a non-zero digit past the decimal's scale         |
+| `RangeOutsideBuffer` | was asked for at a range its buffer does not hold     |
 
 A decimal of a run-time scale reads at the scale its text spells, so `"1.50"` is
 1.50 at two decimals; `from_ascii` takes a scale to read at instead.
@@ -72,9 +71,8 @@ notation:
 
 [`write_ascii`][ddust::Decimal::write_ascii] writes the same text as `Display`
 into a byte buffer, with no formatter, and returns its length, or `None` when
-the buffer is too short. It touches no byte past the text, and
-[`MAX_ASCII_LEN`][ddust::MAX_ASCII_LEN] bytes, 41, hold every value's: a sign,
-39 digits and a point.
+the buffer is too short. It touches no byte past the text, and [`MAX_ASCII_LEN`]
+bytes, 41, hold every value's: a sign, 39 digits and a point.
 
 ```rs
 {{#include ../../crates/ddust/tests/book/text.rs:write}}

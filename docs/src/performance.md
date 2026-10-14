@@ -273,9 +273,8 @@ price:
 | decimal-rs 0.2.0                                 | HalfExpand |             227 |               208 |    581 |        1,183 |          2.66 |
 | bigdecimal 0.4.11                                | HalfEven   |          14,899 |             4,381 | 12,251 |       50,875 |         37.67 |
 
-A [`Divisor`][ddust::Divisor] prepared from that one divisor divides by two
-multiplications and a comparison, with no division at all; no other crate has
-one:
+A [`Divisor`] prepared from that one divisor divides by two multiplications and
+a comparison, with no division at all; no other crate has one:
 
 **The rounded quotient by a prepared divisor, narrow, 64 bits at 8 decimals:**
 
@@ -733,8 +732,8 @@ decimals, beside their vector ones.
 - **A wide division where a narrow one does.** A `D128` quotient costs about
   three times a `D64`'s, and a chain of them about twice; a quantity, a price or
   a cash amount fits a `D64`.
-- **Dividing many values by one decimal.** A [`Divisor`][ddust::Divisor]
-  prepared once divides with no division.
+- **Dividing many values by one decimal.** A [`Divisor`] prepared once divides
+  with no division.
 - **A conversion to a double inside a calculation.** It is correctly rounded and
   cheap, but the double is rarely the decimal, and a calculation that goes
   through one loses the exactness ddust keeps.

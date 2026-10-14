@@ -43,7 +43,7 @@ table. [Run-Time Scales](run-time-scales.md) converts between the two.
 | a quotient truncated, as an integer's | `/`                                                   |
 | a quotient rounded                    | [`div_round`][ddust::Decimal::div_round], with a mode |
 | a quotient at another scale           | [`div_round_to`][ddust::Decimal::div_round_to]        |
-| many quotients by one divisor         | a [`Divisor`][ddust::Divisor], prepared once          |
+| many quotients by one divisor         | a [`Divisor`], prepared once                          |
 | a share: `a × b / c`, rounded once    | [`mul_div_round`][ddust::Decimal::mul_div_round]      |
 
 [Performance](performance.md) measures what each choice costs.

@@ -68,8 +68,8 @@ for a zero divisor too, where its operator panics.
 
 ## Unsigned Decimals
 
-An unsigned decimal, [`UD64`][ddust::UD64] and its siblings, stops at zero as
-its integer does:
+An unsigned decimal, [`UD64`] and its siblings, stops at zero as its integer
+does:
 
 ```rs
 {{#include ../../crates/ddust/tests/book/arithmetic.rs:unsigned}}

@@ -32,9 +32,9 @@ as arbitrary does:
 ## Random Values
 
 With `rand-09`, a decimal implements rand 0.9's `SampleUniform`, through
-[`UniformDecimal`][ddust::rand_09::UniformDecimal], so it is drawn uniformly
-from a range as an integer is: its steps from the bounds' steps. Seeded, the
-draws are the same on every run:
+`ddust::rand_09::UniformDecimal`, so it is drawn uniformly from a range as an
+integer is: its steps from the bounds' steps. Seeded, the draws are the same on
+every run:
 
 ```rs
 {{#include ../../crates/ddust/tests/book/testing.rs:rand}}

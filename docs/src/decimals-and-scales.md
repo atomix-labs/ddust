@@ -14,9 +14,8 @@ rescaled behind the caller's back.
 
 ## The Integer
 
-`I` is one of Rust's ten integers, which [`Int`][ddust::Int] names; the five
-signed ones are [`Signed`][ddust::Signed] too. Each has an alias at a static
-scale of `D` decimals:
+`I` is one of Rust's ten integers, which [`Int`] names; the five signed ones are
+[`Signed`] too. Each has an alias at a static scale of `D` decimals:
 
 | Signed    | Unsigned   | Bytes | Digits every value has room for |
 | --------- | ---------- | ----- | ------------------------------- |
@@ -37,9 +36,8 @@ from −92,233,720,368,547,758.08 to 92,233,720,368,547,758.07.
 decimal of it is its integer alone, and two values of it never differ in scale.
 `D` is at most [`MAX_DECIMALS`][ddust::scale::MAX_DECIMALS], 38, since $10^{38}$
 is the largest power of ten a 128-bit integer holds; a `Fixed<39>` fails the
-build. [`Dynamic`][ddust::Dynamic] carries its scale at run time, in a byte
-beside the steps, and has a chapter of its own,
-[Run-Time Scales](run-time-scales.md).
+build. [`Dynamic`] carries its scale at run time, in a byte beside the steps,
+and has a chapter of its own, [Run-Time Scales](run-time-scales.md).
 
 Two static scales are two types, so their values never meet until one is
 converted:
@@ -55,10 +53,10 @@ converted:
 ## Making a Decimal
 
 A program reads a decimal from text, as [Text](text.md) shows, or writes it as a
-literal. [`dec!`][ddust::dec] takes its type from where it goes, or from a type
-named after a colon, and is checked when the constant is evaluated: a literal
-with more decimals than its scale, past its range, or negative for an unsigned
-decimal fails the build. The value is the literal exactly, never rounded.
+literal. [`dec!`] takes its type from where it goes, or from a type named after
+a colon, and is checked when the constant is evaluated: a literal with more
+decimals than its scale, past its range, or negative for an unsigned decimal
+fails the build. The value is the literal exactly, never rounded.
 
 ```rs
 {{#include ../../crates/ddust/tests/book/decimals.rs:literal}}
@@ -67,8 +65,8 @@ decimal fails the build. The value is the literal exactly, never rounded.
 From digits known at run time, [`new`][ddust::Decimal::new] takes the digits,
 their decimals and the scale, and makes
 $\text{digits} \times 10^{-\text{decimals}}$ exactly, or refuses it with a
-[`ConvertError`][ddust::ConvertError]: `TooManyDecimals` for a non-zero digit
-past the scale, `PosOverflow` or `NegOverflow` past the range.
+[`ConvertError`]: `TooManyDecimals` for a non-zero digit past the scale,
+`PosOverflow` or `NegOverflow` past the range.
 [`new_round`][ddust::Decimal::new_round] rounds where `new` refuses, and
 [`to_digits`][ddust::Decimal::to_digits] goes back:
 

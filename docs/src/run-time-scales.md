@@ -1,9 +1,9 @@
 # Run-Time Scales
 
-[`Dynamic`][ddust::Dynamic] is a scale known only at run time: read from a
-venue's rules, a database column's type or the text of a number. A decimal of it
-carries its scale in a byte beside its steps, so a `Decimal<i64, Dynamic>` is 16
-bytes where a `D64<2>` is 8. Text read into one takes the scale the text spells:
+[`Dynamic`] is a scale known only at run time: read from a venue's rules, a
+database column's type or the text of a number. A decimal of it carries its
+scale in a byte beside its steps, so a `Decimal<i64, Dynamic>` is 16 bytes where
+a `D64<2>` is 8. Text read into one takes the scale the text spells:
 
 ```rs
 {{#include ../../crates/ddust/tests/book/run_time.rs:spelled}}
@@ -59,8 +59,8 @@ for the values whose scale the program learns as it runs;
 
 ## Another Crate's Scale
 
-[`Scale`][ddust::Scale] is a trait a crate built on ddust can implement, for a
-scale its own types give, such as a price's scale that its assets decide.
+[`Scale`] is a trait a crate built on ddust can implement, for a scale its own
+types give, such as a price's scale that its assets decide.
 [`LINES_UP`][ddust::Scale::LINES_UP] says what two of its values at different
 decimals do: line up at the finer one, as `Dynamic`'s do, or never mix, in which
 case an operator panics in every build and a `checked_*` method returns `None`.

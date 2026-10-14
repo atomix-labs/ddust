@@ -13,15 +13,14 @@ refused, since it has already lost the digits a decimal keeps:
 ## Choosing a Field's Form
 
 A field takes another form through `#[serde(with = …)]` and one of the modules
-in [`ddust::serde`][ddust::serde], each of which has an `option` twin for an
-`Option` field:
+in `ddust::serde`, each of which has an `option` twin for an `Option` field:
 
-| Form                           | Where a person reads the format | Where none does |
-| ------------------------------ | ------------------------------- | --------------- |
-| the decimal's own              | its text                        | its steps       |
-| [`text`][ddust::serde::text]   | its text                        | its text        |
-| [`steps`][ddust::serde::steps] | its steps, as a number          | its steps       |
-| [`float`][ddust::serde::float] | its nearest double              | the same        |
+| Form              | Where a person reads the format | Where none does |
+| ----------------- | ------------------------------- | --------------- |
+| the decimal's own | its text                        | its steps       |
+| `text`            | its text                        | its text        |
+| `steps`           | its steps, as a number          | its steps       |
+| `float`           | its nearest double              | the same        |
 
 Each reads what it writes; `text` and the decimal's own form read a whole number
 too, and `steps` a string of digits, where a person reads the format:
