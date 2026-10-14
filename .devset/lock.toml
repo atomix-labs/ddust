@@ -351,7 +351,7 @@ tag = "v0.21.0"
 [[profiles]]
 name = "mdbook"
 rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
-digest = "19c87f01de4a14786f94aa3f3cbd1ebd684b13e8c9123ca5819bd8f2040e957e"
+digest = "e940c93cfb5a6958358f9a3d0a3dccf85a88de98300184f57be80cb3c6ed19c5"
 
 [profiles.source]
 git = "https://github.com/atomix-labs/atxp"
@@ -367,7 +367,7 @@ pages = ["default"]
 [[profiles]]
 name = "project"
 rev = "eb22090a57e6f58d5a9f82de9cac8a2c92ebbaa6"
-digest = "83088e4f16e82dca5fc334affffca3d32c4025cd51c9c2947ee713c0cdf9dad5"
+digest = "5a133c2e1f4802f1a0cebdf50d2020c0ed4fe82184d743255c940c8eb2b135dc"
 
 [profiles.source]
 git = "https://github.com/atomix-labs/atxp"

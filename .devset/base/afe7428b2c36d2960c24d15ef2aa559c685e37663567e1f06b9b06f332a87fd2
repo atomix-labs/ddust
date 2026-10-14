@@ -1,0 +1,16 @@
+/* The book's logo before its title in the menu bar, in each scheme's ink. */
+.menu-title::before {
+  content: "";
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-inline-end: 0.45em;
+  vertical-align: -0.15em;
+  background: url("../media/mark-light.svg") center / contain no-repeat;
+}
+
+.coal .menu-title::before,
+.navy .menu-title::before,
+.ayu .menu-title::before {
+  background-image: url("../media/mark-dark.svg");
+}

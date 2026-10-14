@@ -35,3 +35,17 @@ siblings_only = true
 ".github/pull_request_template.md" = ["MD041"]
 ".github/release-notes.md"         = ["MD041"]
 "**/SUMMARY.md"                    = ["MD025", "MD063"]
+
+# Crate names are proper nouns written in lower case, as their crates spell them.
+[MD063]
+ignore-words = [
+    "ddust",
+    "rust_decimal",
+    "fastnum",
+    "bigdecimal",
+    "fixed",
+    "fixdec",
+    "bytemuck",
+    "zerocopy",
+    "defmt",
+]
