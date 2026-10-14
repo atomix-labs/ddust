@@ -28,10 +28,11 @@ pub struct Prepared<U, D> {
 ///
 /// A book's notionals by one price, or amounts by one rate: [`div_round`](Decimal::div_round) and
 /// [`checked_div_round`](Decimal::checked_div_round) take it where they take a decimal, and divide
-/// by two multiplications and a comparison where by a decimal they divide. Preparing it takes a
-/// division, so it pays where one divisor divides many values: by one divisor, a `D64<8>` quotient
-/// rounded half to even takes 3.01 ns prepared and 4.72 by the decimal, and a `D128<18>` one 11.10
-/// and 15.01, on a Graviton4 (`bench/results/2026-10-14T06-08Z-pr18-baseline-graviton4`).
+/// by two multiplications and a comparison, where by a decimal they take a division. Preparing it
+/// takes a division, so it pays where one divisor divides many values: on values of random lengths
+/// by one divisor, a `D64<8>` quotient rounded half to even takes 3.00 ns prepared and 5.97 by the
+/// decimal, and a `D128<18>` one 12.40 and 15.95, on a Graviton4
+/// (`bench/results/2026-10-14T06-08Z-pr18-baseline-graviton4`).
 ///
 /// # Examples
 /// ```

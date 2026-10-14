@@ -24,6 +24,6 @@ mod run_time;
 #[cfg(test)]
 mod serialization;
 #[cfg(test)]
-mod testing;
+mod test_inputs;
 #[cfg(test)]
 mod text;

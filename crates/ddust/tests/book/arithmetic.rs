@@ -2,7 +2,7 @@
 
 #![expect(
     clippy::arithmetic_side_effects,
-    reason = "the operators are what the chapter shows; overflow checks decide, as for an integer"
+    reason = "the chapter shows the operators, which overflow as an integer's do"
 )]
 
 #[test]

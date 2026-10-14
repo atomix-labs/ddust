@@ -20,10 +20,19 @@ fn two_run_time_scales_line_up_at_the_finer() {
     let sum = read("1.5") + read("1.25");
     assert_eq!((sum.to_string(), sum.decimals()), ("2.75".into(), 2));
     assert_eq!(read("1.5"), read("1.50"), "equal, whatever their scales");
+}
+// ANCHOR_END: lines_up
+
+#[test]
+// ANCHOR: product
+fn a_run_time_product_takes_the_sum_of_its_factors_decimals() {
+    use ddust::{Decimal, Dynamic};
+
+    let read = |text: &str| -> Decimal<i64, Dynamic> { text.parse().expect("a decimal") };
     let product = read("1.5") * read("1.25");
     assert_eq!((product.to_string(), product.decimals()), ("1.875".into(), 3));
 }
-// ANCHOR_END: lines_up
+// ANCHOR_END: product
 
 #[test]
 // ANCHOR: venue
@@ -45,13 +54,14 @@ fn a_scale_read_from_a_venue_rounds_on_purpose() {
 #[test]
 // ANCHOR: static
 fn a_static_scale_converts_to_a_run_time_one_and_back() {
-    use ddust::{D64, Decimal, Dynamic, dec};
+    use ddust::{ConvertError, ConvertErrorKind, D64, Decimal, Dynamic, dec};
 
     let price: D64<2> = dec!(1.25);
     let carried: Decimal<i64, Dynamic> = price.into();
     assert_eq!(carried.decimals(), 2);
     assert_eq!(D64::<2>::try_from(carried), Ok(price));
     assert_eq!(D64::<4>::try_from(carried), Ok(dec!(1.25)), "zeros added");
-    assert!(D64::<1>::try_from(carried).is_err(), "a digit past one decimal");
+    let refused = D64::<1>::try_from(carried).map_err(ConvertError::kind);
+    assert_eq!(refused, Err(ConvertErrorKind::TooManyDecimals), "a digit past one decimal");
 }
 // ANCHOR_END: static

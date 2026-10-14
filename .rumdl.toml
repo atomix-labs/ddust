@@ -38,4 +38,14 @@ siblings_only = true
 
 # Crate names are proper nouns written in lower case, as their crates spell them.
 [MD063]
-ignore-words = ["ddust", "rust_decimal", "fastnum", "bigdecimal", "fixed", "fixdec", "bytemuck", "zerocopy", "defmt"]
+ignore-words = [
+    "ddust",
+    "rust_decimal",
+    "fastnum",
+    "bigdecimal",
+    "fixed",
+    "fixdec",
+    "bytemuck",
+    "zerocopy",
+    "defmt",
+]

@@ -45,17 +45,17 @@ feature asks for one.
 
 ## What It Leaves Out
 
-- **Arbitrary precision.** A decimal holds at most 38 decimals and its integer's
+- Arbitrary precision. A decimal holds at most 38 decimals and its integer's
   range: about ±9.2 × 10¹⁶ at two decimals in an `i64`, and about ±1.7 × 10²⁰ at
   eighteen in an `i128`.
-- **A scale that each operation chooses.** rust_decimal's values carry their own
+- A scale that each operation chooses. rust_decimal's values carry their own
   scale, up to 28 decimals, and a quotient takes as many decimals as fit. In
   ddust a scale is chosen by the caller; a quotient is at the dividend's scale,
   or at one its rounding names.
-- **NaN, the infinities and negative zero**, which a float has and a decimal
-  does not need.
-- **Square roots, logarithms, powers and trigonometry.**
-- **Stable Rust.** ddust builds on nightly, from `nightly-2026-09-28`: its
+- NaN, the infinities and negative zero, which a float has and a decimal does
+  not need.
+- Square roots, logarithms, powers and trigonometry.
+- Stable Rust. ddust builds on nightly, from `nightly-2026-09-28`: its
   arithmetic, rounding and literals are `const fn` through const traits, which
   are not stable yet.
 

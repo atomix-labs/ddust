@@ -2,7 +2,8 @@
 
 Code that uses ddust is tested as code that uses integers is: a decimal is a
 value, with no clock, no allocator and no global state, so a test that builds
-its decimals from literals is deterministic. Three features make more of them.
+its decimals from literals is deterministic. Three features draw a test's
+decimals instead.
 
 ## Property Tests
 
@@ -11,7 +12,7 @@ scale its scale type takes, from 0 to 38 decimals for `Dynamic`. A rounding mode
 is `Arbitrary` too, any of the nine:
 
 ```rs
-{{#include ../../crates/ddust/tests/book/testing.rs:proptest}}
+{{#include ../../crates/ddust/tests/book/test_inputs.rs:proptest}}
 ```
 
 Any steps means the ends of the range too, so a property that adds two values
@@ -26,7 +27,7 @@ decimals from the fuzzer's bytes as it takes integers. The feature needs `std`,
 as arbitrary does:
 
 ```rs
-{{#include ../../crates/ddust/tests/book/testing.rs:arbitrary}}
+{{#include ../../crates/ddust/tests/book/test_inputs.rs:arbitrary}}
 ```
 
 ## Random Values
@@ -37,7 +38,7 @@ integer is: its steps from the bounds' steps. Seeded, the draws are the same on
 every run:
 
 ```rs
-{{#include ../../crates/ddust/tests/book/testing.rs:rand}}
+{{#include ../../crates/ddust/tests/book/test_inputs.rs:rand}}
 ```
 
 ## Overflow in Tests

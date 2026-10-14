@@ -24,6 +24,10 @@ product takes the sum of the factors' decimals, as a static one does:
 {{#include ../../crates/ddust/tests/book/run_time.rs:lines_up}}
 ```
 
+```rs
+{{#include ../../crates/ddust/tests/book/run_time.rs:product}}
+```
+
 Lining up never rounds. A comparison is exact whatever the two scales are; a sum
 or a difference that does not fit at the finer scale overflows as any other
 does, panicking with overflow checks on and wrapping otherwise, and its

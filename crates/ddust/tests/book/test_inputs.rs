@@ -1,4 +1,4 @@
-//! The listings of the chapter Testing.
+//! The listings of the chapter Testing: decimals drawn for property tests, fuzzing and random runs.
 
 #[cfg(feature = "proptest")]
 // ANCHOR: proptest

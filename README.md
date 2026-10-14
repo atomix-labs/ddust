@@ -94,8 +94,8 @@ truncates, as the integer's does.
 ## Speed
 
 Nanoseconds per operation on a Graviton4, over 64-bit values at eight decimals
-of random signs and lengths; a rounded row takes ddust in the rounding mode of
-the crate beside it. [Performance][performance] has every operation, both
+of random signs and lengths; in a rounded row, ddust rounds in the mode of the
+fastest other crate. [Performance][performance] has every operation, both
 widths, and how each was measured.
 
 | Operation        | ddust | rust_decimal | The fastest other                   |
@@ -117,7 +117,7 @@ widths, and how each was measured.
 | `num-traits-02`    | num-traits 0.2's `Zero`, `ConstZero`, `Bounded`, `Checked*`, `Saturating*` and `Wrapping*` traits, `FromPrimitive` and `ToPrimitive`                                                                                                                                                        |
 | `proptest`         | proptest's `Arbitrary`, for property tests: any steps at any scale, and any rounding mode                                                                                                                                                                                                   |
 | `rand-09`          | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand_09::UniformDecimal`                                                                                                                                                                              |
-| `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read and written with SSSE3 where the CPU has it                                                                                                                                                                   |
+| `runtime-dispatch` | a check of the CPU, once, on an `x86_64` build without SSSE3, so text is read and written with SSSE3 where the CPU has it                                                                                                                                                                   |
 | `serde`            | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose the form at a field                                                                                                               |
 | `zerocopy-08`      | zerocopy 0.8's `FromBytes` and `IntoBytes` for a decimal of a `Fixed` scale, `D8` to `UD128`, read from and written as its steps' bytes; `KnownLayout` and `Immutable` for every decimal; and `IntoBytes` and `Unaligned` for `Dynamic`, to write its byte, and for `Fixed`, which has none |
 

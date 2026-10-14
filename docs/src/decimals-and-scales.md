@@ -114,5 +114,5 @@ of any other decimals fails the build:
 ```
 
 A product's scale could be written in the type, `Fixed<{ A + B }>`, only with
-the unstable `generic_const_exprs`, which is incomplete; `Sum` gives the same
-result in the types Rust has now.
+the unstable and incomplete `generic_const_exprs`; `Sum` gives the same result
+without it.

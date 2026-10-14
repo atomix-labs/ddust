@@ -44,7 +44,7 @@ fn a_number_is_read_in_place_from_a_message() {
 
 #[test]
 // ANCHOR: display
-fn a_value_is_written_as_its_shortest_exact_decimal() {
+fn a_value_is_written_as_its_format_asks() {
     use ddust::{D64, dec};
 
     let price: D64<4> = dec!(1.2500);

@@ -24,13 +24,14 @@ fn generic_numeric_code_takes_a_decimal() {
 #[test]
 // ANCHOR: bytemuck
 fn a_static_scale_decimal_is_its_steps_bytes() {
+    use bytemuck::{cast, cast_slice};
     use ddust::{D64, dec};
 
     let prices: [D64<2>; 2] = [dec!(1.25), dec!(-0.01)];
-    let bytes: &[u8] = bytemuck::cast_slice(&prices);
+    let bytes: &[u8] = cast_slice(&prices);
     assert_eq!(bytes.len(), 16, "eight bytes a price, and nothing else");
-    assert_eq!(bytemuck::cast_slice::<u8, D64<2>>(bytes), prices);
-    assert_eq!(bytemuck::cast::<D64<2>, i64>(prices[0]), 125, "the steps");
+    assert_eq!(cast_slice::<u8, D64<2>>(bytes), prices);
+    assert_eq!(cast::<D64<2>, i64>(prices[0]), 125, "the steps");
 }
 // ANCHOR_END: bytemuck
 

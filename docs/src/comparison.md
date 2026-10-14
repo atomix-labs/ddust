@@ -8,9 +8,9 @@ checked against an exact reference.
 
 ## Speed
 
-Nanoseconds per operation on the unpredictable values, ddust's rounding half to
-even and each other crate's in its own mode, as [Performance](performance.md)
-names it with ddust beside it in each:
+Nanoseconds per operation on the unpredictable values. ddust rounds half to even
+here, and each other crate in its own mode; [Performance](performance.md) gives
+ddust in every crate's mode beside it:
 
 | Crate                                          |  Sum | Rounded product | Rounded quotient | To cents |            Read | Write |         The mix |
 | ---------------------------------------------- | ---: | --------------: | ---------------: | -------: | --------------: | ----: | --------------: |
@@ -150,12 +150,12 @@ writes and divides some large values wrongly.
 
 ## What ddust Gives Up
 
-- **Stable Rust.** ddust needs nightly, for const traits.
-- **A scale each value carries and each operation chooses**, as rust_decimal's
-  and the decimal floats' do. ddust's run-time scale lines up exactly but never
+- Stable Rust. ddust needs nightly, for const traits.
+- A scale each value carries and each operation chooses, as rust_decimal's and
+  the decimal floats' do. ddust's run-time scale lines up exactly but never
   grows a quotient's decimals.
-- **Arbitrary precision**, and decimal floating point: 38 digits is its limit.
-- **NaN, the infinities and negative zero.**
-- **Square roots, exponentials, logarithms, powers and trigonometry.**
-- **The integrations only time brings**: diesel, sqlx, postgres, borsh, rkyv,
-  and the rest of a crate that has been used for years.
+- Arbitrary precision, and decimal floating point: 38 digits is its limit.
+- NaN, the infinities and negative zero.
+- Square roots, exponentials, logarithms, powers and trigonometry.
+- The integrations a crate gathers over years of use: diesel, sqlx, postgres,
+  borsh, rkyv and the rest.

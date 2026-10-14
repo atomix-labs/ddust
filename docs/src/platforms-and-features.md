@@ -26,8 +26,8 @@ change.
 ## Text in Vector Lanes
 
 Text is read in 32 vector lanes at once, through `core::simd`, when it is up to
-32 bytes long, and written in them when its steps are below $10^{31}$, at up to
-30 decimals, where the build has the instructions:
+32 bytes long at up to 32 decimals, and written in them when its steps are below
+$10^{31}$, at up to 30 decimals, where the build has the instructions:
 
 | Build                                                           | Text is read and written                                    |
 | --------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -37,9 +37,13 @@ Text is read in 32 vector lanes at once, through `core::simd`, when it is up to
 | anything else, and any other text                               | eight bytes at a time in a 64-bit word                      |
 
 The repository's own builds take `x86-64-v2` as their floor, which every
-`x86_64` CPU since 2009 meets. On aarch64 with NEON, whose floating-point
-division is pipelined, a quotient within a double's reach is taken from a
-double's estimate, then corrected to the exact one.
+`x86_64` CPU since 2009 meets.
+
+## Division
+
+On aarch64 with NEON, whose floating-point division is pipelined, a quotient
+within a double's reach is taken from a double's estimate, then corrected to the
+exact one; on any other build it is divided as integers.
 
 ## Crate Features
 
@@ -51,7 +55,7 @@ double's estimate, then corrected to the exact one.
 | `num-traits-02`    | num-traits 0.2's `Zero`, `ConstZero`, `Bounded`, `Checked*`, `Saturating*` and `Wrapping*` traits, `FromPrimitive` and `ToPrimitive`                                                                                                                                                            |
 | `proptest`         | proptest's `Arbitrary`, for property tests: any steps at any scale, and any rounding mode                                                                                                                                                                                                       |
 | `rand-09`          | rand 0.9's `SampleUniform`, to draw a decimal uniformly from a range, through `ddust::rand_09::UniformDecimal`                                                                                                                                                                                  |
-| `runtime-dispatch` | On an `x86_64` build without SSSE3, a check of the CPU, once, so text is read and written with SSSE3 where the CPU has it                                                                                                                                                                       |
+| `runtime-dispatch` | a check of the CPU, once, on an `x86_64` build without SSSE3, so text is read and written with SSSE3 where the CPU has it                                                                                                                                                                       |
 | `serde`            | serde's `Serialize` and `Deserialize`: the text where a person reads the format, the steps where none does, and the modules in `ddust::serde` that choose the form at a field                                                                                                                   |
 | `zerocopy-08`      | zerocopy 0.8's `FromBytes` and `IntoBytes` for a decimal of a `Fixed` scale, [`D8`] to [`UD128`], read from and written as its steps' bytes; `KnownLayout` and `Immutable` for every decimal; and `IntoBytes` and `Unaligned` for `Dynamic`, to write its byte, and for `Fixed`, which has none |
 
