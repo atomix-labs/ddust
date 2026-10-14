@@ -3,7 +3,7 @@
 Add the crate:
 
 ```sh
-cargo add --git https://github.com/atomix-labs/ddust ddust
+cargo add ddust
 ```
 
 ddust builds on nightly Rust, from `nightly-2026-09-28`, since its arithmetic is

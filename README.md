@@ -35,7 +35,7 @@ never drops without being asked.
 ## Install
 
 ```sh
-cargo add --git https://github.com/atomix-labs/ddust ddust
+cargo add ddust
 ```
 
 ddust builds on nightly Rust, from `nightly-2026-09-28`, since its arithmetic is
@@ -125,7 +125,7 @@ None is on by default, and ddust has no dependencies without one. A feature is
 turned on as it is added:
 
 ```sh
-cargo add --git https://github.com/atomix-labs/ddust ddust --features serde
+cargo add ddust --features serde
 ```
 
 ## Documentation
