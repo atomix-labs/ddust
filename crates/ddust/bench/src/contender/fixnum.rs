@@ -11,7 +11,7 @@ use fixnum::typenum::{U8, U18};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
-    ToF64, format_by_display, low_byte,
+    ToF64, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -38,7 +38,7 @@ macro_rules! fixnum {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.as_bits().cast_unsigned()))
+                folded_byte(u128::from(value.as_bits().cast_unsigned()))
             }
         }
 

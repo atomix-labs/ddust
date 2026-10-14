@@ -20,7 +20,7 @@ use fastnum::{D64, D128};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, format_by_display, low_byte, steps_of,
+    Parse, RescaleRound, ToF64, folded_byte, format_by_display, steps_of,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -68,7 +68,7 @@ macro_rules! fastnum {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(value.digits().to_u128().unwrap_or(0))
+                folded_byte(value.digits().to_u128().unwrap_or(0))
             }
         }
 

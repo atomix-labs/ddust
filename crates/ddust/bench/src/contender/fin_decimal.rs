@@ -11,7 +11,7 @@ use fin_decimal::{AmountSign, Decimal, Decimal128, Rounding, str_i64};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulRound, Parse,
-    RescaleRound, ToF64, cents, format_by_display, low_byte,
+    RescaleRound, ToF64, cents, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -38,7 +38,7 @@ macro_rules! fin_decimal {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.0.cast_unsigned()))
+                folded_byte(u128::from(value.0.cast_unsigned()))
             }
         }
 

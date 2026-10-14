@@ -124,6 +124,44 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         }
     }
 
+    /// The sum, by `sign`, of two values of one scale, as their integer sums them, or `None` past
+    /// the range.
+    #[inline]
+    const fn checked_shared_sum(self, rhs: Self, sign: Sign) -> Option<Self>
+    where
+        I: [const] Int,
+    {
+        let (a, b) = (self.steps(), rhs.steps());
+        let steps = match sign {
+            Sign::Plus => a.checked_add(b),
+            Sign::Minus => a.checked_sub(b),
+        };
+        match steps {
+            Some(steps) => Some(Self::from_steps(steps, self.scale())),
+            None => None,
+        }
+    }
+
+    /// The sum, by `sign`, of two values of a scale carried at run time: as their integer sums
+    /// them for one scale, lined up for two, or `None` past the range or for two that never mix.
+    #[inline]
+    const fn checked_sum(self, rhs: Self, sign: Sign) -> Option<Self>
+    where
+        I: [const] Int,
+        S: [const] Scale,
+    {
+        if self.scale() == rhs.scale() {
+            return self.checked_shared_sum(rhs, sign);
+        }
+        match self.sum_outcome(rhs, sign) {
+            Some((outcome, scale)) => match outcome.checked() {
+                Some(steps) => Some(Self::from_steps(steps, scale)),
+                None => None,
+            },
+            None => None,
+        }
+    }
+
     /// The sum, or `None` past the range or for two scales that never mix.
     ///
     /// # Examples
@@ -141,13 +179,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, Sign::Plus) {
-            Some((outcome, scale)) => match outcome.checked() {
-                Some(steps) => Some(Self::from_steps(steps, scale)),
-                None => None,
-            },
-            None => None,
+        // A zero-sized scale is one value, so two of it sum as their integer does: few enough steps
+        // for rustc to inline into the caller with the integer's hint that overflow is rare, where
+        // the general path leaves LLVM a select that waits on the overflow flag.
+        if const { size_of::<S>() == 0 } {
+            return self.checked_shared_sum(rhs, Sign::Plus);
         }
+        self.checked_sum(rhs, Sign::Plus)
     }
 
     /// The difference, or `None` past the range or for two scales that never mix.
@@ -167,13 +205,13 @@ impl<I: Int, S: Scale> Decimal<I, S> {
         I: [const] Int,
         S: [const] Scale,
     {
-        match self.sum_outcome(rhs, Sign::Minus) {
-            Some((outcome, scale)) => match outcome.checked() {
-                Some(steps) => Some(Self::from_steps(steps, scale)),
-                None => None,
-            },
-            None => None,
+        // A zero-sized scale is one value, so two of it sum as their integer does: few enough steps
+        // for rustc to inline into the caller with the integer's hint that overflow is rare, where
+        // the general path leaves LLVM a select that waits on the overflow flag.
+        if const { size_of::<S>() == 0 } {
+            return self.checked_shared_sum(rhs, Sign::Minus);
         }
+        self.checked_sum(rhs, Sign::Minus)
     }
 
     /// The sum, held at the end of the range it passes.

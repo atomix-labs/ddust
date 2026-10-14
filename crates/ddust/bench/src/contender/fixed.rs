@@ -6,7 +6,7 @@
 
 use fixed::types::I64F64;
 
-use super::{CheckedAdd, Compare, Contender, Kind, MulRound, low_byte};
+use super::{CheckedAdd, Compare, Contender, Kind, MulRound, folded_byte};
 use crate::input::Width;
 use crate::oracle::{self, Mode};
 
@@ -29,7 +29,7 @@ impl Contender for Narrow {
     }
 
     fn fingerprint(value: &Self::Value) -> usize {
-        low_byte(value.to_bits().cast_unsigned())
+        folded_byte(value.to_bits().cast_unsigned())
     }
 }
 

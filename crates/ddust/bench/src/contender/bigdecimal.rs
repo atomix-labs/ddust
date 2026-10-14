@@ -16,7 +16,7 @@ use num_bigint::BigInt;
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, low_byte, steps_of,
+    Parse, RescaleRound, ToF64, folded_byte, steps_of,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -50,7 +50,7 @@ macro_rules! bigdecimal {
 
             fn fingerprint(value: &Self::Value) -> usize {
                 let (digits, _) = value.as_bigint_and_scale();
-                low_byte(u128::from(digits.iter_u64_digits().next().unwrap_or(0)))
+                folded_byte(u128::from(digits.iter_u64_digits().next().unwrap_or(0)))
             }
         }
 

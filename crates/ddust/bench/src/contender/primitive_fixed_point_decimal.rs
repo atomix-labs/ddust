@@ -9,7 +9,7 @@ use primitive_fixed_point_decimal::{ConstScaleFpdec, Rounding};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, Format, FromF64, Kind, MulExact, MulRound,
-    Parse, RescaleRound, ToF64, cents, format_by_display, low_byte,
+    Parse, RescaleRound, ToF64, cents, folded_byte, format_by_display,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -36,7 +36,7 @@ macro_rules! fpdec {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.mantissa().cast_unsigned()))
+                folded_byte(u128::from(value.mantissa().cast_unsigned()))
             }
         }
 

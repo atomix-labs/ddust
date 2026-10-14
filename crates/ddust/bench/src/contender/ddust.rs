@@ -7,7 +7,7 @@ use ddust::{Decimal, Divisor, Fixed};
 
 use super::{
     Buffer, CheckedAdd, Compare, Contender, DivRound, DivRoundPrepared, Format, FromF64, Kind,
-    MulExact, MulRound, Parse, RescaleRound, ToF64, low_byte,
+    MulExact, MulRound, Parse, RescaleRound, ToF64, folded_byte,
 };
 use crate::input::Width;
 use crate::oracle::Mode;
@@ -35,7 +35,7 @@ macro_rules! ddust_type {
             }
 
             fn fingerprint(value: &Self::Value) -> usize {
-                low_byte(u128::from(value.steps().cast_unsigned()))
+                folded_byte(u128::from(value.steps().cast_unsigned()))
             }
         }
 
