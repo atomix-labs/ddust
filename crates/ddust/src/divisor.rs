@@ -30,8 +30,8 @@ pub struct Prepared<U, D> {
 /// [`checked_div_round`](Decimal::checked_div_round) take it where they take a decimal, and divide
 /// by two multiplications and a comparison where by a decimal they divide. Preparing it takes a
 /// division, so it pays where one divisor divides many values: by one divisor, a `D64<8>` quotient
-/// rounded half to even takes 2.97 ns prepared and 7.74 by the decimal, and a `D128<18>` one 11.10
-/// and 30.42, on a Graviton4 (`bench/results/2026-10-08T08-07Z-pr10-divisor-graviton4`).
+/// rounded half to even takes 3.01 ns prepared and 4.72 by the decimal, and a `D128<18>` one 11.10
+/// and 15.01, on a Graviton4 (`bench/results/2026-10-14T06-08Z-pr18-baseline-graviton4`).
 ///
 /// # Examples
 /// ```

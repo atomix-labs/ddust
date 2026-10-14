@@ -14,42 +14,54 @@ names it with ddust beside it in each:
 
 | Crate                                          |  Sum | Rounded product | Rounded quotient | To cents |            Read | Write |         The mix |
 | ---------------------------------------------- | ---: | --------------: | ---------------: | -------: | --------------: | ----: | --------------: |
-| **ddust** `D64<8>`                             | 0.77 |            3.93 |             5.38 |     1.30 |            9.59 |  9.97 |            1.74 |
-| fixdec 0.1.0 `D64`                             | 0.72 | 4.53, *inexact* |             8.17 |     3.82 |            23.0 |  40.5 | 3.24, *inexact* |
-| nexus-decimal 1.2.2 `<i64, 8>`                 | 0.72 |            5.64 |             8.12 |     4.27 |            19.1 |  23.4 |            3.42 |
-| primitive_fixed_point_decimal 1.5.0 `<i64, 8>` | 0.73 |            3.70 |             11.0 |     3.22 |            20.8 |  33.2 |            3.63 |
-| fin_decimal 0.4.0 `Decimal<8>`                 | 0.75 |            9.80 |             11.4 |     5.00 | 21.0, *inexact* |  26.5 |            4.87 |
-| fastnum 0.7.5 `D64`                            | 16.7 |            33.7 |             86.1 |     18.2 |            24.0 |  79.0 |            31.1 |
-| rust_decimal 1.43.0                            | 9.82 |            30.8 |              114 |     21.9 |            19.1 |  65.8 |            35.1 |
-| decimal-rs 0.2.0                               | 7.65 |            40.9 |              198 |     6.50 |            43.1 |  44.0 |            51.0 |
-| bigdecimal 0.4.11                              | 36.8 |             125 |            4,394 |     76.5 |            91.3 |   110 |             931 |
-| fixnum 0.9.5 `<i64, U8>`                       | 0.76 |            13.4 |             14.2 |          |            28.6 |  29.0 |                 |
+| **ddust** `D64<8>`                             | 0.76 |            3.97 |             5.40 |     1.30 |            9.75 |  9.84 |            1.73 |
+| fixdec 0.1.0 `D64`                             | 0.73 | 4.49, *inexact* |             8.12 |     3.82 |            23.5 |  40.4 | 3.21, *inexact* |
+| nexus-decimal 1.2.2 `<i64, 8>`                 | 0.73 |            5.57 |             8.18 |     4.32 |            19.2 |  23.3 |            3.38 |
+| primitive_fixed_point_decimal 1.5.0 `<i64, 8>` | 0.73 |            3.68 |             10.9 |     3.21 |            20.5 |  33.4 |            3.60 |
+| fin_decimal 0.4.0 `Decimal<8>`                 | 0.75 |            9.63 |             11.4 |     4.99 | 20.7, *inexact* |  26.6 |            4.85 |
+| fastnum 0.7.5 `D64`                            | 16.6 |            33.8 |             86.2 |     18.3 |            24.2 |  80.0 |            31.1 |
+| rust_decimal 1.43.0                            | 9.79 |            30.7 |              114 |     21.8 |            19.1 |  67.0 |            35.1 |
+| decimal-rs 0.2.0                               | 7.61 |            40.9 |              199 |     6.57 |            43.6 |  44.0 |            51.1 |
+| bigdecimal 0.4.11                              | 38.0 |             124 |            4,416 |     75.5 |            91.1 |   111 |             931 |
+| fixnum 0.9.5 `<i64, U8>`                       | 0.75 |            13.3 |             14.3 |          |            29.4 |  28.5 |                 |
 
 | Crate                                            |  Sum | Rounded product | Rounded quotient | To cents |            Read | Write | The mix |
 | ------------------------------------------------ | ---: | --------------: | ---------------: | -------: | --------------: | ----: | ------: |
-| **ddust** `D128<18>`                             | 1.06 |            8.07 |             15.9 |     4.19 |            10.0 |  23.4 |    5.68 |
-| primitive_fixed_point_decimal 1.5.0 `<i128, 18>` | 1.09 |            7.30 |             29.9 |     8.40 |            39.6 |  77.3 |    8.40 |
-| nexus-decimal 1.2.2 `<i128, 18>`                 | 1.07 |            8.68 |             22.3 |     14.7 |            20.9 |  49.3 |    8.52 |
-| fin_decimal 0.4.0 `Decimal128<18>`               | 1.08 |            12.9 |             27.4 |     8.92 | 35.7, *inexact* |  45.8 |    9.77 |
-| rust_decimal 1.43.0                              | 10.6 |            57.8 |             98.5 |     43.7 |            30.2 |  91.0 |    42.2 |
-| decimal-rs 0.2.0                                 | 7.61 |            52.6 |              198 |     9.47 |            62.1 |  48.4 |    53.3 |
-| fastnum 0.7.5 `D128`                             | 18.3 |            44.7 |              206 |     24.0 |            32.0 |   104 |    60.0 |
-| bigdecimal 0.4.11                                | 47.0 |             172 |           10,117 |     91.2 |             118 |   137 |   2,075 |
-| fixnum 0.9.5 `<i128, U18>`                       | 1.09 |            17.4 |             34.7 |          |            65.9 |  42.6 |         |
+| **ddust** `D128<18>`                             | 1.06 |            8.12 |             15.8 |     4.15 |            10.0 |  16.4 |    5.68 |
+| primitive_fixed_point_decimal 1.5.0 `<i128, 18>` | 1.05 |            7.30 |             29.9 |     8.39 |            39.6 |  77.6 |    8.40 |
+| nexus-decimal 1.2.2 `<i128, 18>`                 | 1.05 |            8.63 |             22.2 |     14.7 |            20.8 |  49.3 |    8.52 |
+| fin_decimal 0.4.0 `Decimal128<18>`               | 1.05 |            12.9 |             27.4 |     8.89 | 35.2, *inexact* |  46.2 |    9.77 |
+| rust_decimal 1.43.0                              | 10.6 |            57.8 |             98.8 |     43.7 |            30.0 |  91.7 |    42.2 |
+| decimal-rs 0.2.0                                 | 7.65 |            52.5 |              198 |     9.58 |            62.1 |  48.4 |    53.3 |
+| fastnum 0.7.5 `D128`                             | 18.2 |            44.7 |              206 |     24.0 |            31.9 |   103 |    60.0 |
+| bigdecimal 0.4.11                                | 47.8 |             171 |           10,127 |     90.5 |             117 |   139 |   2,074 |
+| fixnum 0.9.5 `<i128, U18>`                       | 1.03 |            17.4 |             34.7 |          |            65.9 |  43.0 |         |
 
-The fixed-point crates add as their integers do, and so do they all; past the
-sum, ddust is the fastest at every operation but the narrow rounded product,
-where primitive_fixed_point_decimal's half away from zero is 3.70 ns and ddust's
-3.73 in the same mode, and the wide one, 7.30 against 7.20. The decimals that
-carry a scale in each value take ten to a hundred times as long, and bigdecimal,
-which allocates, longer still.
+The fixed-point crates add and compare as their integers do, within a few
+percent of each other. ddust's checked sum takes two instructions more than the
+integer's, and its exact product one more, where its `repr(C)` layout, which
+keeps a decimal its integer's bytes, has Rust build the `Option` in memory: the
+narrow sum is 0.76 ns against nexus-decimal's 0.73, and the exact product 0.89
+against primitive_fixed_point_decimal's 0.87. Past them, ddust is the fastest at
+every operation, in the same rounding mode, but three rows of the
+[Performance](performance.md) tables:
+
+- a narrow rescale to cents on predictable values, where fixdec takes 1.19 ns
+  and ddust 1.30;
+- a chain of narrow rounded products on predictable values, where fin_decimal
+  takes 11.7 ns a link and ddust 12.4;
+- a chain of wide rounded products on unpredictable values, where LLVM inlines
+  primitive_fixed_point_decimal's smaller code into the chain and calls ddust's:
+  14.1 ns a link against 15.7.
+
+The decimals that carry a scale in each value take ten to a hundred times as
+long, and bigdecimal, which allocates, longer still.
 
 ## rust_decimal
 
-[rust_decimal](https://docs.rs/rust_decimal/1.43.0) 1.43.0 is the decimal most
-Rust programs use. Its `Decimal` is a 96-bit magnitude, a sign and a scale from
-0 to 28, in 16 bytes; each value carries its own scale, and an operation chooses
-its result's.
+[rust_decimal](https://docs.rs/rust_decimal/1.43.0) 1.43.0's `Decimal` is a
+96-bit magnitude, a sign and a scale from 0 to 28, in 16 bytes: each value
+carries its own scale, and an operation chooses its result's.
 
 | rust_decimal 1.43.0                                                                                     | ddust                                                                           |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

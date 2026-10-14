@@ -91,6 +91,22 @@ each a zero-sized type, or a `Rounding` chosen at run time: `Floor`, `Ceil`,
 to the nearer step and break a tie as their names say. `*` is exact, and `/`
 truncates, as the integer's does.
 
+## Speed
+
+Nanoseconds per operation on a Graviton4, over 64-bit values at eight decimals
+of random signs and lengths; a rounded row takes ddust in the rounding mode of
+the crate beside it. [Performance][performance] has every operation, both
+widths, and how each was measured.
+
+| Operation        | ddust | rust_decimal | The fastest other                   |
+| ---------------- | ----: | -----------: | ----------------------------------- |
+| Checked sum      |  0.76 |         9.79 | 0.73, primitive_fixed_point_decimal |
+| Rounded product  |  3.73 |         30.7 | 3.68, primitive_fixed_point_decimal |
+| Rounded quotient |  4.49 |          114 | 8.18, nexus-decimal                 |
+| To cents         |  1.14 |         21.8 | 3.21, primitive_fixed_point_decimal |
+| Read text        |  9.75 |         19.1 | 19.1, rust_decimal                  |
+| Write text       |  9.84 |         67.0 | 23.3, nexus-decimal                 |
+
 ## Features
 
 | Feature            | What it adds                                                                                                                                                                                                                                                                                |
@@ -130,6 +146,7 @@ Either [the MIT License][mit] or [the Apache License, Version 2.0][apache], at
 your option.
 
 [book]: https://atomix-labs.github.io/ddust/
+[performance]: https://atomix-labs.github.io/ddust/performance.html
 [docs.rs]: https://docs.rs/ddust
 [changelog]: https://github.com/atomix-labs/ddust/blob/main/CHANGELOG.md
 [contributing]: https://github.com/atomix-labs/ddust/blob/main/CONTRIBUTING.md
