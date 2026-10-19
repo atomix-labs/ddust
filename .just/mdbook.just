@@ -9,16 +9,23 @@ check-mdbook:
     #!/usr/bin/env bash
     set -euo pipefail
     mise exec -- python3 -B .just/mdbook.py lint docs
-    # rustdoc's index page is nightly's, and the API lands in target/doc, not target/<triple>/doc,
-    # where the book's preprocessor, building it again with these flags, looks for it.
-    export RUSTDOCFLAGS="-Zunstable-options --enable-index-page"
+    # rustdoc's index page is nightly's. In the host's entry, its flags join the configuration's
+    # rustdocflags, a CPU floor among them, and reach the preprocessor; RUSTDOCFLAGS replaces both,
+    # so a caller's takes the flags.
+    flags="-Zunstable-options --enable-index-page"
+    host=$(rustc --print host-tuple | tr a-z- A-Z_)
+    export "CARGO_TARGET_${host}_RUSTDOCFLAGS=$flags"
+    if [[ -n ${RUSTDOCFLAGS+set} ]]; then export RUSTDOCFLAGS="$RUSTDOCFLAGS $flags"; fi
+    # A target directory of its own keeps check-rust-doc's pages out of the API, and neither recipe
+    # documents the other's output again. The preprocessor looks in its doc/, not <triple>/doc/.
     unset CARGO_BUILD_TARGET
+    export CARGO_TARGET_DIR=target/book
     cargo doc --workspace --no-deps
     mdbook build docs
     # mdbook runs rustdoc from a temporary directory, where rust-toolchain.toml no longer applies.
     RUSTUP_TOOLCHAIN="$(rustup show active-toolchain | cut -d' ' -f1)" mdbook test docs
     # The preprocessor links the API into the book only where a page links into it.
-    [[ -e docs/book/api ]] || cp -R target/doc docs/book/api
+    [[ -e docs/book/api ]] || cp -R target/book/doc docs/book/api
     find docs/book/api -maxdepth 1 -name '.*' -delete
     mise exec -- python3 -B .just/mdbook.py api docs/book/api
     # The pages alone, as a stylesheet names fallbacks, such as KaTeX's fonts, a browser never

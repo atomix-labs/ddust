@@ -231,8 +231,8 @@ Read each reference a step names, whole, before writing.
   crate, each clean before the next; `--lint-only --advisory` is the quick
   reread, with widows and summaries that wrap.
 
-Then read the page the audit builds, `target/<host>/doc/<crate>/index.html`:
-every ``[`Name`]`` a link, and no heading over an empty paragraph.
+Then read the page the audit builds, `target/doc/<crate>/index.html`: every
+``[`Name`]`` a link, and no heading over an empty paragraph.
 
 Done means every public item, field and variant has a summary that says more
 than its name, and every file its `//!`; every unsafe site, field a proof relies
