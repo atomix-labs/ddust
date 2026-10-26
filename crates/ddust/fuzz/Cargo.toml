@@ -42,5 +42,5 @@ bench = false
 [dependencies]
 ddust         = { path = ".." }
 libfuzzer-sys = { version = "0.4.13", features = ["arbitrary-derive"] }
-num-bigint    = "0.4.6"
-num-integer   = "0.1.46"
+num-bigint    = "0.5.1"
+num-integer   = "0.1.47"
