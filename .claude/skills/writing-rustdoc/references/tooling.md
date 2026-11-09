@@ -20,18 +20,20 @@ just fix-rust-fmt
 just fix-dprint
 just fix-toml
 just fix-markdown
-export CARGO_BUILD_TARGET=$(rustc -vV | sed -n 's/^host: //p')   # the host, as the recipes build
 cargo fmt -p <crate> -- --check
-RUSTDOCFLAGS="-D warnings" cargo doc -p <crate> --no-deps [--all-features] --document-private-items
+cargo doc -p <crate> --no-deps [--all-features] --document-private-items --config 'target."cfg(all())".rustdocflags=["-D","warnings"]'
 cargo test -p <crate> --doc [--all-features]
-cargo clippy -p <crate> --all-targets [--all-features] -- -D warnings
+cargo clippy -p <crate> --all-targets [--all-features] --target "$(rustc --print host-tuple)" -- -D warnings
 mise exec -- python3 .just/rust-doc.py <crate-dir>        # the cut list, mechanically
 ```
 
 `--all-features` where the manifest has a `[features]` table. `-D warnings`
-fails the build on any warning, as `just check-rust-doc` does. The recipes name
-the host as the target, `CARGO_BUILD_TARGET`, so building the same way shares
-their cache and writes the docs where they do, `target/<host>/doc/`.
+fails the build on any warning, as `just check-rust-doc` does; `--config` joins
+it to the rustdocflags Cargo's configuration sets, a CPU floor among them, which
+`RUSTDOCFLAGS` would replace. rustdoc's commands name no target, as the recipe
+does, since under one cargo passes a proc-macro crate no rustdocflags; the docs
+land where the recipe's do, `target/doc/`. clippy names the host, as the recipes
+do through `CARGO_BUILD_TARGET`, so it shares their cache.
 
 The build documents private items, as `just check-rust-doc` does: it is where a
 private doc's ``[`SLOTS`]`` link is checked, and it surfaces link hygiene a
@@ -162,7 +164,7 @@ check-rust-doc` and the audit both do: write the disambiguator from the start,
 ## 6 Rendered Check
 
 The audit's build and `just check-rust-doc`'s land at
-`target/<host>/doc/<crate_snake>/index.html`, the path `cargo doc` prints after
+`target/doc/<crate_snake>/index.html`, the path `cargo doc` prints after
 `Generated`; the recipe's holds every crate of the workspace. Read the crate
 page top to bottom in the HTML (without a browser, `sed 's/<[^>]*>//g'` over the
 file) and check:
@@ -194,8 +196,8 @@ being documented and on none of its dependencies. So a published crate:
   than its `cfg` adds `#[cfg_attr(docsrs, doc(cfg(feature = "…")))]`. Both build
   on stable, where nothing sets `docsrs`; a `doc(cfg)` outside `cfg_attr(docsrs,
   …)` does not, since it is unstable. `just check-rust-doc` sets no `docsrs`, so
-  the badges are read by hand, on nightly: `RUSTDOCFLAGS="--cfg docsrs" cargo
-  doc -p <crate> --all-features --no-deps`.
+  the badges are read by hand, on nightly: `cargo doc -p <crate> --all-features
+  --no-deps --config 'target."cfg(all())".rustdocflags=["--cfg","docsrs"]'`.
 - **Links only what resolves there**: items of this crate and its normal
   dependencies, which docs.rs links to each dependency's own docs, and pages by
   URL (§4); never a relative HTML path.
