@@ -57,17 +57,31 @@ CRATE_NAME = re.compile(r"(?<![\w-])[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+(?![\w-])")
 def crate_meta(crate: Path, packages: list):
     """The crate at `crate`: its name; each of the workspace's crates, by name, with whether its docs
     may name it; and its manifest. It may name itself, a crate of its family (`<name>-derive`, or the
-    crate whose name its own extends), and a dependency of any kind."""
+    crate whose name its own extends), and a dependency of any kind. A crate is known by its package's
+    name and its library's, so `atomix-core` is of the family of `atomix-rs`, whose library is
+    `atomix`."""
     manifest = (crate / "Cargo.toml").read_text()
     package = next((p for p in packages if Path(p["manifest_path"]).resolve().parent == crate), {})
     me = package.get("name", crate.name)
+    mine = known_as(package) or {me.replace("_", "-")}
     deps = {(d.get("rename") or d["name"]).replace("_", "-") for d in package.get("dependencies", [])}
     names = {}
     for other in packages:
         name = other["name"].replace("_", "-")
-        family = name.startswith(f"{me}-") or me.startswith(f"{name}-")
-        names[name] = name == me or family or name in deps
+        theirs = known_as(other)
+        family = any(their.startswith(f"{my}-") or my.startswith(f"{their}-") for my in mine for their in theirs)
+        names[name] = name in mine or family or name in deps
     return me, names, manifest
+
+
+def known_as(package: dict) -> set:
+    """The names a package goes by: its own, and its library's, which `[lib] name` may set apart."""
+    libraries = {
+        target["name"]
+        for target in package.get("targets", [])
+        if {"lib", "rlib", "proc-macro"} & set(target.get("kind", []))
+    }
+    return {name.replace("_", "-") for name in {package.get("name", ""), *libraries} if name}
 
 
 def paragraphs(block):
