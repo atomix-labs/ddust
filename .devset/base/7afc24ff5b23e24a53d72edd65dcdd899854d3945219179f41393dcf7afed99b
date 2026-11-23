@@ -26,21 +26,25 @@ done
 name=$(sed -n 's/^name *= *"\([^"]*\)".*/\1/p' "$crate/Cargo.toml" | head -1)
 root=$(cd "$crate" && cargo locate-project --workspace --message-format plain | xargs dirname)
 cd "$root"
-# The host as the target, as the `just` recipes build, so the audit shares their cache and writes
-# the docs where `just check-rust-doc` does: `target/<host>/doc/`.
-export CARGO_BUILD_TARGET="${CARGO_BUILD_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
+# clippy builds for the target the `just` recipes name, the host where none is, so the audit shares
+# their cache. rustdoc's steps name none, as `just check-rust-doc` does: under a named target, cargo
+# passes a proc-macro crate no rustdocflags. The docs land where the recipe's do, in target/doc.
+target=${CARGO_BUILD_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}
+unset CARGO_BUILD_TARGET
 
 if ! $lint_only; then
     features=()
     grep -q '^\[features\]' "$crate/Cargo.toml" && features=(--all-features)
     step() { echo "== $*"; "$@"; }
     step cargo fmt -p "$name" -- --check
-    # As `just check-rust-doc` builds it: private items documented, and any warning fatal.
-    RUSTDOCFLAGS="-D warnings" step cargo doc -p "$name" --no-deps ${features[@]+"${features[@]}"} \
-        --document-private-items
+    # As `just check-rust-doc` builds it: private items documented, and any warning fatal, through
+    # an entry cargo joins to the workspace's rustdocflags, where RUSTDOCFLAGS would replace them.
+    step cargo doc -p "$name" --no-deps ${features[@]+"${features[@]}"} --document-private-items \
+        --config "target.'cfg(all())'.rustdocflags = ['-D', 'warnings']"
     step cargo test -p "$name" --doc ${features[@]+"${features[@]}"}
     # Any warning fatal, a dead `#[expect]` included where the workspace only warns of one.
-    step cargo clippy -p "$name" --all-targets ${features[@]+"${features[@]}"} -- -D warnings
+    step cargo clippy -p "$name" --all-targets --target "$target" ${features[@]+"${features[@]}"} \
+        -- -D warnings
 fi
 echo "== doc-lint"
 python3 -B "$(git rev-parse --show-toplevel)/.just/rust-doc.py" "$crate" ${advisory[@]+"${advisory[@]}"}
